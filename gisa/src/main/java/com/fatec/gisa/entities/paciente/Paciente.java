@@ -39,6 +39,7 @@ public class Paciente extends Pessoa {
     private Boolean convenio;
 
     @ManyToOne
+    @JoinColumn(name = "IDEscola")
     private Escola escola;
 
     @ManyToMany

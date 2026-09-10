@@ -23,7 +23,7 @@ import lombok.Setter;
 @Setter 
 @NoArgsConstructor 
 @AllArgsConstructor 
-@EqualsAndHashCode 
+@EqualsAndHashCode(exclude = "alunos")
 @Table(name = "Escola")
 public class Escola {
 

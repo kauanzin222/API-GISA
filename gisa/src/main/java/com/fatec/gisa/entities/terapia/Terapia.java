@@ -30,14 +30,14 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode
+@EqualsAndHashCode(exclude = { "presencaPacientes", "especialistas" })
 @Table(name = "Terapia")
 public class Terapia {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idTerapia;
-    
+
     private LocalDateTime dataHoraInicio;
     private LocalDateTime dataHoraFim;
 
@@ -51,7 +51,7 @@ public class Terapia {
     private List<PresencaPaciente> presencaPacientes;
 
     @ManyToMany
-       @JoinTable(
+    @JoinTable(
         name = "Especialista_Terapia", 
         joinColumns = @JoinColumn(name = "IDTerapia"), 
         inverseJoinColumns = @JoinColumn(name = "IDEspecialista")

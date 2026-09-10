@@ -28,7 +28,7 @@ public class JornadaTrabalho {
 
     private Integer diaSemana;
     private LocalTime horaInicio;
-    private LocalTime horaFim;
+    private LocalTime horaTermino;
 
     @ManyToOne
     @JoinColumn(name = "IDEspecialista")

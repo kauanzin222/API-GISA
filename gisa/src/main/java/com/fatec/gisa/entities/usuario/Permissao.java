@@ -19,7 +19,7 @@ import lombok.Setter;
 @Setter 
 @NoArgsConstructor 
 @AllArgsConstructor 
-@EqualsAndHashCode 
+@EqualsAndHashCode(exclude = "perfis")
 @Table(name = "Permissao")
 public class Permissao {
 

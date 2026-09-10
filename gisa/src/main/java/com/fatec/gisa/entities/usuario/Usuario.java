@@ -20,7 +20,7 @@ import lombok.Setter;
 @Setter 
 @NoArgsConstructor 
 @AllArgsConstructor 
-@EqualsAndHashCode 
+@EqualsAndHashCode
 @Table(name = "Usuario")
 public class Usuario {
 
