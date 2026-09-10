@@ -9,5 +9,4 @@ public class GisaApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(GisaApplication.class, args);
 	}
-
 }
