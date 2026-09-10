@@ -22,7 +22,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "Responsavel")
+@Table(name = "Responsavel_Paciente")
 public class VinculoResponsavel {
 
     @EmbeddedId

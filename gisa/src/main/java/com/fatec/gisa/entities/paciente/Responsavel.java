@@ -1,8 +1,11 @@
 package com.fatec.gisa.entities.paciente;
 
+import java.util.List;
+
 import com.fatec.gisa.entities.Pessoa;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrimaryKeyJoinColumn;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -19,4 +22,7 @@ import lombok.Setter;
 @PrimaryKeyJoinColumn(name = "IDCadastro")
 public class Responsavel extends Pessoa {
     private String ocupacao;
+
+    @OneToMany(mappedBy = "responsavel")
+    private List<VinculoResponsavel> dependentes;
 }
