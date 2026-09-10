@@ -1,4 +1,4 @@
-package com.fatec.gisa.entities.paciente.pk;
+package com.fatec.gisa.entities.terapia.pk;
 
 import java.io.Serializable;
 
@@ -15,7 +15,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-public class VinculoResponsavelPK implements Serializable {
+public class PresencaPacientePK implements Serializable {
     private Long idPaciente;
-    private Long idResponsavel;
+    private Long idTerapia;
 }
