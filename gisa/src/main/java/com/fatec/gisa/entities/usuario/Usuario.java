@@ -23,6 +23,7 @@ import lombok.Setter;
 @EqualsAndHashCode 
 @Table(name = "Usuario")
 public class Usuario {
+
     @Id 
     private Long idCadastro;
 
@@ -30,6 +31,7 @@ public class Usuario {
     @MapsId 
     @JoinColumn(name = "IDCadastro")
     private Pessoa pessoa;
+    
     private String senha;
 
     @ManyToOne

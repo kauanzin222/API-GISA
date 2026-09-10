@@ -1,4 +1,4 @@
-package com.fatec.gisa.entities.usuario;
+package com.fatec.gisa.entities;
 
 import java.util.List;
 
@@ -22,20 +22,26 @@ import lombok.Setter;
 @NoArgsConstructor 
 @AllArgsConstructor 
 @EqualsAndHashCode 
-@Table(name = "Perfil")
-public class Perfil {
+@Table(name = "Endereco")
+public class Endereco {
 
-    @Id 
+    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long idPerfil;
+    private Integer idEndereco;
     
-    private String nome;
+    private String cep;
+    private String rua;
+    private String cidade;
+    private String bairro;
+    private String estado;
+    private String numero;
+    private String complemento;
 
-    @ManyToMany
+    @ManyToMany 
     @JoinTable(
-        name = "Perfil_Permissao",
-        joinColumns = @JoinColumn(name = "IDPerfil"),
-        inverseJoinColumns = @JoinColumn(name = "IDPermissao")
+        name = "Endereco_Pessoa",
+        joinColumns = @JoinColumn(name = "IDEndereco"),
+        inverseJoinColumns = @JoinColumn(name = "IDCadastro")
     )
-    private List<Permissao> permissoes;
+    private List<Pessoa> moradores;
 }

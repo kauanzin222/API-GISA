@@ -1,13 +1,13 @@
-package com.fatec.gisa.entities.usuario;
+package com.fatec.gisa.entities.paciente;
 
-import java.util.List;
+import com.fatec.gisa.enums.TipoEscola;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -20,16 +20,15 @@ import lombok.Setter;
 @NoArgsConstructor 
 @AllArgsConstructor 
 @EqualsAndHashCode 
-@Table(name = "Permissao")
-public class Permissao {
+public class Escola {
 
     @Id 
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long idPermissao;
+    private Integer idEscola;
     
     private String nome;
-    private String descricao;
+    private String telefone;
 
-    @ManyToMany(mappedBy = "permissoes")
-    private List<Perfil> perfis;
+    @Enumerated(EnumType.STRING)
+    private TipoEscola tipoEscola;
 }
