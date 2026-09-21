@@ -36,10 +36,6 @@ public class PessoaCadastroRequestDTO {
     @NotBlank(message = "O celular é obrigatório")
     private String celular;
 
-    @NotBlank(message = "O e-mail é obrigatório")
-    @Email(message = "Formato de e-mail inválido")
-    private String email;
-
     private String numCNS;
 
     private EstadoCivil estadoCivil;

@@ -21,6 +21,8 @@ import lombok.Setter;
 @PrimaryKeyJoinColumn(name = "IDCadastro")
 public class Profissional extends Pessoa {
 
+    private String email;
+
     @ManyToOne
     @JoinColumn(name = "IDCargo")
     private Cargo cargo;

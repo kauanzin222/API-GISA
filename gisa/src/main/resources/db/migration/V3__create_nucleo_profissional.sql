@@ -16,6 +16,7 @@ CREATE TABLE "Cargo" (
 CREATE TABLE "Profissional" (
     "IDProfissional" BIGINT PRIMARY KEY,
     "IDCargo" BIGINT NOT NULL,
+    "Email" VARCHAR(255) NOT NULL UNIQUE,
     CONSTRAINT "fk_profissional_pessoa" FOREIGN KEY ("IDProfissional") REFERENCES "Pessoa" ("IDCadastro") ON DELETE CASCADE,
     CONSTRAINT "fk_profissional_cargo" FOREIGN KEY ("IDCargo") REFERENCES "Cargo" ("IDCargo") ON DELETE RESTRICT
 );
