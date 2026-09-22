@@ -26,20 +26,23 @@ public class ProfissionalController {
     public ResponseEntity<ProfissionalCadastroResponseDTO> cadastrar(
             @Valid @RequestBody ProfissionalCadastroRequestDTO request) {
         Profissional profissional = cadastroFacadeService.cadastrarProfissional(request);
-        return ResponseEntity.status(201).body(toResponse(profissional));
+        return ResponseEntity.status(201).body(toResponse(profissional, false));
     }
 
     @PostMapping("/com-usuario")
     public ResponseEntity<ProfissionalCadastroResponseDTO> cadastrarComUsuario(
             @Valid @RequestBody ProfissionalComUsuarioRequestDTO request) {
         Profissional profissional = cadastroFacadeService.cadastrarProfissionalComUsuario(request);
-        return ResponseEntity.status(201).body(toResponse(profissional));
+        return ResponseEntity.status(201).body(toResponse(profissional, true));
     }
 
-    private ProfissionalCadastroResponseDTO toResponse(Profissional profissional) {
+    private ProfissionalCadastroResponseDTO toResponse(Profissional profissional, boolean acessoCriado) {
         return new ProfissionalCadastroResponseDTO(
                 profissional.getIdCadastro(),
                 profissional.getNome(),
-                profissional.getEmail());
+                profissional.getCpf(),
+                profissional.getEmail(),
+                profissional.getCargo().getIdCargo(),
+                acessoCriado);
     }
 }
