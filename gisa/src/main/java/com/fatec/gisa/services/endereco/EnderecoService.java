@@ -1,0 +1,34 @@
+package com.fatec.gisa.services.endereco;
+
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
+import com.fatec.gisa.dtos.EnderecoDTO;
+import com.fatec.gisa.entities.Endereco;
+import com.fatec.gisa.entities.Pessoa;
+import com.fatec.gisa.repositories.EnderecoRepository;
+import com.fatec.gisa.services.cadastro.CadastroMapper;
+
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
+public class EnderecoService {
+
+    private final EnderecoRepository enderecoRepository;
+    private final CadastroMapper cadastroMapper;
+
+    @Transactional
+    public void associarEnderecos(Pessoa pessoa, List<EnderecoDTO> enderecosDTO) {
+        if (enderecosDTO == null || enderecosDTO.isEmpty()) {
+            pessoa.setEnderecos(List.of());
+            return;
+        }
+
+        List<Endereco> enderecos = cadastroMapper.mapearEnderecos(pessoa, enderecosDTO);
+        enderecoRepository.saveAll(enderecos);
+        pessoa.setEnderecos(enderecos);
+    }
+}

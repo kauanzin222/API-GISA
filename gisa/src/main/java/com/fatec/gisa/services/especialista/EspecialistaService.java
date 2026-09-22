@@ -8,6 +8,7 @@ import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.repositories.especialista.EspecialistaRepository;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.services.cadastro.CadastroMapper;
+import com.fatec.gisa.services.endereco.EnderecoService;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +22,15 @@ public class EspecialistaService {
     private final CadastroMapper cadastroMapper;
     private final EspecialidadeService especialidadeService;
     private final JornadaTrabalhoService jornadaTrabalhoService;
+    private final EnderecoService enderecoService;
 
     @Transactional
     public Especialista cadastrar(EspecialistaCadastroRequestDTO dto) {
         Especialista especialista = new Especialista();
         preencherDadosEspecialista(especialista, dto);
-        return especialistaRepository.save(especialista);
+        Especialista especialistaSalvo = especialistaRepository.save(especialista);
+        enderecoService.associarEnderecos(especialistaSalvo, dto.getEnderecos());
+        return especialistaSalvo;
     }
 
     void preencherDadosEspecialista(Especialista especialista, EspecialistaCadastroRequestDTO dto) {
