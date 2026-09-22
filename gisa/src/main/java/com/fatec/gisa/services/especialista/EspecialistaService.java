@@ -11,10 +11,8 @@ import org.springframework.stereotype.Service;
 import com.fatec.gisa.dtos.especialista.JornadaTrabalhoDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialidadeRequestDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaCadastroRequestDTO;
-import com.fatec.gisa.dtos.especialista.request.EspecialistaPJCadastroRequestDTO;
 import com.fatec.gisa.entities.especialista.Especialidade;
 import com.fatec.gisa.entities.especialista.Especialista;
-import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.entities.especialista.JornadaTrabalho;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.repositories.especialista.EspecialidadeRepository;
@@ -33,28 +31,9 @@ public class EspecialistaService {
     private final CargoRepository cargoRepository;
 
     @Transactional
-    public Especialista cadastrarPessoaFisica(EspecialistaCadastroRequestDTO dto) {
+    public Especialista cadastrar(EspecialistaCadastroRequestDTO dto) {
         Especialista especialista = new Especialista();
-        preencherDadosEspecialista(especialista, dto);
-        return especialistaRepository.save(especialista);
-    }
 
-    @Transactional
-    public EspecialistaPJ cadastrarPessoaJuridica(EspecialistaPJCadastroRequestDTO dto) {
-        EspecialistaPJ especialistaPJ = new EspecialistaPJ();
-        preencherDadosEspecialista(especialistaPJ, dto);
-        
-        // Mapeamento específico de PJ
-        especialistaPJ.setCnpj(dto.getCnpj());
-        especialistaPJ.setRazaoSocial(dto.getRazaoSocial());
-        especialistaPJ.setNomeFantasia(dto.getNomeFantasia());
-        especialistaPJ.setInscricaoEstadual(dto.getInscricaoEstadual());
-
-        return especialistaRepository.save(especialistaPJ);
-    }
-
-    private void preencherDadosEspecialista(Especialista especialista, EspecialistaCadastroRequestDTO dto) {
-        // 1. Dados da Pessoa
         especialista.setNome(dto.getNome());
         especialista.setCpf(dto.getCpf());
         especialista.setRg(dto.getRg());
@@ -65,51 +44,45 @@ public class EspecialistaService {
         especialista.setNumCNS(dto.getNumCNS());
         especialista.setEstadoCivil(dto.getEstadoCivil());
 
-        // 2. Vinculo com Cargo
         Cargo cargo = cargoRepository.findById(dto.getIdCargo())
-                .orElseThrow(() -> new EntidadeNaoEncontradaException("Cargo não encontrado com ID: " + dto.getIdCargo()));
-        especialista.setCargo(cargo);
+                .orElseThrow(() -> new IllegalArgumentException("Cargo não encontrado"));
 
-        // 3. Registro do Conselho
+        especialista.setCargo(cargo);
         especialista.setRegistroConselho(dto.getRegistroConselho());
 
-        // 4. Processamento de Especialidades (Existentes + Novas)
         Set<Especialidade> especialidades = processarEspecialidades(
-                dto.getEspecialidadesIds(), 
+                dto.getEspecialidadesIds(),
                 dto.getNovasEspecialidades()
         );
-        especialista.setEspecialidades(especialidades);
 
-        // 5. Mapeamento da Jornada de Trabalho
-        List<JornadaTrabalho> jornadas = mapearJornadas(dto.getJornadas(), especialista);
-        especialista.setJornadas(jornadas);
+        especialista.setEspecialidades(new ArrayList<>(especialidades));
+        especialista.setJornadaTrabalho(mapearJornadas(dto.getJornadas(), especialista));
+
+        return especialistaRepository.save(especialista);
     }
 
-    private Set<Especialidade> processarEspecialidades(List<Long> especialidadesIds, List<EspecialidadeRequestDTO> novasEspecialidades) {
+    private Set<Especialidade> processarEspecialidades(List<Long> especialidadesIds,
+                                                      List<EspecialidadeRequestDTO> novasEspecialidades) {
         boolean semExistentes = especialidadesIds == null || especialidadesIds.isEmpty();
         boolean semNovas = novasEspecialidades == null || novasEspecialidades.isEmpty();
 
-        // Regra de negócio: obriga ter ao menos 1 especialidade associada
         if (semExistentes && semNovas) {
-            throw new RegraDeNegocioException("O especialista deve possuir ao menos uma especialidade (existente ou nova).");
+            throw new IllegalArgumentException("O especialista deve possuir ao menos uma especialidade.");
         }
 
         Set<Especialidade> resultado = new HashSet<>();
 
-        // Busca especialidades já cadastradas
         if (!semExistentes) {
             List<Especialidade> encontradas = especialidadeRepository.findAllById(especialidadesIds);
             if (encontradas.size() != especialidadesIds.size()) {
-                throw new EntidadeNaoEncontradaException("Uma ou mais especialidades informadas não foram encontradas.");
+                throw new IllegalArgumentException("Especialidade inválida.");
             }
             resultado.addAll(encontradas);
         }
 
-        // Persiste novas especialidades enviadas no formulário
         if (!semNovas) {
             for (EspecialidadeRequestDTO novaDto : novasEspecialidades) {
-                // Evita duplicar se já existir uma especialidade com o mesmo nome
-                Especialidade especialidade = especialidadeRepository.findByNomeIgnoreCase(novaDto.getNome())
+                Especialidade especialidade = especialidadeRepository.findByNome(novaDto.getNome())
                         .orElseGet(() -> {
                             Especialidade nova = new Especialidade();
                             nova.setNome(novaDto.getNome());
@@ -133,7 +106,6 @@ public class EspecialistaService {
             jornada.setDiaSemana(dto.getDiaSemana());
             jornada.setHoraInicio(dto.getHoraInicio());
             jornada.setHoraTermino(dto.getHoraTermino());
-            jornada.setDuracaoConsultaMin(dto.getDuracaoConsultaMin());
             jornada.setEspecialista(especialista);
             return jornada;
         }).collect(Collectors.toList());

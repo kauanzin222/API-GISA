@@ -20,7 +20,7 @@ public class Especialidade {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer idEspecialidade;
+    private Long idEspecialidade;
 
     private String nome;
     private String descricao;
