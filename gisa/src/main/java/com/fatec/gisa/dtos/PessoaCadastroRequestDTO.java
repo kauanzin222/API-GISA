@@ -30,6 +30,7 @@ public class PessoaCadastroRequestDTO {
     @NotNull(message = "A data de nascimento é obrigatória")
     private LocalDate dataNascimento;
 
+    @NotNull(message = "O sexo é obrigatório")
     private Character sexo;
 
     @NotBlank(message = "O celular é obrigatório")
@@ -37,6 +38,7 @@ public class PessoaCadastroRequestDTO {
 
     private String numCNS;
 
+    @NotNull(message = "O estado civil é obrigatório")
     private EstadoCivil estadoCivil;
 
     @Valid

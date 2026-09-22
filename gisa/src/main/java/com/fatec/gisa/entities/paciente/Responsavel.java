@@ -19,7 +19,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "Responsavel")
-@PrimaryKeyJoinColumn(name = "IDCadastro")
+@PrimaryKeyJoinColumn(name = "IDResponsavel", referencedColumnName = "IDCadastro")
 public class Responsavel extends Pessoa {
     private String ocupacao;
 

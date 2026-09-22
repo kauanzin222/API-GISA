@@ -29,7 +29,7 @@ public class Escola {
 
     @Id 
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer idEscola;
+    private Long idEscola;
     
     private String nome;
     private String telefone;

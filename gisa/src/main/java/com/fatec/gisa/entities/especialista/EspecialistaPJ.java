@@ -14,7 +14,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "EspecialistaPJ")
-@PrimaryKeyJoinColumn(name = "IDCadastro")
+@PrimaryKeyJoinColumn(name = "IDEspecialistaPJ", referencedColumnName = "IDEspecialista")
 public class EspecialistaPJ extends Especialista {
     private String cnpj;
     private String razaoSocial;

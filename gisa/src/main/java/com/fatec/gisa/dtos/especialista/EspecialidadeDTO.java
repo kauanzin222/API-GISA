@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class EspecialidadeDTO {
 
-    private Integer idEspecialidade;
+    private Long idEspecialidade;
     private String nome;
     private String descricao;
 }

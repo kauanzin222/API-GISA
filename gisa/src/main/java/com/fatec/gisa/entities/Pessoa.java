@@ -51,7 +51,7 @@ public class Pessoa {
     private EstadoCivil estadoCivil;
 
     @Enumerated(EnumType.STRING)
-    private StatusCadastro statusCadastro;
+    private StatusCadastro statusCadastro = StatusCadastro.ATIVO;
 
     @OneToOne(mappedBy = "pessoa", cascade = CascadeType.ALL)
     private Usuario usuario;

@@ -27,7 +27,7 @@ public class Endereco {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer idEndereco;
+    private Long idEndereco;
     
     private String cep;
     private String rua;

@@ -18,7 +18,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "Profissional")
-@PrimaryKeyJoinColumn(name = "IDCadastro")
+@PrimaryKeyJoinColumn(name = "IDProfissional", referencedColumnName = "IDCadastro")
 public class Profissional extends Pessoa {
 
     private String email;

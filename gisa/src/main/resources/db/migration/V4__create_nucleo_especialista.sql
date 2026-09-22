@@ -1,6 +1,6 @@
 -- 1. Tabela: Especialidade
 CREATE TABLE "Especialidade" (
-    "IDEspecialidade" SERIAL PRIMARY KEY,
+    "IDEspecialidade" BIGSERIAL PRIMARY KEY,
     "Nome" VARCHAR(100) NOT NULL,
     "Descricao" VARCHAR(255)
 );
@@ -14,12 +14,12 @@ CREATE TABLE "Especialista" (
 
 -- 3. Tabela: EspecialistaPJ (Especialização de Especialista)
 CREATE TABLE "EspecialistaPJ" (
-    "IDEspecialista" BIGINT PRIMARY KEY,
+    "IDEspecialistaPJ" BIGINT PRIMARY KEY,
     "CNPJ" VARCHAR(18) NOT NULL UNIQUE,
     "RazaoSocial" VARCHAR(150) NOT NULL,
     "NomeFantasia" VARCHAR(150),
     "InscricaoEstadual" VARCHAR(30),
-    CONSTRAINT "fk_especialistapj_especialista" FOREIGN KEY ("IDEspecialista") REFERENCES "Especialista" ("IDEspecialista") ON DELETE CASCADE
+    CONSTRAINT "fk_especialistapj_especialista" FOREIGN KEY ("IDEspecialistaPJ") REFERENCES "Especialista" ("IDEspecialista") ON DELETE CASCADE
 );
 
 -- 4. Tabela: JornadaTrabalho
@@ -28,14 +28,14 @@ CREATE TABLE "JornadaTrabalho" (
     "IDEspecialista" BIGINT NOT NULL,
     "DiaSemana" INT NOT NULL,
     "HoraInicio" TIME NOT NULL,
-    "HoraFim" TIME NOT NULL,
+    "HoraTermino" TIME NOT NULL,
     CONSTRAINT "fk_jornada_especialista" FOREIGN KEY ("IDEspecialista") REFERENCES "Especialista" ("IDEspecialista") ON DELETE CASCADE
 );
 
 -- 5. Tabela Associativa: Especialidade_Especialista (N:N)
 CREATE TABLE "Especialidade_Especialista" (
     "IDEspecialista" BIGINT NOT NULL,
-    "IDEspecialidade" INT NOT NULL,
+    "IDEspecialidade" BIGINT NOT NULL,
     PRIMARY KEY ("IDEspecialista", "IDEspecialidade"),
     CONSTRAINT "fk_especialidade_especialista_especialista" FOREIGN KEY ("IDEspecialista") REFERENCES "Especialista" ("IDEspecialista") ON DELETE CASCADE,
     CONSTRAINT "fk_especialidade_especialista_especialidade" FOREIGN KEY ("IDEspecialidade") REFERENCES "Especialidade" ("IDEspecialidade") ON DELETE CASCADE

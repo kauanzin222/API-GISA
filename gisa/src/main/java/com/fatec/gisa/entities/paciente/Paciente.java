@@ -29,7 +29,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "Paciente")
-@PrimaryKeyJoinColumn(name = "IDCadastro")
+@PrimaryKeyJoinColumn(name = "IDPaciente", referencedColumnName = "IDCadastro")
 public class Paciente extends Pessoa {
 
     @Enumerated(EnumType.STRING)
