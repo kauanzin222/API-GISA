@@ -1,6 +1,7 @@
 package com.fatec.gisa.entities.paciente;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.Column;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.MapsId;
@@ -20,11 +21,12 @@ import lombok.Setter;
 public class Prontuario {
 
     @Id 
+    @Column(name = "IDPaciente")
     private Long idProntuario;
 
     @OneToOne
     @MapsId
-    @JoinColumn(name = "IDProntuario")
+    @JoinColumn(name = "IDPaciente")
     private Paciente paciente;
 
     private String alergias;

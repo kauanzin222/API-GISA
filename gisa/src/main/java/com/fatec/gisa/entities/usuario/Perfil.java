@@ -3,6 +3,7 @@ package com.fatec.gisa.entities.usuario;
 import java.util.List;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -27,8 +28,10 @@ public class Perfil {
 
     @Id 
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "IDPerfil")
     private Long idPerfil;
     
+    @Column(name = "Nome")
     private String nome;
 
     @ManyToMany

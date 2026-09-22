@@ -3,6 +3,7 @@ package com.fatec.gisa.entities.usuario;
 import java.util.List;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -25,8 +26,10 @@ public class Permissao {
 
     @Id 
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "IDPermissao")
     private Long idPermissao;
     
+    @Column(name = "Nome")
     private String nome;
     private String descricao;
 

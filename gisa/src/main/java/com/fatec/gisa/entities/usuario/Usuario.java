@@ -3,6 +3,7 @@ package com.fatec.gisa.entities.usuario;
 import com.fatec.gisa.entities.Pessoa;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.Column;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -25,6 +26,7 @@ import lombok.Setter;
 public class Usuario {
 
     @Id 
+    @Column(name = "IDCadastro")
     private Long idCadastro;
 
     @OneToOne 
@@ -32,6 +34,7 @@ public class Usuario {
     @JoinColumn(name = "IDCadastro")
     private Pessoa pessoa;
     
+    @Column(name = "Senha")
     private String senha;
 
     @ManyToOne(optional = false)

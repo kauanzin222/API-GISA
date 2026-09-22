@@ -8,6 +8,7 @@ import com.fatec.gisa.enums.EstadoCivil;
 import com.fatec.gisa.enums.StatusCadastro;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -37,9 +38,11 @@ public class Pessoa {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "IDCadastro")
     protected Long idCadastro;
     
     private String nome;
+    @Column(name = "CPF")
     private String cpf;
     private String rg;
     private LocalDate dataNascimento;
