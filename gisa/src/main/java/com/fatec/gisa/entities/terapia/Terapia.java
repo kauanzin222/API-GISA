@@ -8,6 +8,7 @@ import com.fatec.gisa.enums.Modalidade;
 import com.fatec.gisa.enums.StatusTerapia;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -36,15 +37,21 @@ public class Terapia {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "IDTerapia")
     private Long idTerapia;
 
+    @Column(name = "DataHoraInicio")
     private LocalDateTime dataHoraInicio;
+
+    @Column(name = "DataHoraFim")
     private LocalDateTime dataHoraFim;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "Modalidade")
     private Modalidade modalidade;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "Status")
     private StatusTerapia status;
 
     @OneToMany(mappedBy = "terapia", cascade = CascadeType.ALL, orphanRemoval = true)

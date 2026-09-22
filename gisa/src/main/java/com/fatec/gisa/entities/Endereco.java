@@ -2,6 +2,7 @@ package com.fatec.gisa.entities;
 
 import java.util.List;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -27,14 +28,28 @@ public class Endereco {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "IDEndereco")
     private Long idEndereco;
     
+    @Column(name = "CEP")
     private String cep;
+
+    @Column(name = "Rua")
     private String rua;
+
+    @Column(name = "Cidade")
     private String cidade;
+
+    @Column(name = "Bairro")
     private String bairro;
+
+    @Column(name = "Estado")
     private String estado;
+
+    @Column(name = "Numero")
     private String numero;
+
+    @Column(name = "Complemento")
     private String complemento;
 
     @ManyToMany 

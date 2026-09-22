@@ -41,19 +41,30 @@ public class Pessoa {
     @Column(name = "IDCadastro")
     protected Long idCadastro;
     
+    @Column(name = "Nome")
     private String nome;
+
     @Column(name = "CPF")
     private String cpf;
-    private String rg;
+
+    @Column(name = "DataNascimento")
     private LocalDate dataNascimento;
+
+    @Column(name = "Sexo")
     private Character sexo;
+
+    @Column(name = "Celular")
     private String celular;
+
+    @Column(name = "NumCNS")
     private String numCNS;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "EstadoCivil")
     private EstadoCivil estadoCivil;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "StatusCadastro")
     private StatusCadastro statusCadastro = StatusCadastro.ATIVO;
 
     @OneToOne(mappedBy = "pessoa", cascade = CascadeType.ALL)

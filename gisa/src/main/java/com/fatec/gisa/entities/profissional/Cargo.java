@@ -1,5 +1,6 @@
 package com.fatec.gisa.entities.profissional;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -24,7 +25,10 @@ public class Cargo {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "IDCargo")
     private Long idCargo;
+
+    @Column(name = "Nome")
     private String nome;
 
     @ManyToOne

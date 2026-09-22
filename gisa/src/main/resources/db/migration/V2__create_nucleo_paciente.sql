@@ -25,7 +25,7 @@ CREATE TABLE "Paciente" (
     "IDEscola" BIGINT,
     "StatusPaciente" VARCHAR(30) NOT NULL,
     "DataCadastro" DATE NOT NULL,
-    "Convenio" VARCHAR(100),
+    "Convenio" BOOLEAN,
     CONSTRAINT "fk_paciente_pessoa" FOREIGN KEY ("IDPaciente") REFERENCES "Pessoa" ("IDCadastro") ON DELETE CASCADE,
     CONSTRAINT "fk_paciente_escola" FOREIGN KEY ("IDEscola") REFERENCES "Escola" ("IDEscola") ON DELETE SET NULL
 );

@@ -7,6 +7,7 @@ import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.enums.StatusPaciente;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -33,9 +34,13 @@ import lombok.Setter;
 public class Paciente extends Pessoa {
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "StatusPaciente")
     private StatusPaciente statusPaciente;
 
+    @Column(name = "DataCadastro")
     private LocalDate dataCadastro;
+
+    @Column(name = "Convenio")
     private Boolean convenio;
 
     @ManyToOne

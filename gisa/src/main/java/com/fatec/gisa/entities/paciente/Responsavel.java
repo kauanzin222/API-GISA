@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.fatec.gisa.entities.Pessoa;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrimaryKeyJoinColumn;
@@ -21,6 +22,8 @@ import lombok.Setter;
 @Table(name = "Responsavel")
 @PrimaryKeyJoinColumn(name = "IDResponsavel", referencedColumnName = "IDCadastro")
 public class Responsavel extends Pessoa {
+
+    @Column(name = "Ocupacao")
     private String ocupacao;
 
     @OneToMany(mappedBy = "responsavel")

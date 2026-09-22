@@ -5,6 +5,7 @@ import java.util.List;
 import com.fatec.gisa.entities.profissional.Profissional;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
@@ -25,6 +26,7 @@ import lombok.Setter;
 @Table(name = "Especialista")
 @PrimaryKeyJoinColumn(name = "IDEspecialista", referencedColumnName = "IDProfissional")
 public class Especialista extends Profissional {
+    @Column(name = "RegistroConselho")
     private String registroConselho;
 
     @ManyToMany

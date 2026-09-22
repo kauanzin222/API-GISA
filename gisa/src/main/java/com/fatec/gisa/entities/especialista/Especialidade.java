@@ -1,5 +1,6 @@
 package com.fatec.gisa.entities.especialista;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -20,8 +21,12 @@ public class Especialidade {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "IDEspecialidade")
     private Long idEspecialidade;
 
+    @Column(name = "Nome")
     private String nome;
+
+    @Column(name = "Descricao")
     private String descricao;
 }

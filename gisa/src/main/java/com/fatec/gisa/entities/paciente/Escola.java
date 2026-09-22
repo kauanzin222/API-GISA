@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.fatec.gisa.enums.TipoEscola;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -29,12 +30,17 @@ public class Escola {
 
     @Id 
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "IDEscola")
     private Long idEscola;
     
+    @Column(name = "Nome")
     private String nome;
+
+    @Column(name = "Telefone")
     private String telefone;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "TipoEscola")
     private TipoEscola tipoEscola;
 
     @OneToMany(mappedBy = "escola")

@@ -29,7 +29,12 @@ public class Prontuario {
     @JoinColumn(name = "IDPaciente")
     private Paciente paciente;
 
+    @Column(name = "Alergias")
     private String alergias;
+
+    @Column(name = "Comorbidade")
     private String comorbidade;
+
+    @Column(name = "Mobilidade")
     private String mobilidade;
 }

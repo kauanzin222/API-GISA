@@ -2,6 +2,7 @@ package com.fatec.gisa.entities.especialista;
 
 import java.time.LocalTime;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -24,10 +25,16 @@ public class JornadaTrabalho {
     
     @Id 
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "IDJornada")
     private Long idJornada;
 
+    @Column(name = "DiaSemana")
     private Integer diaSemana;
+
+    @Column(name = "HoraInicio")
     private LocalTime horaInicio;
+
+    @Column(name = "HoraTermino")
     private LocalTime horaTermino;
 
     @ManyToOne

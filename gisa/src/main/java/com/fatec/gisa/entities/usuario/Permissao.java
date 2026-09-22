@@ -31,6 +31,8 @@ public class Permissao {
     
     @Column(name = "Nome")
     private String nome;
+
+    @Column(name = "Descricao")
     private String descricao;
 
     @ManyToMany(mappedBy = "permissoes")

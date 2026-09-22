@@ -18,7 +18,6 @@ public class CadastroMapper {
     public void preencherPessoa(Pessoa pessoa, PessoaCadastroRequestDTO dto) {
         pessoa.setNome(dto.getNome());
         pessoa.setCpf(dto.getCpf());
-        pessoa.setRg(dto.getRg());
         pessoa.setDataNascimento(dto.getDataNascimento());
         pessoa.setSexo(dto.getSexo());
         pessoa.setCelular(dto.getCelular());

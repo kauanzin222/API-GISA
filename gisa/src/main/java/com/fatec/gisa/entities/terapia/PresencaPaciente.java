@@ -4,6 +4,7 @@ import com.fatec.gisa.entities.paciente.Paciente;
 import com.fatec.gisa.entities.terapia.pk.PresencaPacientePK;
 import com.fatec.gisa.enums.StatusPresenca;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -29,8 +30,10 @@ public class PresencaPaciente {
     private PresencaPacientePK id = new PresencaPacientePK();
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "Presenca")
     private StatusPresenca presenca;
     
+    @Column(name = "Justificativa")
     private String justificativa;
 
     @ManyToOne
