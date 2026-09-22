@@ -33,7 +33,11 @@ public class EspecialistaService {
     @Transactional
     public Especialista cadastrar(EspecialistaCadastroRequestDTO dto) {
         Especialista especialista = new Especialista();
+        preencherDadosEspecialista(especialista, dto);
+        return especialistaRepository.save(especialista);
+    }
 
+    void preencherDadosEspecialista(Especialista especialista, EspecialistaCadastroRequestDTO dto) {
         especialista.setNome(dto.getNome());
         especialista.setCpf(dto.getCpf());
         especialista.setRg(dto.getRg());
@@ -57,8 +61,6 @@ public class EspecialistaService {
 
         especialista.setEspecialidades(new ArrayList<>(especialidades));
         especialista.setJornadaTrabalho(mapearJornadas(dto.getJornadas(), especialista));
-
-        return especialistaRepository.save(especialista);
     }
 
     private Set<Especialidade> processarEspecialidades(List<Long> especialidadesIds,

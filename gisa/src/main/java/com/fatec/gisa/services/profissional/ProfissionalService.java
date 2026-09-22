@@ -1,4 +1,4 @@
-package com.fatec.gisa.services.especialista;
+package com.fatec.gisa.services.profissional;
 
 import org.springframework.stereotype.Service;
 
@@ -6,6 +6,7 @@ import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
+import com.fatec.gisa.repositories.profissional.ProfissionalRepository;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 public class ProfissionalService {
 
     private final CargoRepository cargoRepository;
+    private final ProfissionalRepository profissionalRepository;
 
     @Transactional
     public Profissional criarProfissional(ProfissionalCadastroRequestDTO dto) {
@@ -35,6 +37,6 @@ public class ProfissionalService {
 
         profissional.setCargo(cargo);
 
-        return profissional;
+        return profissionalRepository.save(profissional);
     }
 }
