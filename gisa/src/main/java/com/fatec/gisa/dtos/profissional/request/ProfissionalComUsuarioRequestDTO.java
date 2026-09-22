@@ -6,11 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
 public record ProfissionalComUsuarioRequestDTO(
-        @NotNull(message = "Os dados do profissional sao obrigatorios.")
-        @Valid
-        ProfissionalCadastroRequestDTO profissional,
+        @NotNull(message = "Os dados do profissional sao obrigatorios.") @Valid ProfissionalCadastroRequestDTO profissional,
 
-        @NotNull(message = "Os dados do usuario sao obrigatorios.")
-        @Valid
-        UsuarioRequestDTO usuario) {
+        @NotNull(message = "Os dados do usuario sao obrigatorios.") @Valid UsuarioRequestDTO usuario) {
 }
