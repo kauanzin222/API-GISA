@@ -37,12 +37,12 @@ public class CadastroMapper {
         return dtos.stream().map(dto -> {
             Endereco endereco = new Endereco();
             endereco.setCep(dto.getCep());
-            endereco.setRua(dto.getLogradouro());
+            endereco.setRua(dto.getRua());
             endereco.setNumero(dto.getNumero());
             endereco.setComplemento(dto.getComplemento());
             endereco.setBairro(dto.getBairro());
             endereco.setCidade(dto.getCidade());
-            endereco.setEstado(dto.getUf());
+            endereco.setEstado(dto.getEstado());
             endereco.setMoradores(List.of(pessoa));
             return endereco;
         }).collect(Collectors.toList());
