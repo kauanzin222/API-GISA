@@ -28,7 +28,6 @@ curl -u 99999999999:Admin@12345 \
 {
   "nome": "Maria Silva",
   "cpf": "12345678901",
-  "rg": "123456789",
   "dataNascimento": "1990-05-10",
   "sexo": "F",
   "celular": "11999999999",
@@ -59,7 +58,6 @@ curl -u 99999999999:Admin@12345 \
   "profissional": {
     "nome": "Maria Silva",
     "cpf": "12345678901",
-    "rg": "123456789",
     "dataNascimento": "1990-05-10",
     "sexo": "F",
     "celular": "11999999999",
@@ -84,7 +82,6 @@ curl -u 99999999999:Admin@12345 \
 {
   "nome": "Joao Santos",
   "cpf": "23456789012",
-  "rg": "987654321",
   "dataNascimento": "1985-08-20",
   "sexo": "M",
   "celular": "11988888888",
