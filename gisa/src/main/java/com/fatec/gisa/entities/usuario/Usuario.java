@@ -34,7 +34,7 @@ public class Usuario {
     
     private String senha;
 
-    @ManyToOne
-    @JoinColumn(name = "IDPerfil")
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "IDPerfil", nullable = false)
     private Perfil perfil;
 }

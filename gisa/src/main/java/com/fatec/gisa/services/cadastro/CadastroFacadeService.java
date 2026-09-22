@@ -3,7 +3,10 @@ package com.fatec.gisa.services.cadastro;
 import org.springframework.stereotype.Service;
 
 import com.fatec.gisa.dtos.especialista.request.EspecialistaCadastroRequestDTO;
+import com.fatec.gisa.dtos.especialista.request.EspecialistaComUsuarioRequestDTO;
+import com.fatec.gisa.dtos.especialista.request.EspecialistaPJComUsuarioRequestDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaPJCadastroRequestDTO;
+import com.fatec.gisa.dtos.profissional.request.ProfissionalComUsuarioRequestDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.dtos.usuario.request.UsuarioRequestDTO;
 import com.fatec.gisa.entities.Pessoa;
@@ -61,5 +64,28 @@ public class CadastroFacadeService {
     @Transactional
     public Profissional cadastrarProfissional(ProfissionalCadastroRequestDTO dto) {
         return profissionalService.criarProfissional(dto);
+    }
+
+    @Transactional
+    public Profissional cadastrarProfissionalComUsuario(ProfissionalCadastroRequestDTO profissionalDto,
+            UsuarioRequestDTO usuarioDto) {
+        Profissional profissional = profissionalService.criarProfissional(profissionalDto);
+        usuarioService.criarUsuarioParaPessoa(profissional, usuarioDto);
+        return profissional;
+    }
+
+    @Transactional
+    public Profissional cadastrarProfissionalComUsuario(ProfissionalComUsuarioRequestDTO request) {
+        return cadastrarProfissionalComUsuario(request.profissional(), request.usuario());
+    }
+
+    @Transactional
+    public Especialista cadastrarEspecialistaComUsuario(EspecialistaComUsuarioRequestDTO request) {
+        return cadastrarEspecialistaComUsuario(request.especialista(), request.usuario());
+    }
+
+    @Transactional
+    public EspecialistaPJ cadastrarEspecialistaPJComUsuario(EspecialistaPJComUsuarioRequestDTO request) {
+        return cadastrarEspecialistaPJComUsuario(request.especialistaPJ(), request.usuario());
     }
 }
