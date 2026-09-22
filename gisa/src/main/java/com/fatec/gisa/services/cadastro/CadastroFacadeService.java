@@ -1,4 +1,4 @@
-package com.fatec.gisa.services;
+package com.fatec.gisa.services.cadastro;
 
 import org.springframework.stereotype.Service;
 

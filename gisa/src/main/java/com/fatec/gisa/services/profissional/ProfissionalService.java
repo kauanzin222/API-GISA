@@ -7,6 +7,7 @@ import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.repositories.profissional.ProfissionalRepository;
+import com.fatec.gisa.services.cadastro.CadastroMapper;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -15,27 +16,19 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ProfissionalService {
 
-    private final CargoRepository cargoRepository;
     private final ProfissionalRepository profissionalRepository;
+    private final CargoRepository cargoRepository;
+    private final CadastroMapper cadastroMapper;
 
     @Transactional
     public Profissional criarProfissional(ProfissionalCadastroRequestDTO dto) {
         Profissional profissional = new Profissional();
 
-        profissional.setNome(dto.getNome());
-        profissional.setCpf(dto.getCpf());
-        profissional.setRg(dto.getRg());
-        profissional.setDataNascimento(dto.getDataNascimento());
-        profissional.setSexo(dto.getSexo());
-        profissional.setCelular(dto.getCelular());
-        profissional.setNumCNS(dto.getNumCNS());
-        profissional.setEstadoCivil(dto.getEstadoCivil());
-        profissional.setEmail(dto.getEmail());
-
         Cargo cargo = cargoRepository.findById(dto.getIdCargo())
-                .orElseThrow(() -> new IllegalArgumentException("Cargo não encontrado"));
-
-        profissional.setCargo(cargo);
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Cargo nao encontrado com ID: " + dto.getIdCargo()));
+                        
+        cadastroMapper.preencherProfissional(profissional, dto, cargo);
 
         return profissionalRepository.save(profissional);
     }
