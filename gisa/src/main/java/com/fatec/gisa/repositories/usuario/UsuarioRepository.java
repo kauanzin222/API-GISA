@@ -10,5 +10,5 @@ import com.fatec.gisa.entities.usuario.Usuario;
 @Repository 
 public interface UsuarioRepository extends JpaRepository<Usuario, Long>{
     Optional<Usuario> findByPessoa_Cpf(String cpf);
-    boolean existsByPessoaCpf(String cpf);
+    boolean existsByPessoa_Cpf(String cpf);
 }
