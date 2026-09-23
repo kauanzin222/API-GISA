@@ -31,7 +31,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode
+@EqualsAndHashCode(exclude = {"usuario", "enderecos"})
 @Table(name = "Pessoa")
 @Inheritance(strategy = InheritanceType.JOINED)
 public class Pessoa {

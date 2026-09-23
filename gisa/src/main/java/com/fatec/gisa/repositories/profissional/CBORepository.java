@@ -8,7 +8,7 @@ import org.springframework.stereotype.Repository;
 import com.fatec.gisa.entities.profissional.Cbo;
 
 @Repository
-public interface CBORepository extends JpaRepository<Cbo, Integer> {
+public interface CBORepository extends JpaRepository<Cbo, String> {
     
-    Optional<Cbo> findByCodigoCBO(Integer codigoCBO);
+    Optional<Cbo> findByCodigoCBO(String codigoCBO);
 }

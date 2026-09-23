@@ -3,7 +3,6 @@ package com.fatec.gisa.dtos.especialista.response;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.fatec.gisa.dtos.especialista.EspecialidadeDTO;
 import com.fatec.gisa.dtos.especialista.JornadaTrabalhoDTO;
 
 import lombok.AllArgsConstructor;
@@ -35,6 +34,6 @@ public class EspecialistaResponseDTO {
     private String inscricaoEstadual;
 
     // Listas associadas
-    private List<EspecialidadeDTO> especialidades;
+    private List<EspecialidadeResponseDTO> especialidades;
     private List<JornadaTrabalhoDTO> jornadas;
 }

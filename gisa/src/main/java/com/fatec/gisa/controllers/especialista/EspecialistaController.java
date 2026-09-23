@@ -1,4 +1,4 @@
-package com.fatec.gisa.controllers;
+package com.fatec.gisa.controllers.especialista;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;

@@ -57,4 +57,9 @@ public class EspecialidadeService {
         especialidade.setDescricao(dto.getDescricao());
         return especialidadeRepository.save(especialidade);
     }
+
+    @Transactional
+    public List<Especialidade> listarTodas() {
+        return especialidadeRepository.findAll();
+    }
 }

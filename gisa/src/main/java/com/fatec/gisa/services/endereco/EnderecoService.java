@@ -1,5 +1,6 @@
 package com.fatec.gisa.services.endereco;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -27,7 +28,19 @@ public class EnderecoService {
             return;
         }
 
-        List<Endereco> enderecos = cadastroMapper.mapearEnderecos(pessoa, enderecosDTO);
+        List<Endereco> enderecos = new ArrayList<>();
+
+        for (EnderecoDTO dto : enderecosDTO) {
+            Endereco endereco = enderecoRepository.findByCepAndNumeroAndComplemento(dto.getCep(), dto.getNumero(), dto.getComplemento())
+                    .orElseGet(() -> cadastroMapper.criarEndereco(dto));
+
+            if (!endereco.getMoradores().contains(pessoa)) {
+                endereco.getMoradores().add(pessoa);
+            }
+
+            enderecos.add(endereco);
+        }
+
         enderecoRepository.saveAll(enderecos);
         pessoa.setEnderecos(enderecos);
     }

@@ -1,5 +1,6 @@
 package com.fatec.gisa.services.cadastro;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,18 +33,16 @@ public class CadastroMapper {
         profissional.setCargo(cargo);
     }
 
-    public List<Endereco> mapearEnderecos(Pessoa pessoa, List<EnderecoDTO> dtos) {
-        return dtos.stream().map(dto -> {
-            Endereco endereco = new Endereco();
-            endereco.setCep(dto.getCep());
-            endereco.setRua(dto.getRua());
-            endereco.setNumero(dto.getNumero());
-            endereco.setComplemento(dto.getComplemento());
-            endereco.setBairro(dto.getBairro());
-            endereco.setCidade(dto.getCidade());
-            endereco.setEstado(dto.getEstado());
-            endereco.setMoradores(List.of(pessoa));
-            return endereco;
-        }).collect(Collectors.toList());
+    public Endereco criarEndereco(EnderecoDTO dto) {
+        Endereco endereco = new Endereco();
+        endereco.setCep(dto.getCep());
+        endereco.setRua(dto.getRua());
+        endereco.setNumero(dto.getNumero());
+        endereco.setComplemento(dto.getComplemento());
+        endereco.setBairro(dto.getBairro());
+        endereco.setCidade(dto.getCidade());
+        endereco.setEstado(dto.getEstado());
+        endereco.setMoradores(new ArrayList<>());
+        return endereco;
     }
 }
