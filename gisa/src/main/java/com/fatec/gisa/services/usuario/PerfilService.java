@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import com.fatec.gisa.entities.usuario.Perfil;
 import com.fatec.gisa.repositories.usuario.PerfilRepository;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service

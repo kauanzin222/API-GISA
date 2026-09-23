@@ -10,7 +10,7 @@ import com.fatec.gisa.entities.Endereco;
 import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.repositories.EnderecoRepository;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service

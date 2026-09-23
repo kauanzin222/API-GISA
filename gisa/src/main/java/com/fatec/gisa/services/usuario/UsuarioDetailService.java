@@ -15,7 +15,7 @@ import com.fatec.gisa.entities.usuario.Permissao;
 import com.fatec.gisa.entities.usuario.Usuario;
 import com.fatec.gisa.repositories.usuario.UsuarioRepository;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service

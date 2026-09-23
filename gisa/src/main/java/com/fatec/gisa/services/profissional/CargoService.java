@@ -3,6 +3,7 @@ package com.fatec.gisa.services.profissional;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.fatec.gisa.dtos.profissional.request.CargoRequestDTO;
 import com.fatec.gisa.entities.profissional.Cargo;
@@ -10,7 +11,7 @@ import com.fatec.gisa.entities.profissional.Cbo;
 import com.fatec.gisa.repositories.profissional.CBORepository;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 
-import jakarta.transaction.Transactional;
+
 import lombok.RequiredArgsConstructor;
 
 @Service

@@ -10,7 +10,7 @@ import com.fatec.gisa.dtos.especialista.request.EspecialidadeRequestDTO;
 import com.fatec.gisa.entities.especialista.Especialidade;
 import com.fatec.gisa.repositories.especialista.EspecialidadeRepository;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service

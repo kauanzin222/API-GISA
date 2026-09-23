@@ -10,7 +10,7 @@ import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.services.endereco.EnderecoService;
 import com.fatec.gisa.services.profissional.ProfissionalMapper;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service

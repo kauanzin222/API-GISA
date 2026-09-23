@@ -1,6 +1,11 @@
 package com.fatec.gisa.controllers.profissional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -9,8 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalComUsuarioRequestDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalCadastroResponseDTO;
+import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.services.cadastro.CadastroFacadeService;
+import com.fatec.gisa.services.profissional.ProfissionalService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +27,15 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ProfissionalController {
 
+    private final ProfissionalService profissionalService;
     private final CadastroFacadeService cadastroFacadeService;
+
+    @GetMapping
+    public ResponseEntity<Page<ProfissionalResumoDTO>> listarPaginado(
+            @PageableDefault(page = 0, size = 10, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
+        Page<ProfissionalResumoDTO> pagina = profissionalService.listarPaginado(pageable);
+        return ResponseEntity.ok(pagina);
+    }
 
     @PostMapping
     public ResponseEntity<ProfissionalCadastroResponseDTO> cadastrar(

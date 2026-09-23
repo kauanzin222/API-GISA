@@ -1,15 +1,18 @@
 package com.fatec.gisa.services.profissional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
+import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.repositories.profissional.ProfissionalRepository;
 import com.fatec.gisa.services.endereco.EnderecoService;
 
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -28,11 +31,17 @@ public class ProfissionalService {
         Cargo cargo = cargoRepository.findById(dto.getIdCargo())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Cargo nao encontrado com ID: " + dto.getIdCargo()));
-                        
+
         profissionalMapper.preencherProfissional(profissional, dto, cargo);
 
         Profissional profissionalSalvo = profissionalRepository.save(profissional);
         enderecoService.associarEnderecos(profissionalSalvo, dto.getEnderecos());
         return profissionalSalvo;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ProfissionalResumoDTO> listarPaginado(Pageable pageable) {
+        return profissionalRepository.findAll(pageable)
+                .map(profissionalMapper::toResumoDTO);
     }
 }

@@ -7,7 +7,7 @@ import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.repositories.especialista.EspecialistaPJRepository;
 import com.fatec.gisa.services.endereco.EnderecoService;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service

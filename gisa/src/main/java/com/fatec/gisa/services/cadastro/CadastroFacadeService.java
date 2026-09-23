@@ -18,7 +18,7 @@ import com.fatec.gisa.services.especialista.EspecialistaService;
 import com.fatec.gisa.services.profissional.ProfissionalService;
 import com.fatec.gisa.services.usuario.UsuarioService;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service

@@ -2,6 +2,7 @@ package com.fatec.gisa.services.usuario;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.fatec.gisa.dtos.usuario.request.UsuarioRequestDTO;
 import com.fatec.gisa.entities.Pessoa;
@@ -10,7 +11,7 @@ import com.fatec.gisa.entities.usuario.Usuario;
 import com.fatec.gisa.repositories.usuario.PerfilRepository;
 import com.fatec.gisa.repositories.usuario.UsuarioRepository;
 
-import jakarta.transaction.Transactional;
+
 
 @Service
 public class UsuarioService {
