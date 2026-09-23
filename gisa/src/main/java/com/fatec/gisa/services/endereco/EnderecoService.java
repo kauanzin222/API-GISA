@@ -9,7 +9,6 @@ import com.fatec.gisa.dtos.EnderecoDTO;
 import com.fatec.gisa.entities.Endereco;
 import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.repositories.EnderecoRepository;
-import com.fatec.gisa.services.cadastro.CadastroMapper;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +18,7 @@ import lombok.RequiredArgsConstructor;
 public class EnderecoService {
 
     private final EnderecoRepository enderecoRepository;
-    private final CadastroMapper cadastroMapper;
+    private final EnderecoMapper enderecoMapper;
 
     @Transactional
     public void associarEnderecos(Pessoa pessoa, List<EnderecoDTO> enderecosDTO) {
@@ -32,7 +31,7 @@ public class EnderecoService {
 
         for (EnderecoDTO dto : enderecosDTO) {
             Endereco endereco = enderecoRepository.findByCepAndNumeroAndComplemento(dto.getCep(), dto.getNumero(), dto.getComplemento())
-                    .orElseGet(() -> cadastroMapper.criarEndereco(dto));
+                    .orElseGet(() -> enderecoMapper.criarEndereco(dto));
 
             if (!endereco.getMoradores().contains(pessoa)) {
                 endereco.getMoradores().add(pessoa);
