@@ -51,7 +51,8 @@ public class EspecialidadeService {
         return resultado;
     }
 
-    private Especialidade criar(EspecialidadeRequestDTO dto) {
+    @Transactional 
+    public Especialidade criar(EspecialidadeRequestDTO dto) {
         Especialidade especialidade = new Especialidade();
         especialidade.setNome(dto.getNome());
         especialidade.setDescricao(dto.getDescricao());

@@ -29,7 +29,7 @@ public class CargoController {
     public ResponseEntity<List<CargoResponseDTO>> listarTodos() {
         List<CargoResponseDTO> cargos = cargoService.listarTodos()
                 .stream()
-                .map(this::toDTO)
+                .map(this::toResponse)
                 .toList();
 
         return ResponseEntity.ok(cargos);
@@ -38,10 +38,10 @@ public class CargoController {
     @PostMapping
     public ResponseEntity<CargoResponseDTO> criar(@Valid @RequestBody CargoRequestDTO dto) {
         Cargo cargo = cargoService.criar(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(toDTO(cargo));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(cargo));
     }
 
-    private CargoResponseDTO toDTO(Cargo cargo) {
+    private CargoResponseDTO toResponse(Cargo cargo) {
         return new CargoResponseDTO(
                 cargo.getIdCargo(),
                 cargo.getNome(),
