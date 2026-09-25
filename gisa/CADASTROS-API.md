@@ -11,18 +11,9 @@ Usuario: 99999999999
 Senha: Admin@12345
 ```
 
-Exemplo com `curl`:
-
-```bash
-curl -u 99999999999:Admin@12345 \
-  -H "Content-Type: application/json" \
-  -X POST http://localhost:8080/api/profissionais \
-  -d @profissional.json
-```
-
 ## 1. Profissional
 
-`POST /api/profissionais`
+`POST https://api-gisa.onrender.com/api/profissionais`
 
 ```json
 {
@@ -51,7 +42,7 @@ curl -u 99999999999:Admin@12345 \
 
 ## 2. Profissional com acesso
 
-`POST /api/profissionais/com-usuario`
+`POST https://api-gisa.onrender.com/api/profissionais/com-usuario`
 
 ```json
 {
@@ -76,7 +67,7 @@ curl -u 99999999999:Admin@12345 \
 
 ## 3. Especialista
 
-`POST /api/especialistas`
+`POST https://api-gisa.onrender.com/api/especialistas`
 
 ```json
 {
@@ -121,7 +112,7 @@ O especialista precisa possuir pelo menos uma especialidade existente ou nova.
 
 ## 4. Especialista com acesso
 
-`POST /api/especialistas/com-usuario`
+`POST https://api-gisa.onrender.com/api/especialistas/com-usuario`
 
 ```json
 {
@@ -155,7 +146,7 @@ O especialista precisa possuir pelo menos uma especialidade existente ou nova.
 
 ## 5. Especialista PJ
 
-`POST /api/especialistas/pj`
+`POST https://api-gisa.onrender.com/api/especialistas/pj`
 
 ```json
 {
@@ -187,7 +178,7 @@ O especialista precisa possuir pelo menos uma especialidade existente ou nova.
 
 ## 6. Especialista PJ com acesso
 
-`POST /api/especialistas/pj/com-usuario`
+`POST https://api-gisa.onrender.com/api/especialistas/pj/com-usuario`
 
 ```json
 {
