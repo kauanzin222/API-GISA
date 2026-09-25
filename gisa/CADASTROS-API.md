@@ -1,15 +1,22 @@
 # Payloads de cadastro da API
 
-Todos os endpoints exigem autenticacao HTTP Basic.
+Todos os endpoints exigem autenticacao JWT Token.
 
 ## Autenticacao
 
 Use as credenciais administrativas iniciais:
 
-```text
-Usuario: 99999999999
-Senha: Admin@12345
+JSON: 
+```json
+{
+    "cpf": "99999999999",
+    "senha": "Admin@12345"
+}
 ```
+
+O endpoint: `POST https://api-gisa.onrender.com/api/auth/login` retornará um token válido.
+
+Para encerrar a sessão, remova o token da aplicação.
 
 ## 1. Profissional
 
