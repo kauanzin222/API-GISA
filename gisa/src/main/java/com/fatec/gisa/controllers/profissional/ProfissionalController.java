@@ -32,7 +32,7 @@ public class ProfissionalController {
 
     @GetMapping
     public ResponseEntity<Page<ProfissionalResumoDTO>> listarPaginado(
-            @PageableDefault(page = 0, size = 10, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
+            @PageableDefault(page = 0, size = 9, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
         Page<ProfissionalResumoDTO> pagina = profissionalService.listarPaginado(pageable);
         return ResponseEntity.ok(pagina);
     }
