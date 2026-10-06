@@ -1,6 +1,8 @@
 package com.fatec.gisa.controllers.especialista;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,9 +14,13 @@ import com.fatec.gisa.dtos.especialista.request.EspecialistaPJCadastroRequestDTO
 import com.fatec.gisa.dtos.especialista.request.EspecialistaPJComUsuarioRequestDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaCadastroResponseDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaPJCadastroResponseDTO;
+import com.fatec.gisa.dtos.especialista.response.EspecialistaPJResponseDTO;
+import com.fatec.gisa.dtos.especialista.response.EspecialistaResponseDTO;
 import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.services.cadastro.CadastroFacadeService;
+import com.fatec.gisa.services.especialista.EspecialistaService;
+import com.fatec.gisa.services.especialista.EspecialistaPJService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +31,18 @@ import lombok.RequiredArgsConstructor;
 public class EspecialistaController {
 
     private final CadastroFacadeService cadastroFacadeService;
+    private final EspecialistaService especialistaService;
+    private final EspecialistaPJService especialistaPJService;
+
+    @GetMapping("/{idCadastro}")
+    public ResponseEntity<EspecialistaResponseDTO> buscarPorId(@PathVariable Long idCadastro) {
+        return ResponseEntity.of(especialistaService.buscarDetalhes(idCadastro));
+    }
+
+    @GetMapping("/pj/{idCadastro}")
+    public ResponseEntity<EspecialistaPJResponseDTO> buscarPJPorId(@PathVariable Long idCadastro) {
+        return ResponseEntity.of(especialistaPJService.buscarDetalhes(idCadastro));
+    }
 
     @PostMapping
     public ResponseEntity<EspecialistaCadastroResponseDTO> cadastrar(

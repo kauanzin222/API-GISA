@@ -6,6 +6,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalComUsuarioRequestDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalCadastroResponseDTO;
+import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.services.cadastro.CadastroFacadeService;
@@ -35,6 +37,11 @@ public class ProfissionalController {
             @PageableDefault(page = 0, size = 9, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
         Page<ProfissionalResumoDTO> pagina = profissionalService.listarPaginado(pageable);
         return ResponseEntity.ok(pagina);
+    }
+
+    @GetMapping("/{idCadastro}")
+    public ResponseEntity<ProfissionalResponseDTO> buscarPorId(@PathVariable Long idCadastro) {
+        return ResponseEntity.of(profissionalService.buscarDetalhes(idCadastro));
     }
 
     @PostMapping

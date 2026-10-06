@@ -1,39 +1,13 @@
 package com.fatec.gisa.dtos.especialista.response;
 
-import java.time.LocalDate;
 import java.util.List;
 
 import com.fatec.gisa.dtos.especialista.JornadaTrabalhoDTO;
+import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class EspecialistaResponseDTO {
-
-    private Long idCadastro;
-    private String nome;
-    private String cpf;
-    private String email;
-    private String telefone;
-    private LocalDate dataNascimento;
-
-    // Dados do Cargo e Conselho
-    private Long idCargo;
-    private String nomeCargo;
-    private String registroConselho;
-
-    // Dados PJ (populados apenas se for PJ)
-    private Boolean isPJ;
-    private String cnpj;
-    private String razaoSocial;
-    private String nomeFantasia;
-    private String inscricaoEstadual;
-
-    // Listas associadas
-    private List<EspecialidadeResponseDTO> especialidades;
-    private List<JornadaTrabalhoDTO> jornadas;
+public record EspecialistaResponseDTO(
+        ProfissionalResponseDTO profissional,
+        String registroConselho,
+        List<EspecialidadeResponseDTO> especialidades,
+        List<JornadaTrabalhoDTO> jornadas) {
 }

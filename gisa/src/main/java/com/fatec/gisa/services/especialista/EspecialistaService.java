@@ -1,8 +1,11 @@
 package com.fatec.gisa.services.especialista;
 
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 
 import com.fatec.gisa.dtos.especialista.request.EspecialistaCadastroRequestDTO;
+import com.fatec.gisa.dtos.especialista.response.EspecialistaResponseDTO;
 import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.repositories.especialista.EspecialistaRepository;
@@ -31,6 +34,12 @@ public class EspecialistaService {
         Especialista especialistaSalvo = especialistaRepository.save(especialista);
         enderecoService.associarEnderecos(especialistaSalvo, dto.getEnderecos());
         return especialistaSalvo;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<EspecialistaResponseDTO> buscarDetalhes(Long idCadastro) {
+        return especialistaRepository.findById(idCadastro)
+                .map(profissionalMapper::toEspecialistaResponseDTO);
     }
 
     void preencherDadosEspecialista(Especialista especialista, EspecialistaCadastroRequestDTO dto) {

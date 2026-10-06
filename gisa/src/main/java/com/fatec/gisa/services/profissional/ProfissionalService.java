@@ -4,8 +4,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Optional;
 
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
+import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
@@ -43,5 +45,11 @@ public class ProfissionalService {
     public Page<ProfissionalResumoDTO> listarPaginado(Pageable pageable) {
         return profissionalRepository.findAll(pageable)
                 .map(profissionalMapper::toResumoDTO);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<ProfissionalResponseDTO> buscarDetalhes(Long idCadastro) {
+        return profissionalRepository.findById(idCadastro)
+                .map(profissionalMapper::toProfissionalResponseDTO);
     }
 }
