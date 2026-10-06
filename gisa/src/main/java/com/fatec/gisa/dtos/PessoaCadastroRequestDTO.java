@@ -33,7 +33,7 @@ public class PessoaCadastroRequestDTO {
     @NotNull(message = "O sexo é obrigatório")
     private Character sexo;
 
-    @NotBlank(message = "O celular é obrigatório")
+    // @NotBlank(message = "O celular é obrigatório")
     private String celular;
 
     private String numCNS;
