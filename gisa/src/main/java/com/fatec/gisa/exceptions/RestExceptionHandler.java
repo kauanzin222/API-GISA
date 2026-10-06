@@ -8,6 +8,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -18,6 +19,13 @@ import jakarta.validation.ConstraintViolationException;
 @RestControllerAdvice
 public class RestExceptionHandler {
 
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiErrorResponse> handleAuthentication(
+            AuthenticationException exception,
+            HttpServletRequest request) {
+        return response(HttpStatus.UNAUTHORIZED, "Credenciais inválidas.", request, Map.of());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleMethodArgumentNotValid(
             MethodArgumentNotValidException exception,
@@ -26,7 +34,7 @@ public class RestExceptionHandler {
         exception.getBindingResult().getFieldErrors()
                 .forEach(error -> fields.putIfAbsent(error.getField(), error.getDefaultMessage()));
 
-        return response(HttpStatus.BAD_REQUEST, "Erro de validacao dos dados.", request, fields);
+        return response(HttpStatus.BAD_REQUEST, "Erro de validação dos dados.", request, fields);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -44,7 +52,7 @@ public class RestExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleMessageNotReadable(
             HttpMessageNotReadableException exception,
             HttpServletRequest request) {
-        return response(HttpStatus.BAD_REQUEST, "Corpo da requisicao invalido ou malformado.", request, Map.of());
+        return response(HttpStatus.BAD_REQUEST, "Corpo da requisição inválido ou malformado.", request, Map.of());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
