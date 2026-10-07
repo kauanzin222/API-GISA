@@ -13,8 +13,11 @@ import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.entities.profissional.Profissional;
+import com.fatec.gisa.entities.paciente.Paciente;
+import com.fatec.gisa.dtos.paciente.request.PacienteCadastroRequestDTO;
 import com.fatec.gisa.services.especialista.EspecialistaPJService;
 import com.fatec.gisa.services.especialista.EspecialistaService;
+import com.fatec.gisa.services.paciente.PacienteService;
 import com.fatec.gisa.services.profissional.ProfissionalService;
 import com.fatec.gisa.services.usuario.UsuarioService;
 
@@ -29,6 +32,12 @@ public class CadastroFacadeService {
     private final EspecialistaPJService especialistaPJService;
     private final UsuarioService usuarioService;
     private final ProfissionalService profissionalService;
+    private final PacienteService pacienteService;
+
+    @Transactional
+    public Paciente cadastrarPaciente(PacienteCadastroRequestDTO dto) {
+        return pacienteService.cadastrar(dto);
+    }
 
     @Transactional
     public Especialista cadastrarEspecialista(EspecialistaCadastroRequestDTO dto) {

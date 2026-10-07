@@ -24,7 +24,12 @@ public class PacienteCadastroRequestDTO extends PessoaCadastroRequestDTO {
     @Positive(message = "O ID da escola deve ser positivo")
     private Long idEscola;
 
+    private Boolean convenio;
+
     private List<@NotBlank(message = "O código CID não pode ser vazio") String> codigosCid;
+
+    @Valid
+    private List<CidCadastroRequestDTO> novosCids;
 
     @NotNull(message = "Os dados do prontuário são obrigatórios")
     @Valid
