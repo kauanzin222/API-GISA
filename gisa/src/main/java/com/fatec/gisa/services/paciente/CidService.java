@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -21,6 +22,11 @@ import lombok.RequiredArgsConstructor;
 public class CidService {
 
     private final CidRepository cidRepository;
+
+    @Transactional(readOnly = true)
+    public Optional<Cid> buscarPorCodigo(String codigoCID) {
+        return cidRepository.findById(codigoCID);
+    }
 
     @Transactional
     public List<Cid> obterOuCriar(List<String> codigosCid, List<CidCadastroRequestDTO> novosCids) {
