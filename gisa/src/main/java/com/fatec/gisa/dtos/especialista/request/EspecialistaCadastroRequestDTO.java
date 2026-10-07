@@ -26,10 +26,8 @@ public class EspecialistaCadastroRequestDTO extends ProfissionalCadastroRequestD
     private List<Long> especialidadesIds;
 
     // Novas especialidades criadas na tela pelo usuário
-    @Valid
-    private List<EspecialidadeRequestDTO> novasEspecialidades;
+    private List<@Valid EspecialidadeRequestDTO> novasEspecialidades;
 
-    @Valid
     @NotEmpty(message = "Informe ao menos um horário de jornada de trabalho")
-    private List<JornadaTrabalhoDTO> jornadas;
+    private List<@Valid JornadaTrabalhoDTO> jornadas;
 }

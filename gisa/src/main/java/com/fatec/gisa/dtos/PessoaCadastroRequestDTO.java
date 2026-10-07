@@ -41,6 +41,5 @@ public class PessoaCadastroRequestDTO {
     @NotNull(message = "O estado civil é obrigatório")
     private EstadoCivil estadoCivil;
 
-    @Valid
-    private List<EnderecoDTO> enderecos;
+    private List<@Valid EnderecoDTO> enderecos;
 }

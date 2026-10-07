@@ -28,16 +28,14 @@ public class PacienteCadastroRequestDTO extends PessoaCadastroRequestDTO {
 
     private List<@NotBlank(message = "O código CID não pode ser vazio") String> codigosCid;
 
-    @Valid
-    private List<CidCadastroRequestDTO> novosCids;
+    private List<@Valid CidCadastroRequestDTO> novosCids;
 
     @NotNull(message = "Os dados do prontuário são obrigatórios")
     @Valid
     private ProntuarioCadastroRequestDTO prontuario;
 
     @NotEmpty(message = "Informe ao menos um responsável")
-    @Valid
-    private List<ResponsavelCadastroRequestDTO> responsaveis;
+    private List<@Valid ResponsavelCadastroRequestDTO> responsaveis;
 
     @Override
     @NotEmpty(message = "Informe ao menos um endereço para o paciente")
