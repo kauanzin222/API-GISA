@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import com.fatec.gisa.enums.EstadoCivil;
+import com.fatec.gisa.validation.SexoValido;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -25,12 +26,11 @@ public class PessoaCadastroRequestDTO {
     @Pattern(regexp = "\\d{11}", message = "O CPF deve conter 11 dígitos numéricos")
     private String cpf;
 
-    private String rg;
-
     @NotNull(message = "A data de nascimento é obrigatória")
     private LocalDate dataNascimento;
 
     @NotNull(message = "O sexo é obrigatório")
+    @SexoValido
     private Character sexo;
 
     // @NotBlank(message = "O celular é obrigatório")

@@ -31,7 +31,7 @@ public class PacienteController {
 
     @GetMapping
     public ResponseEntity<Page<PacienteResumoDTO>> listarPaginado(
-            @PageableDefault(page = 0, size = 10, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
+            @PageableDefault(page = 0, size = 9, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(pacienteService.listarPaginado(pageable));
     }
 
