@@ -1,0 +1,2 @@
+ALTER TABLE "Pessoa"
+ALTER COLUMN "Celular" DROP NOT NULL;
