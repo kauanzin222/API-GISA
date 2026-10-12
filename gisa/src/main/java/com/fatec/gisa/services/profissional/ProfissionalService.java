@@ -7,12 +7,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
 
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
+import com.fatec.gisa.dtos.profissional.request.ProfissionalPatchRequestDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
+import com.fatec.gisa.enums.StatusCadastro;
+import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.repositories.profissional.ProfissionalRepository;
+import com.fatec.gisa.repositories.usuario.PerfilRepository;
 import com.fatec.gisa.services.endereco.EnderecoService;
 
 import lombok.RequiredArgsConstructor;
@@ -23,6 +27,7 @@ public class ProfissionalService {
 
     private final ProfissionalRepository profissionalRepository;
     private final CargoRepository cargoRepository;
+    private final PerfilRepository perfilRepository;
     private final ProfissionalMapper profissionalMapper;
     private final EnderecoService enderecoService;
 
@@ -51,5 +56,81 @@ public class ProfissionalService {
     public Optional<ProfissionalResponseDTO> buscarDetalhes(Long idCadastro) {
         return profissionalRepository.findById(idCadastro)
                 .map(profissionalMapper::toProfissionalResponseDTO);
+    }
+
+    @Transactional
+    public Profissional atualizar(Long idCadastro, ProfissionalPatchRequestDTO dto) {
+        Profissional profissional = profissionalRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Profissional não encontrado com ID: " + idCadastro));
+
+        if (dto.hasField("nome")) {
+            if (dto.getNome() == null || dto.getNome().isBlank()) {
+                throw new IllegalArgumentException("O nome não pode ser vazio.");
+            }
+            profissional.setNome(dto.getNome());
+        }
+        if (dto.hasField("celular")) {
+            profissional.setCelular(dto.getCelular());
+        }
+        if (dto.hasField("numCNS")) {
+            profissional.setNumCNS(dto.getNumCNS());
+        }
+        if (dto.hasField("estadoCivil")) {
+            if (dto.getEstadoCivil() == null) {
+                throw new IllegalArgumentException("O estado civil não pode ser nulo.");
+            }
+            profissional.setEstadoCivil(dto.getEstadoCivil());
+        }
+        if (dto.hasField("statusCadastro")) {
+            if (dto.getStatusCadastro() == null) {
+                throw new IllegalArgumentException("O status do cadastro não pode ser nulo.");
+            }
+            profissional.setStatusCadastro(dto.getStatusCadastro());
+        }
+        if (dto.hasField("enderecos")) {
+            enderecoService.substituirEnderecos(profissional, dto.getEnderecos());
+        }
+        if (dto.hasField("email")) {
+            if (dto.getEmail() == null || dto.getEmail().isBlank()) {
+                throw new IllegalArgumentException("O e-mail não pode ser vazio.");
+            }
+            if (profissionalRepository.existsByEmailAndIdCadastroNot(
+                    dto.getEmail(), profissional.getIdCadastro())) {
+                throw new IllegalArgumentException("Já existe um profissional com este e-mail.");
+            }
+            profissional.setEmail(dto.getEmail());
+        }
+        if (dto.hasField("idCargo")) {
+            if (dto.getIdCargo() == null) {
+                throw new IllegalArgumentException("O cargo não pode ser nulo.");
+            }
+            Cargo cargo = cargoRepository.findById(dto.getIdCargo())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Cargo não encontrado com ID: " + dto.getIdCargo()));
+            profissional.setCargo(cargo);
+        }
+        if (dto.hasField("idPerfil")) {
+            if (dto.getIdPerfil() == null) {
+                throw new IllegalArgumentException("O perfil de acesso não pode ser nulo.");
+            }
+            if (profissional.getUsuario() == null) {
+                throw new IllegalStateException(
+                        "Não é possível alterar o perfil: o profissional não possui usuário.");
+            }
+            profissional.getUsuario().setPerfil(perfilRepository.findById(dto.getIdPerfil())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Perfil não encontrado com ID: " + dto.getIdPerfil())));
+        }
+
+        return profissionalRepository.save(profissional);
+    }
+
+    @Transactional
+    public void inativar(Long idCadastro) {
+        Profissional profissional = profissionalRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Profissional não encontrado com ID: " + idCadastro));
+        profissional.setStatusCadastro(StatusCadastro.INATIVO);
     }
 }

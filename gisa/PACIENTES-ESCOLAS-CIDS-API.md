@@ -163,7 +163,72 @@ Observações:
 
 ---
 
-### 1.2 `POST /api/pacientes` — cadastrar paciente
+### 1.2 `GET /api/pacientes/{idCadastro}` — detalhes do paciente
+
+Retorna os dados pessoais, endereços, escola, CIDs, prontuário e responsáveis com seus graus de parentesco.
+
+```json
+{
+  "pessoa": {
+    "idCadastro": 1,
+    "nome": "Lucas Almeida Souza",
+    "cpf": "45678901234",
+    "dataNascimento": "2015-04-12",
+    "sexo": "M",
+    "celular": "15999990000",
+    "numCNS": null,
+    "estadoCivil": "SOLTEIRO",
+    "statusCadastro": "ATIVO",
+    "enderecos": []
+  },
+  "statusPaciente": "MATRICULADO",
+  "dataCadastro": "2026-10-12",
+  "convenio": true,
+  "escola": null,
+  "cids": [],
+  "prontuario": {
+    "alergias": null,
+    "comorbidade": null,
+    "mobilidade": null
+  },
+  "responsaveis": []
+}
+```
+
+Retorna `404` quando o paciente não existe.
+
+### 1.3 `PATCH /api/pacientes/{idCadastro}` — atualizar paciente
+
+Envie somente os campos que deseja alterar. Campos omitidos permanecem iguais; campos opcionais podem ser limpos enviando `null`. As listas `enderecos`, `codigosCid` e `responsaveis`, quando enviadas, substituem os valores atuais. O paciente precisa continuar com pelo menos um responsável.
+
+`cpf`, `dataNascimento`, `sexo` e `dataCadastro` não são alteráveis. Cada responsável é referenciado pelo ID e o PATCH do paciente altera apenas o vínculo e o grau de parentesco, não os dados pessoais do responsável.
+
+```json
+{
+  "nome": "Lucas Almeida",
+  "convenio": false,
+  "codigosCid": ["F84.0"],
+  "prontuario": {
+    "alergias": null
+  },
+  "responsaveis": [
+    {
+      "idResponsavel": 2,
+      "grauParentesco": "MAE"
+    }
+  ]
+}
+```
+
+Enviando `"enderecos": []` ou `"codigosCid": []`, remove os itens associados. A resposta `200` contém os detalhes atualizados do paciente.
+
+### 1.4 `DELETE /api/pacientes/{idCadastro}` — inativar paciente
+
+Não apaga o registro nem seus vínculos/histórico. Define `statusCadastro` como `INATIVO` e `statusPaciente` como `DESLIGADO`; se o paciente já estiver em `ALTA`, esse status é preservado. Retorna `204 No Content`.
+
+---
+
+### 1.5 `POST /api/pacientes` — cadastrar paciente
 
 Cadastra o paciente junto com prontuário, endereços, responsáveis e CIDs, tudo em uma única requisição.
 

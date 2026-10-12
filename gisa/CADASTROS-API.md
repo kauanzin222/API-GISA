@@ -305,6 +305,20 @@ O especialista precisa possuir pelo menos uma especialidade existente (`especial
 }
 ```
 
+## Consulta e atualização de cadastros
+
+Os endpoints de detalhes retornam os campos da pessoa, endereço e dados específicos do tipo cadastrado:
+
+- `GET /api/profissionais/{idCadastro}`: profissional e cargo; `usuario` será `null` quando não houver usuário. Quando houver usuário, a resposta inclui perfil e permissões, nunca a senha.
+- `GET /api/especialistas/{idCadastro}`: profissional, cargo, registro do conselho, especialidades e jornadas.
+- `GET /api/especialistas/pj/{idCadastro}`: detalhes do especialista PJ, incluindo razão social, nome fantasia e inscrição estadual. CNPJ e registro do conselho são retornados, mas não podem ser alterados.
+
+`PATCH /api/profissionais/{idCadastro}`, `PATCH /api/especialistas/{idCadastro}` e `PATCH /api/especialistas/pj/{idCadastro}` recebem somente os campos a alterar. Campos omitidos permanecem iguais; campos opcionais enviados como `null` são limpos. `enderecos`, `especialidadesIds` e `jornadas`, quando enviados, substituem a relação correspondente. Especialistas precisam continuar com ao menos uma especialidade e uma jornada.
+
+Não podem ser alterados CPF, data de nascimento, sexo, registro do conselho e CNPJ. Para profissional, cargo e e-mail podem ser alterados. O perfil do usuário pode ser alterado enviando `idPerfil`, mas isso só é possível se o cadastro já possuir usuário; esse PATCH não cria usuário e não altera senha.
+
+Os DELETE inativam, sem apagar o registro: `DELETE /api/profissionais/{idCadastro}`, `DELETE /api/especialistas/{idCadastro}` ou `DELETE /api/especialistas/pj/{idCadastro}` definem `statusCadastro` como `INATIVO` e retornam `204 No Content`. Cadastros inativos não podem autenticar.
+
 > Os exemplos 5 e 6 usam o mesmo CNPJ. Se o CNPJ já tiver sido cadastrado, use outro válido ao testar o segundo.
 
 ---

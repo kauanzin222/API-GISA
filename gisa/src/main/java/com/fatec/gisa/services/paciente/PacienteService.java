@@ -15,18 +15,33 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fatec.gisa.dtos.EnderecoDTO;
+import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
+import com.fatec.gisa.dtos.paciente.request.ProntuarioPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.PacienteCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
+import com.fatec.gisa.dtos.paciente.request.ResponsavelVinculoPatchDTO;
+import com.fatec.gisa.dtos.paciente.response.CidResponseDTO;
 import com.fatec.gisa.dtos.paciente.response.CidResumoDTO;
+import com.fatec.gisa.dtos.paciente.response.EscolaResponseDTO;
+import com.fatec.gisa.dtos.paciente.response.PacienteDetalheDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteResumoDTO;
+import com.fatec.gisa.dtos.paciente.response.ProntuarioResponseDTO;
 import com.fatec.gisa.dtos.paciente.response.ResponsavelResumoDTO;
+import com.fatec.gisa.dtos.paciente.response.ResponsavelVinculoResponseDTO;
 import com.fatec.gisa.entities.paciente.Paciente;
+import com.fatec.gisa.entities.paciente.Cid;
+import com.fatec.gisa.entities.paciente.Escola;
+import com.fatec.gisa.entities.paciente.Prontuario;
 import com.fatec.gisa.entities.paciente.Responsavel;
 import com.fatec.gisa.entities.paciente.VinculoResponsavel;
+import com.fatec.gisa.entities.Pessoa;
+import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.enums.StatusPaciente;
 import com.fatec.gisa.repositories.PessoaRepository;
 import com.fatec.gisa.repositories.paciente.PacienteRepository;
+import com.fatec.gisa.repositories.paciente.ResponsavelRepository;
 import com.fatec.gisa.repositories.paciente.VinculoResponsavelRepository;
+import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.services.PessoaMapper;
 import com.fatec.gisa.services.endereco.EnderecoService;
 
@@ -39,6 +54,7 @@ public class PacienteService {
     private final PacienteRepository pacienteRepository;
     private final VinculoResponsavelRepository vinculoResponsavelRepository;
     private final PessoaRepository pessoaRepository;
+    private final ResponsavelRepository responsavelRepository;
     private final PessoaMapper pessoaMapper;
     private final EnderecoService enderecoService;
     private final EscolaService escolaService;
@@ -81,6 +97,106 @@ public class PacienteService {
                 responsaveisPorPaciente.getOrDefault(paciente.getIdCadastro(), List.of()),
                 cidsPorPaciente.getOrDefault(paciente.getIdCadastro(), List.of()),
                 paciente.getStatusPaciente()));
+    }
+
+    @Transactional(readOnly = true)
+    public PacienteDetalheDTO buscarDetalhes(Long idCadastro) {
+        Paciente paciente = pacienteRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Paciente não encontrado com ID: " + idCadastro));
+
+        List<CidResponseDTO> cids = paciente.getCids() == null
+                ? List.of()
+                : paciente.getCids().stream()
+                        .sorted(Comparator.comparing(Cid::getCodigoCID))
+                        .map(cid -> new CidResponseDTO(cid.getCodigoCID(), cid.getDescricao()))
+                        .toList();
+
+        List<ResponsavelVinculoResponseDTO> responsaveis = paciente.getResponsaveis() == null
+                ? List.of()
+                : paciente.getResponsaveis().stream()
+                        .map(vinculo -> new ResponsavelVinculoResponseDTO(
+                                pessoaMapper.toPessoaResponseDTO(vinculo.getResponsavel()),
+                                vinculo.getResponsavel().getOcupacao(),
+                                vinculo.getGrauParentesco()))
+                        .toList();
+
+        Escola escola = paciente.getEscola();
+        EscolaResponseDTO escolaResponse = escola == null
+                ? null
+                : new EscolaResponseDTO(
+                        escola.getIdEscola(),
+                        escola.getNome(),
+                        escola.getTipoEscola(),
+                        escola.getTelefone());
+
+        Prontuario prontuario = paciente.getProntuario();
+        ProntuarioResponseDTO prontuarioResponse = prontuario == null
+                ? null
+                : new ProntuarioResponseDTO(
+                        prontuario.getAlergias(),
+                        prontuario.getComorbidade(),
+                        prontuario.getMobilidade());
+
+        return new PacienteDetalheDTO(
+                pessoaMapper.toPessoaResponseDTO(paciente),
+                paciente.getStatusPaciente(),
+                paciente.getDataCadastro(),
+                paciente.getConvenio(),
+                escolaResponse,
+                cids,
+                prontuarioResponse,
+                responsaveis);
+    }
+
+    @Transactional
+    public Paciente atualizar(Long idCadastro, PacientePatchRequestDTO dto) {
+        Paciente paciente = pacienteRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Paciente não encontrado com ID: " + idCadastro));
+
+        atualizarPessoa(paciente, dto);
+
+        if (dto.hasField("statusPaciente")) {
+            if (dto.getStatusPaciente() == null) {
+                throw new IllegalArgumentException("O status do paciente não pode ser nulo.");
+            }
+            paciente.setStatusPaciente(dto.getStatusPaciente());
+        }
+        if (dto.hasField("convenio")) {
+            paciente.setConvenio(dto.getConvenio());
+        }
+        if (dto.hasField("idEscola")) {
+            paciente.setEscola(escolaService.buscarOpcional(dto.getIdEscola()));
+        }
+        if (dto.hasField("enderecos")) {
+            enderecoService.substituirEnderecos(paciente, dto.getEnderecos());
+        }
+        if (dto.hasField("codigosCid")) {
+            paciente.setCids(cidService.obterOuCriar(
+                    dto.getCodigosCid() == null ? List.of() : dto.getCodigosCid(),
+                    List.of()));
+        }
+        if (dto.hasField("prontuario")) {
+            atualizarProntuario(paciente, dto.getProntuario());
+        }
+        if (dto.hasField("responsaveis")) {
+            substituirResponsaveis(paciente, dto.getResponsaveis());
+        }
+
+        return pacienteRepository.save(paciente);
+    }
+
+    @Transactional
+    public void inativar(Long idCadastro) {
+        Paciente paciente = pacienteRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Paciente não encontrado com ID: " + idCadastro));
+
+        paciente.setStatusCadastro(StatusCadastro.INATIVO);
+        if (paciente.getStatusPaciente() != StatusPaciente.ALTA) {
+            paciente.setStatusPaciente(StatusPaciente.DESLIGADO);
+        }
     }
 
     @Transactional
@@ -128,5 +244,106 @@ public class PacienteService {
 
     private int calcularIdade(LocalDate dataNascimento) {
         return Period.between(dataNascimento, LocalDate.now()).getYears();
+    }
+
+    private void atualizarPessoa(Pessoa pessoa, PacientePatchRequestDTO dto) {
+        if (dto.hasField("nome")) {
+            if (dto.getNome() == null || dto.getNome().isBlank()) {
+                throw new IllegalArgumentException("O nome não pode ser vazio.");
+            }
+            pessoa.setNome(dto.getNome());
+        }
+        if (dto.hasField("celular")) {
+            pessoa.setCelular(dto.getCelular());
+        }
+        if (dto.hasField("numCNS")) {
+            pessoa.setNumCNS(dto.getNumCNS());
+        }
+        if (dto.hasField("estadoCivil")) {
+            if (dto.getEstadoCivil() == null) {
+                throw new IllegalArgumentException("O estado civil não pode ser nulo.");
+            }
+            pessoa.setEstadoCivil(dto.getEstadoCivil());
+        }
+        if (dto.hasField("statusCadastro")) {
+            if (dto.getStatusCadastro() == null) {
+                throw new IllegalArgumentException("O status do cadastro não pode ser nulo.");
+            }
+            pessoa.setStatusCadastro(dto.getStatusCadastro());
+        }
+    }
+
+    private void atualizarProntuario(Paciente paciente, ProntuarioPatchRequestDTO dto) {
+        if (dto == null) {
+            paciente.setProntuario(null);
+            return;
+        }
+
+        Prontuario prontuario = paciente.getProntuario();
+        if (prontuario == null) {
+            prontuario = new Prontuario();
+            prontuario.setPaciente(paciente);
+            paciente.setProntuario(prontuario);
+        }
+
+        if (dto.hasField("alergias")) {
+            prontuario.setAlergias(dto.getAlergias());
+        }
+        if (dto.hasField("comorbidade")) {
+            prontuario.setComorbidade(dto.getComorbidade());
+        }
+        if (dto.hasField("mobilidade")) {
+            prontuario.setMobilidade(dto.getMobilidade());
+        }
+    }
+
+    private void substituirResponsaveis(
+            Paciente paciente,
+            List<ResponsavelVinculoPatchDTO> responsaveisDTO) {
+        if (responsaveisDTO == null || responsaveisDTO.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "O paciente deve possuir ao menos um responsável.");
+        }
+
+        var ids = responsaveisDTO.stream()
+                .map(ResponsavelVinculoPatchDTO::idResponsavel)
+                .toList();
+        if (ids.stream().distinct().count() != ids.size()) {
+            throw new IllegalArgumentException(
+                    "O mesmo responsável foi informado mais de uma vez.");
+        }
+
+        Map<Long, VinculoResponsavel> vinculosExistentes = new HashMap<>();
+        if (paciente.getResponsaveis() != null) {
+            paciente.getResponsaveis().forEach(vinculo ->
+                    vinculosExistentes.put(
+                            vinculo.getResponsavel().getIdCadastro(), vinculo));
+        }
+
+        List<VinculoResponsavel> vinculosAtualizados = new ArrayList<>();
+        for (ResponsavelVinculoPatchDTO dto : responsaveisDTO) {
+            VinculoResponsavel vinculo = vinculosExistentes.remove(dto.idResponsavel());
+            if (vinculo == null) {
+                Responsavel responsavel = responsavelRepository.findById(dto.idResponsavel())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Responsável não encontrado com ID: " + dto.idResponsavel()));
+                vinculo = new VinculoResponsavel();
+                vinculo.setPaciente(paciente);
+                vinculo.setResponsavel(responsavel);
+            }
+            vinculo.setGrauParentesco(dto.grauParentesco());
+            vinculosAtualizados.add(vinculo);
+        }
+
+        if (paciente.getResponsaveis() == null) {
+            paciente.setResponsaveis(vinculosAtualizados);
+            return;
+        }
+        paciente.getResponsaveis().removeAll(vinculosExistentes.values());
+        for (VinculoResponsavel vinculo : vinculosAtualizados) {
+            if (!paciente.getResponsaveis().contains(vinculo)) {
+                paciente.getResponsaveis().add(vinculo);
+            }
+        }
     }
 }

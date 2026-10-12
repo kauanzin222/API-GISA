@@ -1,7 +1,9 @@
 package com.fatec.gisa.controllers.especialista;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,6 +14,8 @@ import com.fatec.gisa.dtos.especialista.request.EspecialistaCadastroRequestDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaComUsuarioRequestDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaPJCadastroRequestDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaPJComUsuarioRequestDTO;
+import com.fatec.gisa.dtos.especialista.request.EspecialistaPJPatchRequestDTO;
+import com.fatec.gisa.dtos.especialista.request.EspecialistaPatchRequestDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaCadastroResponseDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaPJCadastroResponseDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaPJResponseDTO;
@@ -42,6 +46,34 @@ public class EspecialistaController {
     @GetMapping("/pj/{idCadastro}")
     public ResponseEntity<EspecialistaPJResponseDTO> buscarPJPorId(@PathVariable Long idCadastro) {
         return ResponseEntity.of(especialistaPJService.buscarDetalhes(idCadastro));
+    }
+
+    @PatchMapping("/{idCadastro}")
+    public ResponseEntity<EspecialistaResponseDTO> atualizar(
+            @PathVariable Long idCadastro,
+            @Valid @RequestBody EspecialistaPatchRequestDTO request) {
+        especialistaService.atualizar(idCadastro, request);
+        return ResponseEntity.of(especialistaService.buscarDetalhes(idCadastro));
+    }
+
+    @DeleteMapping("/{idCadastro}")
+    public ResponseEntity<Void> inativar(@PathVariable Long idCadastro) {
+        especialistaService.inativar(idCadastro);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/pj/{idCadastro}")
+    public ResponseEntity<EspecialistaPJResponseDTO> atualizarPJ(
+            @PathVariable Long idCadastro,
+            @Valid @RequestBody EspecialistaPJPatchRequestDTO request) {
+        especialistaPJService.atualizar(idCadastro, request);
+        return ResponseEntity.of(especialistaPJService.buscarDetalhes(idCadastro));
+    }
+
+    @DeleteMapping("/pj/{idCadastro}")
+    public ResponseEntity<Void> inativarPJ(@PathVariable Long idCadastro) {
+        especialistaPJService.inativar(idCadastro);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping

@@ -1,17 +1,22 @@
 package com.fatec.gisa.services.especialista;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
 import com.fatec.gisa.dtos.especialista.request.EspecialistaCadastroRequestDTO;
+import com.fatec.gisa.dtos.especialista.request.EspecialistaPatchRequestDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaResponseDTO;
 import com.fatec.gisa.entities.especialista.Especialista;
+import com.fatec.gisa.entities.especialista.Especialidade;
 import com.fatec.gisa.entities.profissional.Cargo;
+import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.repositories.especialista.EspecialistaRepository;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.services.endereco.EnderecoService;
 import com.fatec.gisa.services.profissional.ProfissionalMapper;
+import com.fatec.gisa.services.profissional.ProfissionalService;
 
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +31,7 @@ public class EspecialistaService {
     private final EspecialidadeService especialidadeService;
     private final JornadaTrabalhoService jornadaTrabalhoService;
     private final EnderecoService enderecoService;
+    private final ProfissionalService profissionalService;
 
     @Transactional
     public Especialista cadastrar(EspecialistaCadastroRequestDTO dto) {
@@ -40,6 +46,47 @@ public class EspecialistaService {
     public Optional<EspecialistaResponseDTO> buscarDetalhes(Long idCadastro) {
         return especialistaRepository.findById(idCadastro)
                 .map(profissionalMapper::toEspecialistaResponseDTO);
+    }
+
+    @Transactional
+    public Especialista atualizar(Long idCadastro, EspecialistaPatchRequestDTO dto) {
+        profissionalService.atualizar(idCadastro, dto);
+        Especialista especialista = especialistaRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Especialista não encontrado com ID: " + idCadastro));
+
+        if (dto.hasField("especialidadesIds") || dto.hasField("novasEspecialidades")) {
+            List<Long> ids = dto.hasField("especialidadesIds")
+                    ? dto.getEspecialidadesIds()
+                    : especialista.getEspecialidades().stream()
+                            .map(Especialidade::getIdEspecialidade)
+                            .toList();
+            especialista.setEspecialidades(new java.util.ArrayList<>(
+                    especialidadeService.obterOuCriar(
+                            ids,
+                            dto.hasField("novasEspecialidades")
+                                    ? dto.getNovasEspecialidades()
+                                    : List.of())));
+        }
+        if (dto.hasField("jornadas")) {
+            if (dto.getJornadas() == null || dto.getJornadas().isEmpty()) {
+                throw new IllegalArgumentException(
+                        "O especialista deve possuir ao menos uma jornada de trabalho.");
+            }
+            especialista.setJornadaTrabalho(
+                    jornadaTrabalhoService.mapear(dto.getJornadas(), especialista));
+        }
+
+        return especialistaRepository.save(especialista);
+    }
+
+    @Transactional
+    public void inativar(Long idCadastro) {
+        if (!especialistaRepository.existsById(idCadastro)) {
+            throw new ResourceNotFoundException(
+                    "Especialista não encontrado com ID: " + idCadastro);
+        }
+        profissionalService.inativar(idCadastro);
     }
 
     void preencherDadosEspecialista(Especialista especialista, EspecialistaCadastroRequestDTO dto) {

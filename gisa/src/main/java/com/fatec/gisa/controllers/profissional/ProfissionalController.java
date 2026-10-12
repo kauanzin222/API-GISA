@@ -5,7 +5,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalComUsuarioRequestDTO;
+import com.fatec.gisa.dtos.profissional.request.ProfissionalPatchRequestDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalCadastroResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
@@ -42,6 +45,20 @@ public class ProfissionalController {
     @GetMapping("/{idCadastro}")
     public ResponseEntity<ProfissionalResponseDTO> buscarPorId(@PathVariable Long idCadastro) {
         return ResponseEntity.of(profissionalService.buscarDetalhes(idCadastro));
+    }
+
+    @PatchMapping("/{idCadastro}")
+    public ResponseEntity<ProfissionalResponseDTO> atualizar(
+            @PathVariable Long idCadastro,
+            @Valid @RequestBody ProfissionalPatchRequestDTO request) {
+        profissionalService.atualizar(idCadastro, request);
+        return ResponseEntity.of(profissionalService.buscarDetalhes(idCadastro));
+    }
+
+    @DeleteMapping("/{idCadastro}")
+    public ResponseEntity<Void> inativar(@PathVariable Long idCadastro) {
+        profissionalService.inativar(idCadastro);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping

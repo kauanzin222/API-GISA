@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import com.fatec.gisa.entities.usuario.Permissao;
 import com.fatec.gisa.entities.usuario.Usuario;
+import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.repositories.usuario.UsuarioRepository;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,9 @@ public class UsuarioDetailService implements UserDetailsService {
         Usuario usuario = usuarioRepository.findByPessoa_Cpf(cpf)
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "Usuario nao encontrado para o CPF informado."));
+        if (usuario.getPessoa().getStatusCadastro() == StatusCadastro.INATIVO) {
+            throw new UsernameNotFoundException("O cadastro deste usuário está inativo.");
+        }
 
         List<GrantedAuthority> authorities = usuario.getPerfil() == null
                 || usuario.getPerfil().getPermissoes() == null

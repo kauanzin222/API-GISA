@@ -4,7 +4,6 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
-import com.fatec.gisa.dtos.EnderecoDTO;
 import com.fatec.gisa.dtos.PessoaResponseDTO;
 import com.fatec.gisa.dtos.especialista.JornadaTrabalhoDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialidadeResponseDTO;
@@ -14,13 +13,14 @@ import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.dtos.profissional.response.CargoResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
-import com.fatec.gisa.entities.Endereco;
-import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.services.PessoaMapper;
+import com.fatec.gisa.dtos.usuario.response.PerfilResponseDTO;
+import com.fatec.gisa.dtos.usuario.response.PermissaoResumoDTO;
+import com.fatec.gisa.dtos.usuario.response.UsuarioResumoDTO;
 
 import lombok.RequiredArgsConstructor;
 
@@ -58,29 +58,30 @@ public class ProfissionalMapper {
                 status);
     }
 
-    public PessoaResponseDTO toPessoaResponseDTO(Pessoa pessoa) {
-        List<EnderecoDTO> enderecos = pessoa.getEnderecos() == null
-                ? List.of()
-                : pessoa.getEnderecos().stream().map(this::toEnderecoDTO).toList();
-
-        return new PessoaResponseDTO(
-                pessoa.getIdCadastro(),
-                pessoa.getNome(),
-                pessoa.getCpf(),
-                pessoa.getDataNascimento(),
-                pessoa.getSexo(),
-                pessoa.getCelular(),
-                pessoa.getNumCNS(),
-                pessoa.getEstadoCivil(),
-                pessoa.getStatusCadastro(),
-                enderecos);
-    }
-
     public ProfissionalResponseDTO toProfissionalResponseDTO(Profissional profissional) {
+        var usuario = profissional.getUsuario();
+        UsuarioResumoDTO usuarioResponse = usuario == null
+                ? null
+                : new UsuarioResumoDTO(
+                        usuario.getIdCadastro(),
+                        usuario.getPerfil() == null
+                                ? null
+                                : new PerfilResponseDTO(
+                                        usuario.getPerfil().getIdPerfil(),
+                                        usuario.getPerfil().getNome()),
+                        usuario.getPerfil() == null || usuario.getPerfil().getPermissoes() == null
+                                ? List.of()
+                                : usuario.getPerfil().getPermissoes().stream()
+                                        .map(permissao -> new PermissaoResumoDTO(
+                                                permissao.getIdPermissao(),
+                                                permissao.getNome(),
+                                                permissao.getDescricao()))
+                                        .toList());
         return new ProfissionalResponseDTO(
-                toPessoaResponseDTO(profissional),
+                pessoaMapper.toPessoaResponseDTO(profissional),
                 profissional.getEmail(),
-                toCargoResponseDTO(profissional.getCargo()));
+                toCargoResponseDTO(profissional.getCargo()),
+                usuarioResponse);
     }
 
     public EspecialistaResponseDTO toEspecialistaResponseDTO(Especialista especialista) {
@@ -129,14 +130,4 @@ public class ProfissionalMapper {
                 cargo.getCbo() == null ? null : cargo.getCbo().getTituloCBO());
     }
 
-    private EnderecoDTO toEnderecoDTO(Endereco endereco) {
-        return new EnderecoDTO(
-                endereco.getCep(),
-                endereco.getRua(),
-                endereco.getNumero(),
-                endereco.getComplemento(),
-                endereco.getBairro(),
-                endereco.getCidade(),
-                endereco.getEstado());
-    }
 }
