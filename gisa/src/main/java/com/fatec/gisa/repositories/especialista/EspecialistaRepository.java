@@ -12,4 +12,5 @@ public interface EspecialistaRepository extends JpaRepository<Especialista, Long
 
     Optional<Especialista> findByRegistroConselho(String registroConselho);
     boolean existsByRegistroConselho(String registroConselho);
+    Optional<Especialista> findByCpf(String cpf);
 }

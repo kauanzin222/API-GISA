@@ -14,6 +14,7 @@ Este documento reúne o que vale para **todos** os módulos da API: autenticaç�
 | `ESPECIALISTAS.md` | especialistas, especialistas PJ e especialidades |
 | `CARGOS.md` | cargos e CBOs |
 | `PERFIS.md` | perfis de acesso e permissões |
+| `TERAPIAS.md` | terapias (consultas), listagem geral e do especialista |
 
 ---
 
@@ -84,6 +85,9 @@ Authorization: Bearer <token>
 | `tipoEscola` | `PUBLICA`, `PARTICULAR` |
 | `statusPaciente` | `MATRICULADO`, `ALTA`, `DESLIGADO` (definido pelo back no cadastro; pode ser alterado no PATCH do paciente) |
 | `statusCadastro` | `ATIVO`, `INATIVO` (pode ser alterado nos PATCH) |
+| `modalidade` (resposta) | `INDIVIDUAL`, `COLETIVA` (calculada pelo número de pacientes) |
+| `statusTerapia` | `AGENDADA`, `EM_ATENDIMENTO`, `CONCLUIDA`, `CANCELADA` |
+| `presenca` | `PENDENTE`, `PRESENTE`, `FALTA_JUSTIFICADA`, `FALTA_INJUSTIFICADA` |
 | `diaSemana` | `1` = Segunda, `2` = Terça, `3` = Quarta, `4` = Quinta, `5` = Sexta, `6` = Sábado, `7` = Domingo |
 
 ---
