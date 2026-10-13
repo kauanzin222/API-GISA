@@ -1,0 +1,226 @@
+# API GISA — Documentação geral
+
+Este documento reúne o que vale para **todos** os módulos da API: autenticação, convenções, enums, formato de erro e regras comuns de PATCH e DELETE. Os módulos têm documentos próprios.
+
+## Documentos
+
+| Documento | Conteúdo |
+|---|---|
+| `00-GERAL.md` | este documento |
+| `ESCOLAS.md` | busca por nome e cadastro de escolas |
+| `CIDS.md` | busca de CID por código e fluxo de cadastro com a API pública |
+| `PACIENTES.md` | pacientes e responsáveis |
+| `PROFISSIONAIS.md` | profissionais e cargos |
+| `ESPECIALISTAS.md` | especialistas, especialistas PJ e especialidades |
+
+---
+
+## Informações gerais
+
+- **URL base:** `https://api-gisa.onrender.com`
+- **Formato:** JSON (`Content-Type: application/json`)
+- **Autenticação:** token JWT em todos os endpoints, exceto o login
+- **Atenção (hospedagem):** se a API estiver em plano gratuito do Render, a primeira requisição após um período sem uso pode demorar (a instância "acorda"). Se a primeira chamada demorar ou der timeout, tente de novo antes de investigar.
+
+---
+
+## Autenticação
+
+### `POST /api/auth/login`
+
+Credenciais administrativas iniciais (**somente para testes**; não use em produção e não publique este arquivo em repositório aberto com a senha):
+
+```json
+{
+  "cpf": "99999999999",
+  "senha": "Admin@12345"
+}
+```
+
+**Resposta `200`:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9..."
+}
+```
+
+**Uso nas demais requisições:**
+
+```
+Authorization: Bearer <token>
+```
+
+- O token vale por **24 horas**.
+- CPF ou senha errados, ou cadastro inativo: `401` com `message` = `Credenciais inválidas.`
+- Token ausente, inválido ou expirado nas demais rotas: `401` ou `403`.
+- Para encerrar a sessão, basta remover o token da aplicação.
+- **Cadastros inativos não conseguem autenticar.**
+
+---
+
+## Convenções
+
+| Item | Regra |
+|---|---|
+| Datas | formato ISO `yyyy-MM-dd` (ex.: `"2015-03-21"`) |
+| Horários | formato `HH:mm` (ex.: `"08:00"`) |
+| CPF | exatamente 11 dígitos, **sem máscara** |
+| CNPJ | exatamente 14 dígitos, **sem máscara** |
+| CPF único | não pode coincidir com o de nenhuma pessoa já cadastrada. Ao testar, não repita CPFs. O CPF `99999999999` é do administrador inicial |
+| Campos opcionais | podem ser omitidos ou enviados como `null` |
+| Listagens paginadas | parâmetros `page`, `size` e `sort`; os dados de paginação vêm no objeto `page` da resposta (ver `PACIENTES.md`) |
+
+### Enums
+
+| Campo | Valores aceitos |
+|---|---|
+| `estadoCivil` | `SOLTEIRO`, `CASADO`, `VIUVO`, `SEPARADO`, `DIVORCIADO` |
+| `sexo` | um único caractere: `F`, `M` ou `O` (outros valores: `400`, "O sexo deve ser F, M ou O") |
+| `grauParentesco` | `PAI`, `MAE`, `AVO`, `TUTOR_LEGAL`, `OUTRO` |
+| `tipoEscola` | `PUBLICA`, `PARTICULAR` |
+| `statusPaciente` | `MATRICULADO`, `ALTA`, `DESLIGADO` (definido pelo back no cadastro; pode ser alterado no PATCH do paciente) |
+| `statusCadastro` | `ATIVO`, `INATIVO` (pode ser alterado nos PATCH) |
+| `diaSemana` | `1` = Segunda, `2` = Terça, `3` = Quarta, `4` = Quinta, `5` = Sexta, `6` = Sábado, `7` = Domingo |
+
+---
+
+## Status HTTP
+
+| Status | Quando |
+|---|---|
+| `200 OK` | consulta, login ou atualização realizados |
+| `201 Created` | cadastro realizado (inclusive concessão de acesso) |
+| `204 No Content` | inativação (DELETE) realizada |
+| `400 Bad Request` | validação de campos, corpo malformado ou regra de negócio violada |
+| `401` / `403` | credenciais inválidas; token ausente, inválido ou expirado |
+| `404 Not Found` | recurso não encontrado |
+| `409 Conflict` | operação incompatível com o estado do cadastro (ex.: alterar perfil de quem não tem usuário) ou, raramente, violação de restrição do banco (`Os dados informados violam uma regra de integridade do banco.`) |
+
+> CPF, e-mail e CNPJ repetidos são recusados com `400` e mensagem simples: `CPF já cadastrado.`, `E-mail já cadastrado.` ou `CNPJ já cadastrado.`
+
+> Alguns `404` vêm **sem corpo** (GET de profissional, especialista, especialista PJ e CID) e outros com o corpo de erro padrão (paciente, responsável e PATCH/DELETE em geral). Trate o `404` pelo status, não pela presença de corpo.
+
+---
+
+## Formato de erro
+
+Todos os erros seguem o mesmo corpo.
+
+**Validação de campos** (`fields` traz um item por campo inválido, no formato campo → mensagem; exiba cada mensagem junto ao campo):
+
+```json
+{
+  "timestamp": "2026-09-22T15:00:00Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Erro de validação dos dados.",
+  "path": "/api/profissionais",
+  "fields": {
+    "cpf": "O CPF deve conter 11 dígitos numéricos"
+  }
+}
+```
+
+**Regra de negócio** (a mensagem da regra vem em `message` e `fields` vem vazio):
+
+```json
+{
+  "timestamp": "2026-10-13T03:08:33.455131157Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Este cadastro é de um especialista PJ. Use /api/especialistas/pj/{idCadastro}.",
+  "path": "/api/especialistas/3",
+  "fields": {}
+}
+```
+
+**Corpo malformado:** JSON inválido, valor de enum inexistente (ex.: `"grauParentesco": "TIO"`), data ou hora em formato errado e `sexo` com mais de um caractere não chegam à validação de campos. A resposta é `400` com `message` = `Corpo da requisição inválido ou malformado.` e `fields` vazio. Use seletores e máscaras no front para evitar esses casos.
+
+Regra prática para o front: se `fields` tiver itens, mostre cada mensagem no campo correspondente; se estiver vazio, mostre `message` como aviso geral.
+
+---
+
+## Regras comuns de PATCH
+
+Valem para os PATCH de pacientes, responsáveis, profissionais, especialistas e especialistas PJ.
+
+- **Envie somente o que quer alterar.** Campos omitidos permanecem iguais.
+- **Campos opcionais** enviados como `null` são limpos.
+- **Campos obrigatórios** (`nome`, `estadoCivil`, `statusCadastro` e os indicados em cada módulo) enviados como `null` ou vazios são recusados com `400`.
+- **Listas substituem por completo** a lista atual (`enderecos`, `codigosCid`, `responsaveis`, `jornadas`, `especialidadesIds`). Para manter um item, ele precisa ser reenviado junto com os novos. Use o GET de detalhes para montar a lista completa antes de enviar. A exceção é `novasEspecialidades`, que acrescenta (ver `ESPECIALISTAS.md`).
+- **Reativação:** enviar `"statusCadastro": "ATIVO"` reativa um cadastro inativado pelo DELETE.
+- **Campos imutáveis são ignorados.** Se vierem no corpo (por exemplo `cpf`, `dataNascimento`, `sexo`, `dataCadastro`, `registroConselho`, `cnpj`), a API responde `200` e simplesmente não altera o valor. O front deve tratar esses campos como somente leitura (desabilitados no formulário) e não esperar erro.
+- **Atenção a nomes de campo digitados errados:** um campo que a API não conhece também é ignorado sem erro. Se o PATCH responder `200` e nada mudar, confira os nomes.
+
+---
+
+## Regras comuns de DELETE
+
+`DELETE` **não apaga** o registro: ele **inativa**.
+
+- Retorna `204 No Content`.
+- O cadastro passa a `statusCadastro: "INATIVO"` e continua podendo ser consultado pelo GET de detalhes.
+- Cadastros inativos não autenticam.
+- No caso do paciente há uma regra adicional sobre `statusPaciente` (ver `PACIENTES.md`).
+
+---
+
+## Acesso ao sistema (criar usuário para um cadastro existente)
+
+Profissionais, especialistas e especialistas PJ já cadastrados **sem usuário** podem receber acesso ao sistema. Na tela, isso corresponde a um botão **"Conceder acesso ao sistema"** que exibe os campos de **perfil** e **senha**.
+
+| Tipo de cadastro | Rota |
+|---|---|
+| Profissional | `POST /api/profissionais/{idCadastro}/usuario` |
+| Especialista | `POST /api/especialistas/{idCadastro}/usuario` |
+| Especialista PJ | `POST /api/especialistas/pj/{idCadastro}/usuario` |
+
+**Requisição** (mesmo bloco `usuario` usado nos cadastros "com acesso"; `senha` entre 8 e 30 caracteres):
+
+```json
+{
+  "senha": "SenhaTeste123",
+  "idPerfil": 1
+}
+```
+
+**Resposta `201 Created`** (a senha nunca é retornada):
+
+```json
+{
+  "idCadastro": 41,
+  "perfil": { "idPerfil": 1, "nome": "Administrador" },
+  "permissoes": [
+    { "idPermissao": 1, "nome": "ACESSO_TOTAL", "descricao": "Acesso total aos recursos da API" },
+    { "idPermissao": 2, "nome": "CADASTRAR_PROFISSIONAL", "descricao": "Cadastrar profissionais" },
+    { "idPermissao": 3, "nome": "CADASTRAR_ESPECIALISTA", "descricao": "Cadastrar especialistas" },
+    { "idPermissao": 4, "nome": "CADASTRAR_ESPECIALISTA_PJ", "descricao": "Cadastrar especialistas pessoa juridica" },
+    { "idPermissao": 5, "nome": "CADASTRAR_USUARIO", "descricao": "Cadastrar usuarios" }
+  ]
+}
+```
+
+**Regras**
+
+| Situação | Status | Mensagem |
+|---|---|---|
+| ID de PJ na rota de especialista | `400` | Este cadastro é de um especialista PJ. Use /api/especialistas/pj/{idCadastro}. |
+| Cadastro já tem usuário | `400` | Esta pessoa já possui um usuário cadastrado. |
+| Cadastro inativo | `400` | Não é possível conceder acesso a um cadastro inativo. |
+| Perfil inexistente | `400` | Perfil de acesso não encontrado. |
+| Cadastro inexistente | `404` | Profissional / Especialista / Especialista PJ não encontrado com ID: {id} |
+
+Depois de criado o acesso, o login funciona com o CPF do cadastro e a senha enviada, e o PATCH com `idPerfil` passa a funcionar para esse cadastro (antes, era recusado com `409` por não haver usuário).
+
+### `GET /api/perfis` — listar perfis de acesso
+
+Use para preencher o seletor de perfil.
+
+```json
+[
+  { "idPerfil": 1, "nome": "Administrador" }
+]
+```
+
+Hoje só existe o perfil **Administrador** (criado na instalação) e não há rota para cadastrar perfis.

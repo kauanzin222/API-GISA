@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.fatec.gisa.dtos.paciente.request.PacienteCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
+import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteCadastroResponseDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteDetalheDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteResumoDTO;
@@ -51,6 +52,14 @@ public class PacienteController {
             @Valid @RequestBody PacientePatchRequestDTO request) {
         pacienteService.atualizar(idCadastro, request);
         return ResponseEntity.ok(pacienteService.buscarDetalhes(idCadastro));
+    }
+
+    @PostMapping("/{idCadastro}/responsaveis")
+    public ResponseEntity<PacienteDetalheDTO> adicionarResponsavel(
+            @PathVariable Long idCadastro,
+            @Valid @RequestBody ResponsavelCadastroRequestDTO request) {
+        pacienteService.adicionarResponsavel(idCadastro, request);
+        return ResponseEntity.status(201).body(pacienteService.buscarDetalhes(idCadastro));
     }
 
     @DeleteMapping("/{idCadastro}")

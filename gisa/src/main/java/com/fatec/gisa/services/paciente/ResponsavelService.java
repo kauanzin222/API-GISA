@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.dtos.EnderecoDTO;
 import com.fatec.gisa.dtos.PessoaPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelPatchRequestDTO;
@@ -34,7 +35,9 @@ public class ResponsavelService {
     private final EnderecoService enderecoService;
 
     @Transactional
-    public Responsavel obterOuCriar(ResponsavelCadastroRequestDTO dto) {
+    // Responsáveis já cadastrados são reaproveitados sem alterar seus dados (inclusive endereços).
+    // Um responsável novo recebe os endereços do paciente, salvo quando não reside com ele.
+    public Responsavel obterOuCriar(ResponsavelCadastroRequestDTO dto, List<EnderecoDTO> enderecosPaciente) {
         if (dto.getIdResponsavel() != null) {
             Responsavel responsavel = responsavelRepository.findById(dto.getIdResponsavel())
                     .orElseThrow(() -> new IllegalArgumentException(
@@ -56,7 +59,13 @@ public class ResponsavelService {
         Responsavel responsavel = new Responsavel();
         pessoaMapper.preencherPessoa(responsavel, dto);
         responsavel.setOcupacao(dto.getOcupacao());
-        return responsavelRepository.save(responsavel);
+        Responsavel responsavelSalvo = responsavelRepository.save(responsavel);
+
+        List<EnderecoDTO> enderecos = Boolean.TRUE.equals(dto.getNaoResideComPaciente())
+                ? dto.getEnderecos()
+                : enderecosPaciente;
+        enderecoService.associarEnderecos(responsavelSalvo, enderecos);
+        return responsavelSalvo;
     }
 
     @Transactional(readOnly = true)

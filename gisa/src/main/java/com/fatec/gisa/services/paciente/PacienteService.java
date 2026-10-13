@@ -194,6 +194,35 @@ public class PacienteService {
     }
 
     @Transactional
+    public Paciente adicionarResponsavel(Long idCadastro, ResponsavelCadastroRequestDTO dto) {
+        Paciente paciente = pacienteRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Paciente não encontrado com ID: " + idCadastro));
+
+        List<EnderecoDTO> enderecosPaciente = pessoaMapper.toPessoaResponseDTO(paciente).enderecos();
+        Responsavel responsavel = responsavelService.obterOuCriar(dto, enderecosPaciente);
+
+        if (paciente.getResponsaveis() == null) {
+            paciente.setResponsaveis(new ArrayList<>());
+        }
+
+        boolean jaVinculado = paciente.getResponsaveis().stream()
+                .anyMatch(vinculo -> vinculo.getResponsavel().getIdCadastro()
+                        .equals(responsavel.getIdCadastro()));
+        if (jaVinculado) {
+            throw new IllegalArgumentException("Este responsável já está vinculado ao paciente.");
+        }
+
+        VinculoResponsavel vinculo = new VinculoResponsavel();
+        vinculo.setPaciente(paciente);
+        vinculo.setResponsavel(responsavel);
+        vinculo.setGrauParentesco(dto.getGrauParentesco());
+        paciente.getResponsaveis().add(vinculo);
+
+        return pacienteRepository.save(paciente);
+    }
+
+    @Transactional
     public void inativar(Long idCadastro) {
         Paciente paciente = pacienteRepository.findById(idCadastro)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -208,7 +237,7 @@ public class PacienteService {
     @Transactional
     public Paciente cadastrar(PacienteCadastroRequestDTO dto) {
         if (pessoaRepository.existsByCpf(dto.getCpf())) {
-            throw new IllegalArgumentException("Já existe uma pessoa cadastrada com este CPF");
+            throw new IllegalArgumentException("CPF já cadastrado.");
         }
 
         Paciente paciente = new Paciente();
@@ -231,11 +260,7 @@ public class PacienteService {
                 throw new IllegalArgumentException("O mesmo responsável foi informado mais de uma vez");
             }
 
-            Responsavel responsavel = responsavelService.obterOuCriar(responsavelDto);
-            List<EnderecoDTO> enderecos = Boolean.TRUE.equals(responsavelDto.getNaoResideComPaciente())
-                    ? responsavelDto.getEnderecos()
-                    : dto.getEnderecos();
-            enderecoService.associarEnderecos(responsavel, enderecos);
+            Responsavel responsavel = responsavelService.obterOuCriar(responsavelDto, dto.getEnderecos());
 
             VinculoResponsavel vinculo = new VinculoResponsavel();
             vinculo.setPaciente(pacienteSalvo);

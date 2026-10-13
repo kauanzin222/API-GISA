@@ -40,6 +40,10 @@ public class EspecialistaPJService {
 
     @Transactional
     public EspecialistaPJ cadastrar(EspecialistaPJCadastroRequestDTO dto) {
+        if (especialistaPJRepository.existsByCnpj(dto.getCnpj())) {
+            throw new IllegalArgumentException("CNPJ já cadastrado.");
+        }
+
         EspecialistaPJ pj = new EspecialistaPJ();
         especialistaService.preencherDadosEspecialista(pj, dto);
 

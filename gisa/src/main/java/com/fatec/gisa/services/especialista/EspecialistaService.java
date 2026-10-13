@@ -135,6 +135,8 @@ public class EspecialistaService {
     }
 
     void preencherDadosEspecialista(Especialista especialista, EspecialistaCadastroRequestDTO dto) {
+        profissionalService.validarDadosUnicos(dto);
+
         Cargo cargo = cargoRepository.findById(dto.getIdCargo())
             .orElseThrow(() -> new IllegalArgumentException(
                 "Cargo nao encontrado com ID: " + dto.getIdCargo()));

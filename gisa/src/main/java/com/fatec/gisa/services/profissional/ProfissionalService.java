@@ -14,6 +14,7 @@ import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
+import com.fatec.gisa.repositories.PessoaRepository;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.repositories.profissional.ProfissionalRepository;
 import com.fatec.gisa.repositories.usuario.PerfilRepository;
@@ -26,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 public class ProfissionalService {
 
     private final ProfissionalRepository profissionalRepository;
+    private final PessoaRepository pessoaRepository;
     private final CargoRepository cargoRepository;
     private final PerfilRepository perfilRepository;
     private final ProfissionalMapper profissionalMapper;
@@ -33,6 +35,8 @@ public class ProfissionalService {
 
     @Transactional
     public Profissional criarProfissional(ProfissionalCadastroRequestDTO dto) {
+        validarDadosUnicos(dto);
+
         Profissional profissional = new Profissional();
 
         Cargo cargo = cargoRepository.findById(dto.getIdCargo())
@@ -44,6 +48,17 @@ public class ProfissionalService {
         Profissional profissionalSalvo = profissionalRepository.save(profissional);
         enderecoService.associarEnderecos(profissionalSalvo, dto.getEnderecos());
         return profissionalSalvo;
+    }
+
+    // Usado também no cadastro de especialistas e especialistas PJ
+    @Transactional(readOnly = true)
+    public void validarDadosUnicos(ProfissionalCadastroRequestDTO dto) {
+        if (pessoaRepository.existsByCpf(dto.getCpf())) {
+            throw new IllegalArgumentException("CPF já cadastrado.");
+        }
+        if (profissionalRepository.existsByEmail(dto.getEmail())) {
+            throw new IllegalArgumentException("E-mail já cadastrado.");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -104,7 +119,7 @@ public class ProfissionalService {
             }
             if (profissionalRepository.existsByEmailAndIdCadastroNot(
                     dto.getEmail(), profissional.getIdCadastro())) {
-                throw new IllegalArgumentException("Já existe um profissional com este e-mail.");
+                throw new IllegalArgumentException("E-mail já cadastrado.");
             }
             profissional.setEmail(dto.getEmail());
         }
