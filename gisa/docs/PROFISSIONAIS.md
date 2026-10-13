@@ -1,33 +1,33 @@
-# API GISA — Profissionais e Cargos
+# API GISA — Profissionais
 
 Autenticação, convenções, enums, formato de erro, regras comuns de PATCH/DELETE e concessão de acesso ao sistema: ver `00-GERAL.md`. Todos os endpoints exigem `Authorization: Bearer <token>`.
 
-Especialistas e especialistas PJ também são profissionais, mas têm rotas próprias: ver `ESPECIALISTAS.md`.
+Especialistas e especialistas PJ também são profissionais, mas têm rotas próprias: ver `ESPECIALISTAS.md`. Cargos e CBOs: ver `CARGOS.md`. Perfis de acesso: ver `PERFIS.md`.
 
 ## Rotas
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET` | `/api/profissionais` | lista profissionais (paginado), incluindo especialistas e PJ |
+| `GET` | `/api/profissionais` | lista profissionais (paginado), incluindo especialistas e PJ, com busca por CPF ou nome |
 | `GET` | `/api/profissionais/{idCadastro}` | detalhes de um profissional |
 | `POST` | `/api/profissionais` | cadastra profissional sem acesso ao sistema |
 | `POST` | `/api/profissionais/com-usuario` | cadastra profissional e cria o usuário de acesso |
 | `POST` | `/api/profissionais/{idCadastro}/usuario` | concede acesso a um profissional já cadastrado (ver `00-GERAL.md`) |
 | `PATCH` | `/api/profissionais/{idCadastro}` | atualiza profissional |
 | `DELETE` | `/api/profissionais/{idCadastro}` | inativa profissional |
-| `GET` | `/api/cargos` | lista cargos |
-| `POST` | `/api/cargos` | cadastra cargo |
 
 ---
 
 ## `GET /api/profissionais` — listar profissionais (paginado)
 
-Lista **todos** os profissionais, incluindo especialistas e especialistas PJ, ativos e inativos.
+Lista os profissionais, incluindo especialistas e especialistas PJ, ativos e inativos. Aceita busca por CPF e/ou nome.
 
 **Query params (todos opcionais)**
 
 | Param | Padrão | Descrição |
 |---|---|---|
+| `cpf` | — | trecho do CPF; a máscara é ignorada |
+| `nome` | — | trecho do nome, sem diferenciar maiúsculas de minúsculas |
 | `page` | `0` | número da página (começa em 0) |
 | `size` | `9` | itens por página |
 | `sort` | `nome,asc` | ordenação, ex.: `sort=nome,desc` |
@@ -137,7 +137,7 @@ Lista **todos** os profissionais, incluindo especialistas e especialistas PJ, at
 | `numCNS` | string | não | |
 | `enderecos` | lista de endereço | não | mesmos campos do endereço do paciente (ver `PACIENTES.md`); pode ser omitido ou `[]` |
 | `email` | string | sim | formato de e-mail válido; único entre profissionais |
-| `idCargo` | número | sim | ID de um cargo existente (ver `GET /api/cargos`) |
+| `idCargo` | número | sim | ID de um cargo existente (ver `CARGOS.md`) |
 
 ### Exemplo
 
@@ -190,7 +190,7 @@ Cadastra o profissional e já cria o usuário de acesso. O corpo tem dois blocos
 | Campo de `usuario` | Tipo | Obrigatório | Observação |
 |---|---|---|---|
 | `senha` | string | sim | entre 8 e 30 caracteres |
-| `idPerfil` | número | sim | ID de um perfil existente (ver `GET /api/perfis` em `00-GERAL.md`) |
+| `idPerfil` | número | sim | ID de um perfil existente (ver `PERFIS.md`) |
 
 ```json
 {
@@ -254,45 +254,6 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. Profissional 
 
 ---
 
-## Cargos
-
-Todo profissional (e especialista) precisa de um cargo, e todo cargo está ligado a um código **CBO** (Classificação Brasileira de Ocupações).
-
-### `GET /api/cargos` — listar cargos
-
-Retorna todos os cargos (sem paginação). Use para preencher o seletor de cargo.
-
-```json
-[
-  {
-    "idCargo": 1,
-    "nome": "Administrador de Sistema",
-    "codigoCBO": "999999",
-    "tituloCBO": "Cargo de Teste - Desenvolvimento"
-  }
-]
-```
-
-### `POST /api/cargos` — cadastrar cargo
-
-| Campo | Tipo | Obrigatório | Observação |
-|---|---|---|---|
-| `nome` | string | sim | único |
-| `codigoCBO` | string | sim | o CBO precisa existir na base |
-
-```json
-{
-  "nome": "Recepcionista",
-  "codigoCBO": "999999"
-}
-```
-
-**Resposta `201 Created`:** o cargo criado, no mesmo formato da listagem.
-
-> Hoje a base tem **apenas o CBO de teste `999999`** e **não existe rota para cadastrar CBO**. Na prática, novos cargos só podem usar esse código até que os CBOs reais sejam carregados no banco.
-
----
-
 ## Mensagens de erro
 
 ### Validação de campos (`400`, em `fields`)
@@ -311,8 +272,6 @@ Retorna todos os cargos (sem paginação). Use para preencher o seletor de cargo
 | `profissional` / `usuario` | Os dados do profissional sao obrigatorios. / Os dados do usuario sao obrigatorios. |
 | `usuario.senha` | A senha é obrigatória. / A senha deve conter entre 8 e 30 caracteres. |
 | `usuario.idPerfil` | O ID do perfil é obrigatório. |
-| cargo: `nome` | O nome do cargo é obrigatório |
-| cargo: `codigoCBO` | O código CBO é obrigatório |
 
 ### Regras de negócio (`message`)
 
@@ -333,8 +292,6 @@ Retorna todos os cargos (sem paginação). Use para preencher o seletor de cargo
 | `idPerfil` `null` (PATCH) | `400` | O perfil de acesso não pode ser nulo. |
 | `idPerfil` sem usuário cadastrado (PATCH) | `409` | Não é possível alterar o perfil: o profissional não possui usuário. |
 | `idPerfil` inexistente (PATCH) | `404` | Perfil não encontrado com ID: {id} |
-| Cargo com nome repetido | `400` | Já existe um cargo com esse nome. |
-| CBO inexistente | `400` | CBO não encontrado com código: {código} |
 
 ---
 

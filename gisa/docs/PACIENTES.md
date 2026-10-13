@@ -6,12 +6,13 @@ Autenticação, convenções, enums, formato de erro e regras comuns de PATCH/DE
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET` | `/api/pacientes` | lista pacientes (paginado) |
+| `GET` | `/api/pacientes` | lista pacientes (paginado), com busca por CPF ou nome |
 | `GET` | `/api/pacientes/{idCadastro}` | detalhes de um paciente |
 | `POST` | `/api/pacientes` | cadastra paciente com prontuário, endereços, responsáveis e CIDs |
 | `PATCH` | `/api/pacientes/{idCadastro}` | atualiza paciente |
 | `POST` | `/api/pacientes/{idCadastro}/responsaveis` | cadastra um responsável e o vincula ao paciente |
 | `DELETE` | `/api/pacientes/{idCadastro}` | inativa paciente |
+| `GET` | `/api/responsaveis` | busca responsáveis por CPF ou nome (paginado) |
 | `GET` | `/api/responsaveis/{idResponsavel}` | detalhes de um responsável |
 | `PATCH` | `/api/responsaveis/{idResponsavel}` | atualiza dados pessoais do responsável |
 | `DELETE` | `/api/responsaveis/{idResponsavel}` | inativa responsável |
@@ -22,12 +23,14 @@ Autenticação, convenções, enums, formato de erro e regras comuns de PATCH/DE
 
 ## `GET /api/pacientes` — listar pacientes (paginado)
 
-Não há filtros; apenas paginação e ordenação. Pacientes inativos também aparecem (confira `statusPaciente`).
+Aceita busca por CPF e/ou nome, além de paginação e ordenação. Pacientes inativos também aparecem (confira `statusPaciente`).
 
 **Query params (todos opcionais)**
 
 | Param | Padrão | Descrição |
 |---|---|---|
+| `cpf` | — | trecho do CPF; a máscara é ignorada (`123.456` vira `123456`) |
+| `nome` | — | trecho do nome, sem diferenciar maiúsculas de minúsculas |
 | `page` | `0` | número da página (começa em 0) |
 | `size` | `9` | itens por página |
 | `sort` | `nome,asc` | ordenação, ex.: `sort=nome,desc`. Campos úteis: `nome`, `dataCadastro`, `statusPaciente` |
@@ -36,7 +39,11 @@ Não há filtros; apenas paginação e ordenação. Pacientes inativos também a
 
 ```
 GET /api/pacientes?page=0&size=9&sort=nome,asc
+GET /api/pacientes?nome=lucas
+GET /api/pacientes?cpf=456789
 ```
+
+Com `cpf` e `nome` juntos, o paciente precisa atender aos dois.
 
 **Resposta `200`**
 
@@ -409,6 +416,41 @@ Para reativar, use o PATCH com `"statusCadastro": "ATIVO"` (e, se for o caso, `"
 
 ---
 
+## `GET /api/responsaveis` — buscar responsáveis (paginado)
+
+Serve para encontrar um responsável **já cadastrado**, por exemplo no pop-up "Adicionar responsável": o usuário digita o CPF, o front busca aqui e, se encontrar, preenche o formulário com os dados de `GET /api/responsaveis/{idResponsavel}` e envia o `idCadastro` como `idResponsavel` em `POST /api/pacientes/{idCadastro}/responsaveis`. Os campos obrigatórios de pessoa continuam sendo exigidos nesse POST, mas os dados do responsável existente não são alterados.
+
+**Query params (todos opcionais):** `cpf`, `nome`, `page`, `size` (padrão `9`) e `sort` (padrão `nome,asc`), com as mesmas regras da listagem de pacientes. Responsáveis inativos também aparecem.
+
+```
+GET /api/responsaveis?cpf=56789012345
+```
+
+**Resposta `200`**
+
+```json
+{
+  "content": [
+    {
+      "idCadastro": 2,
+      "nome": "Maria Almeida Souza",
+      "cpf": "56789012345",
+      "celular": "15999990000",
+      "ocupacao": "Professora",
+      "statusCadastro": "ATIVO"
+    }
+  ],
+  "page": {
+    "size": 9,
+    "number": 0,
+    "totalElements": 1,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
 ## `GET /api/responsaveis/{idResponsavel}` — detalhes do responsável
 
 **Resposta `200`**
@@ -531,3 +573,5 @@ No PATCH, `responsaveis[].idResponsavel` e `responsaveis[].grauParentesco` ausen
 10. `PATCH /api/pacientes/{id}` com `{"statusCadastro": "ATIVO", "statusPaciente": "MATRICULADO"}`. Esperado: `200`, paciente reativado.
 11. `POST /api/pacientes/{id}/responsaveis` com o exemplo da avó. Esperado: `201` e três responsáveis no detalhe; a avó com os endereços do paciente.
 12. Repetir o passo 11. Esperado: `400` com `Este responsável já está vinculado ao paciente.`
+13. `GET /api/pacientes?nome=LUC`. Esperado: o paciente aparece (busca sem diferenciar maiúsculas).
+14. `GET /api/responsaveis?cpf=567.890`. Esperado: a mãe aparece (máscara ignorada).

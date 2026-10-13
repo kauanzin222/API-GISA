@@ -10,8 +10,10 @@ Este documento reúne o que vale para **todos** os módulos da API: autenticaç�
 | `ESCOLAS.md` | busca por nome e cadastro de escolas |
 | `CIDS.md` | busca de CID por código e fluxo de cadastro com a API pública |
 | `PACIENTES.md` | pacientes e responsáveis |
-| `PROFISSIONAIS.md` | profissionais e cargos |
+| `PROFISSIONAIS.md` | profissionais |
 | `ESPECIALISTAS.md` | especialistas, especialistas PJ e especialidades |
+| `CARGOS.md` | cargos e CBOs |
+| `PERFIS.md` | perfis de acesso e permissões |
 
 ---
 
@@ -69,7 +71,8 @@ Authorization: Bearer <token>
 | CNPJ | exatamente 14 dígitos, **sem máscara** |
 | CPF único | não pode coincidir com o de nenhuma pessoa já cadastrada. Ao testar, não repita CPFs. O CPF `99999999999` é do administrador inicial |
 | Campos opcionais | podem ser omitidos ou enviados como `null` |
-| Listagens paginadas | parâmetros `page`, `size` e `sort`; os dados de paginação vêm no objeto `page` da resposta (ver `PACIENTES.md`) |
+| Listagens paginadas | parâmetros `page`, `size` (padrão `9`) e `sort`; os dados de paginação vêm no objeto `page` da resposta (ver `PACIENTES.md`) |
+| Busca de pessoas | as listagens de pacientes, responsáveis e profissionais aceitam `cpf` (trecho, máscara ignorada) e `nome` (trecho, sem diferenciar maiúsculas de minúsculas); os dois juntos precisam ser atendidos |
 
 ### Enums
 
@@ -164,6 +167,8 @@ Valem para os PATCH de pacientes, responsáveis, profissionais, especialistas e 
 - Cadastros inativos não autenticam.
 - No caso do paciente há uma regra adicional sobre `statusPaciente` (ver `PACIENTES.md`).
 
+**Exceção: tabelas de apoio.** Perfis, cargos e CBOs não têm status: o `DELETE` deles **exclui** o registro (`204`), e só é permitido quando nada está vinculado a ele (usuários, profissionais ou cargos, respectivamente). Ver `PERFIS.md` e `CARGOS.md`.
+
 ---
 
 ## Acesso ao sistema (criar usuário para um cadastro existente)
@@ -213,14 +218,6 @@ Profissionais, especialistas e especialistas PJ já cadastrados **sem usuário**
 
 Depois de criado o acesso, o login funciona com o CPF do cadastro e a senha enviada, e o PATCH com `idPerfil` passa a funcionar para esse cadastro (antes, era recusado com `409` por não haver usuário).
 
-### `GET /api/perfis` — listar perfis de acesso
+### Perfis e permissões
 
-Use para preencher o seletor de perfil.
-
-```json
-[
-  { "idPerfil": 1, "nome": "Administrador" }
-]
-```
-
-Hoje só existe o perfil **Administrador** (criado na instalação) e não há rota para cadastrar perfis.
+O `idPerfil` usado acima vem de `GET /api/perfis`. A gestão de perfis e das permissões de cada perfil está em `PERFIS.md`.

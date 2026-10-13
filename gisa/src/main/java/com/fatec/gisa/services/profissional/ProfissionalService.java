@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
 
+import com.fatec.gisa.dtos.FiltroPessoaDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalPatchRequestDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
@@ -62,8 +63,8 @@ public class ProfissionalService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ProfissionalResumoDTO> listarPaginado(Pageable pageable) {
-        return profissionalRepository.findAll(pageable)
+    public Page<ProfissionalResumoDTO> listarPaginado(FiltroPessoaDTO filtro, Pageable pageable) {
+        return profissionalRepository.buscarPorCpfENome(filtro.cpf(), filtro.nome(), pageable)
                 .map(profissionalMapper::toResumoDTO);
     }
 

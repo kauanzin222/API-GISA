@@ -12,8 +12,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fatec.gisa.dtos.FiltroPessoaDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalComUsuarioRequestDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalPatchRequestDTO;
@@ -39,8 +41,11 @@ public class ProfissionalController {
 
     @GetMapping
     public ResponseEntity<Page<ProfissionalResumoDTO>> listarPaginado(
+            @RequestParam(required = false) String cpf,
+            @RequestParam(required = false) String nome,
             @PageableDefault(page = 0, size = 9, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
-        Page<ProfissionalResumoDTO> pagina = profissionalService.listarPaginado(pageable);
+        Page<ProfissionalResumoDTO> pagina = profissionalService.listarPaginado(
+                FiltroPessoaDTO.de(cpf, nome), pageable);
         return ResponseEntity.ok(pagina);
     }
 

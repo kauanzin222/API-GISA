@@ -2,14 +2,18 @@ package com.fatec.gisa.services.paciente;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fatec.gisa.dtos.EnderecoDTO;
+import com.fatec.gisa.dtos.FiltroPessoaDTO;
 import com.fatec.gisa.dtos.PessoaPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.response.ResponsavelDetalheDTO;
+import com.fatec.gisa.dtos.paciente.response.ResponsavelListaDTO;
 import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.paciente.Responsavel;
 import com.fatec.gisa.enums.StatusCadastro;
@@ -66,6 +70,18 @@ public class ResponsavelService {
                 : enderecosPaciente;
         enderecoService.associarEnderecos(responsavelSalvo, enderecos);
         return responsavelSalvo;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ResponsavelListaDTO> listarPaginado(FiltroPessoaDTO filtro, Pageable pageable) {
+        return responsavelRepository.buscarPorCpfENome(filtro.cpf(), filtro.nome(), pageable)
+                .map(responsavel -> new ResponsavelListaDTO(
+                        responsavel.getIdCadastro(),
+                        responsavel.getNome(),
+                        responsavel.getCpf(),
+                        responsavel.getCelular(),
+                        responsavel.getOcupacao(),
+                        responsavel.getStatusCadastro()));
     }
 
     @Transactional(readOnly = true)

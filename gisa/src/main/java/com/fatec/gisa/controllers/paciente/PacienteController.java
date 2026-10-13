@@ -12,8 +12,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fatec.gisa.dtos.FiltroPessoaDTO;
 import com.fatec.gisa.dtos.paciente.request.PacienteCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
@@ -37,8 +39,10 @@ public class PacienteController {
 
     @GetMapping
     public ResponseEntity<Page<PacienteResumoDTO>> listarPaginado(
+            @RequestParam(required = false) String cpf,
+            @RequestParam(required = false) String nome,
             @PageableDefault(page = 0, size = 9, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
-        return ResponseEntity.ok(pacienteService.listarPaginado(pageable));
+        return ResponseEntity.ok(pacienteService.listarPaginado(FiltroPessoaDTO.de(cpf, nome), pageable));
     }
 
     @GetMapping("/{idCadastro}")

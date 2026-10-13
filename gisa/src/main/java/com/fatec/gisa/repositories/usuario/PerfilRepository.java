@@ -7,8 +7,10 @@ import org.springframework.stereotype.Repository;
 
 import com.fatec.gisa.entities.usuario.Perfil;
 
-@Repository 
+@Repository
 public interface PerfilRepository extends JpaRepository<Perfil, Long> {
     Optional<Perfil> findByNome(String nome);
     boolean existsByNome(String nome);
+    boolean existsByNomeIgnoreCase(String nome);
+    boolean existsByNomeIgnoreCaseAndIdPerfilNot(String nome, Long idPerfil);
 }

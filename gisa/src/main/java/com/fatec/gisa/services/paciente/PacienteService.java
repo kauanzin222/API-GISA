@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fatec.gisa.dtos.EnderecoDTO;
+import com.fatec.gisa.dtos.FiltroPessoaDTO;
 import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ProntuarioPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.PacienteCadastroRequestDTO;
@@ -63,8 +64,8 @@ public class PacienteService {
     private final ResponsavelService responsavelService;
 
     @Transactional(readOnly = true)
-    public Page<PacienteResumoDTO> listarPaginado(Pageable pageable) {
-        Page<Paciente> pagina = pacienteRepository.findAll(pageable);
+    public Page<PacienteResumoDTO> listarPaginado(FiltroPessoaDTO filtro, Pageable pageable) {
+        Page<Paciente> pagina = pacienteRepository.buscarPorCpfENome(filtro.cpf(), filtro.nome(), pageable);
         List<Long> pacienteIds = pagina.getContent().stream()
                 .map(Paciente::getIdCadastro)
                 .toList();
