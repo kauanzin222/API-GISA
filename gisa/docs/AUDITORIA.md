@@ -4,6 +4,8 @@ Autenticação, convenções e formato de erro: ver `00-GERAL.md`.
 
 A API registra automaticamente **quem fez o quê, quando e com qual resultado**. O registro é feito pelo back em toda requisição relevante, sem nenhuma ação do front. Serve para rastrear alterações, investigar acessos indevidos e atender à LGPD, já que o sistema guarda dados de saúde de menores.
 
+> A auditoria não é a linha do tempo exibida na tela do paciente. Essa é o **histórico do paciente** (`GET /api/pacientes/{idCadastro}/historico`, ver `PACIENTES.md`), com eventos de negócio legíveis e sem dado de saúde.
+
 ## O que é registrado
 
 | Ação (`acao`) | Quando |

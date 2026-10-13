@@ -18,6 +18,7 @@ import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.entities.usuario.Usuario;
+import com.fatec.gisa.enums.TipoCadastro;
 import com.fatec.gisa.services.PessoaMapper;
 import com.fatec.gisa.dtos.usuario.response.PerfilResponseDTO;
 import com.fatec.gisa.dtos.usuario.response.PermissaoResumoDTO;
@@ -56,7 +57,8 @@ public class ProfissionalMapper {
                 profissional.getNome(),
                 nomeCargo,
                 registroConselho,
-                status);
+                status,
+                TipoCadastro.de(profissional));
     }
 
     public ProfissionalResponseDTO toProfissionalResponseDTO(Profissional profissional) {

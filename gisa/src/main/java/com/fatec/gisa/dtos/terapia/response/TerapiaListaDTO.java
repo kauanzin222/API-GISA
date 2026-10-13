@@ -21,5 +21,7 @@ public record TerapiaListaDTO(
         // Todos os pacientes justificaram a falta: o horário dos especialistas está livre
         boolean horarioLiberado,
         List<TerapiaPacienteDTO> pacientes,
-        List<TerapiaEspecialistaDTO> especialistas) {
+        List<TerapiaEspecialistaDTO> especialistas,
+        // Preenchido só nas terapias canceladas
+        String motivoCancelamento) {
 }

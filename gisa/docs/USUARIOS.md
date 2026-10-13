@@ -1,6 +1,49 @@
-# API GISA — Usuários: senha
+# API GISA — Usuários: usuário logado e senha
 
 Autenticação, convenções e formato de erro: ver `00-GERAL.md`. Todos os endpoints exigem `Authorization: Bearer <token>`.
+
+## Rotas
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/usuarios/me` | dados de quem está logado (nome, tipo de cadastro, perfil e permissões) |
+| `PATCH` | `/api/usuarios/minha-senha` | altera a própria senha |
+| `PATCH` | `/api/usuarios/{idCadastro}/senha` | redefine a senha de outro usuário (administrador) |
+
+---
+
+## `GET /api/usuarios/me` — usuário logado
+
+O token só carrega o CPF. Esta rota diz ao front **quem está logado**, para mostrar o nome no cabeçalho e abrir o painel certo depois do login. O usuário é identificado pelo token, então nenhum ID é enviado.
+
+**Resposta `200`**
+
+```json
+{
+  "idCadastro": 9,
+  "nome": "Mariana Costa",
+  "cpf": "12345678902",
+  "tipoCadastro": "ESPECIALISTA",
+  "perfil": { "idPerfil": 3, "nome": "Especialista" },
+  "permissoes": [
+    { "idPermissao": 1, "nome": "ACESSO_TOTAL", "descricao": "Acesso total aos recursos da API" }
+  ]
+}
+```
+
+| `tipoCadastro` | Quem é | Rota de detalhes |
+|---|---|---|
+| `PROFISSIONAL` | profissional comum | `GET /api/profissionais/{idCadastro}` |
+| `ESPECIALISTA` | especialista | `GET /api/especialistas/{idCadastro}` |
+| `ESPECIALISTA_PJ` | especialista PJ | `GET /api/especialistas/pj/{idCadastro}` |
+| `PESSOA` | cadastro sem vínculo de profissional. Hoje, **só o administrador inicial** (criado pela migration `V6` direto na tabela de pessoas) | — |
+
+- `permissoes` vem ordenada por `idPermissao`; `[]` quando o perfil não tem permissões.
+- Para decidir o que mostrar na tela, use as **permissões**, e não o nome do perfil, que pode ser renomeado.
+- É uma consulta comum: **não** gera registro na auditoria.
+- Token ausente, inválido ou expirado: `401`/`403`, como nas demais rotas.
+
+---
 
 A senha pode ser trocada de duas formas:
 
@@ -90,6 +133,14 @@ Exige que o usuário logado tenha a permissão **`ACESSO_TOTAL`** ou **`CADASTRA
 ## Roteiro rápido de testes
 
 Pré-requisito: um profissional com acesso (ex.: `POST /api/profissionais/com-usuario`), com o `{idCadastro}` dele.
+
+**Usuário logado**
+
+- `GET /api/usuarios/me` com o token do administrador. Esperado: `200`, `nome: "Administrador do Sistema"`, `tipoCadastro: "PESSOA"`, perfil `Administrador` e as 5 permissões.
+- O mesmo com o token do profissional. Esperado: `tipoCadastro: "PROFISSIONAL"` e o `idCadastro` dele. Com um especialista: `ESPECIALISTA`; com um PJ: `ESPECIALISTA_PJ`.
+- `GET /api/auditoria`. Esperado: nenhum registro de `/api/usuarios/me`.
+
+**Senha**
 
 1. Login com esse profissional e guardar o token `T1`.
 2. `PATCH /api/usuarios/minha-senha` com `T1` e o exemplo acima (usando a senha real como `senhaAtual`). Esperado: `200` com token `T2`.

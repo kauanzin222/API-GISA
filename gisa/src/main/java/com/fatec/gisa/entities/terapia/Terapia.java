@@ -54,6 +54,10 @@ public class Terapia {
     @Column(name = "Status")
     private StatusTerapia status;
 
+    // Preenchido só quando a terapia é cancelada
+    @Column(name = "MotivoCancelamento")
+    private String motivoCancelamento;
+
     @OneToMany(mappedBy = "terapia", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PresencaPaciente> presencaPacientes;
 

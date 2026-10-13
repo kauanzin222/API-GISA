@@ -9,13 +9,13 @@ Este documento reúne o que vale para **todos** os módulos da API: autenticaç�
 | `00-GERAL.md` | este documento |
 | `ESCOLAS.md` | busca por nome e cadastro de escolas |
 | `CIDS.md` | busca de CID por código e fluxo de cadastro com a API pública |
-| `PACIENTES.md` | pacientes e responsáveis |
+| `PACIENTES.md` | pacientes, responsáveis e histórico do paciente |
 | `PROFISSIONAIS.md` | profissionais |
 | `ESPECIALISTAS.md` | especialistas, especialistas PJ e especialidades |
 | `CARGOS.md` | cargos e CBOs |
 | `PERFIS.md` | perfis de acesso e permissões |
-| `TERAPIAS.md` | terapias (consultas), listagem geral e do especialista |
-| `USUARIOS.md` | alterar a própria senha e redefinição de senha pelo administrador |
+| `TERAPIAS.md` | terapias (consultas): agendamento, edição, status, listagens com filtros e presença |
+| `USUARIOS.md` | usuário logado (`/api/usuarios/me`), alterar a própria senha e redefinição de senha pelo administrador |
 | `AUDITORIA.md` | trilha de auditoria: logins, alterações e consultas a dados sensíveis |
 
 ---
@@ -57,6 +57,7 @@ Authorization: Bearer <token>
 ```
 
 - O token vale por **24 horas**, ou até a senha do usuário ser trocada (ver `USUARIOS.md`).
+- O token só identifica o CPF. Depois do login, chame `GET /api/usuarios/me` para obter nome, tipo de cadastro, perfil e permissões de quem entrou (ver `USUARIOS.md`).
 - Trocar a própria senha devolve um token novo; o front deve substituir o token salvo.
 - CPF ou senha errados, ou cadastro inativo: `401` com `message` = `Credenciais inválidas.`
 - Token ausente, inválido ou expirado nas demais rotas: `401` ou `403`.
@@ -91,6 +92,8 @@ Authorization: Bearer <token>
 | `modalidade` (resposta) | `INDIVIDUAL`, `COLETIVA` (calculada pelo número de pacientes) |
 | `statusTerapia` | `AGENDADA`, `EM_ATENDIMENTO`, `CONCLUIDA`, `CANCELADA` |
 | `presenca` | `PENDENTE`, `PRESENTE`, `FALTA_JUSTIFICADA`, `FALTA_INJUSTIFICADA` |
+| `tipoCadastro` / `tipo` | `PROFISSIONAL`, `ESPECIALISTA`, `ESPECIALISTA_PJ` (listagem de profissionais); em `GET /api/usuarios/me` também `PESSOA` (administrador inicial) |
+| tipo de evento do histórico | ver `PACIENTES.md` |
 | `diaSemana` | `1` = Segunda, `2` = Terça, `3` = Quarta, `4` = Quinta, `5` = Sexta, `6` = Sábado, `7` = Domingo |
 
 ---

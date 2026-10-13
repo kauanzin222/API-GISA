@@ -8,7 +8,7 @@ Especialistas e especialistas PJ também são profissionais, mas têm rotas pró
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `GET` | `/api/profissionais` | lista profissionais (paginado), incluindo especialistas e PJ, com busca por CPF ou nome |
+| `GET` | `/api/profissionais` | lista profissionais (paginado), incluindo especialistas e PJ, com busca por CPF ou nome e filtros por tipo e status |
 | `GET` | `/api/profissionais/{idCadastro}` | detalhes de um profissional |
 | `POST` | `/api/profissionais` | cadastra profissional sem acesso ao sistema |
 | `POST` | `/api/profissionais/com-usuario` | cadastra profissional e cria o usuário de acesso |
@@ -20,7 +20,7 @@ Especialistas e especialistas PJ também são profissionais, mas têm rotas pró
 
 ## `GET /api/profissionais` — listar profissionais (paginado)
 
-Lista os profissionais, incluindo especialistas e especialistas PJ, ativos e inativos. Aceita busca por CPF e/ou nome.
+Lista os profissionais, incluindo especialistas e especialistas PJ, ativos e inativos. Aceita busca por CPF e/ou nome e filtros por tipo e status; tudo combinável.
 
 **Query params (todos opcionais)**
 
@@ -28,9 +28,18 @@ Lista os profissionais, incluindo especialistas e especialistas PJ, ativos e ina
 |---|---|---|
 | `cpf` | — | trecho do CPF; a máscara é ignorada |
 | `nome` | — | trecho do nome, sem diferenciar maiúsculas de minúsculas |
+| `tipo` | todos | `PROFISSIONAL`, `ESPECIALISTA` ou `ESPECIALISTA_PJ`; aceita mais de um: `?tipo=ESPECIALISTA&tipo=ESPECIALISTA_PJ` |
+| `statusCadastro` | todos | `ATIVO` ou `INATIVO` |
 | `page` | `0` | número da página (começa em 0) |
 | `size` | `9` | itens por página |
 | `sort` | `nome,asc` | ordenação, ex.: `sort=nome,desc` |
+
+```
+GET /api/profissionais?tipo=ESPECIALISTA&tipo=ESPECIALISTA_PJ&statusCadastro=ATIVO&nome=ana
+```
+
+- O `tipo` é **exato**: `ESPECIALISTA` não inclui os PJ. Para "todos que atendem terapias", envie os dois.
+- Valor inválido em `tipo` ou `statusCadastro` (ex.: `?tipo=XYZ`): `400` com `Valor inválido para 'tipo': XYZ`. `PESSOA` (que só aparece em `GET /api/usuarios/me`) também é recusado aqui.
 
 **Resposta `200`**
 
@@ -42,14 +51,16 @@ Lista os profissionais, incluindo especialistas e especialistas PJ, ativos e ina
       "nome": "João Santos",
       "nomeCargo": "Administrador de Sistema",
       "registroConselho": "CRP-12345",
-      "statusCadastro": "ATIVO"
+      "statusCadastro": "ATIVO",
+      "tipo": "ESPECIALISTA"
     },
     {
       "idProfissional": 8,
       "nome": "Maria Silva",
       "nomeCargo": "Administrador de Sistema",
       "registroConselho": null,
-      "statusCadastro": "ATIVO"
+      "statusCadastro": "ATIVO",
+      "tipo": "PROFISSIONAL"
     }
   ],
   "page": {
@@ -63,7 +74,15 @@ Lista os profissionais, incluindo especialistas e especialistas PJ, ativos e ina
 
 - Os dados de paginação vêm dentro do objeto `page`.
 - O ID vem no campo **`idProfissional`** (é o mesmo valor do `idCadastro` usado nas demais rotas).
-- `registroConselho` vem preenchido para especialistas e PJ e `null` para profissionais comuns. Use-o para saber qual tela de detalhes abrir; para distinguir especialista de PJ, consulte `GET /api/especialistas/{id}` (que recusa PJ com `400`) ou `GET /api/especialistas/pj/{id}`.
+- `tipo` diz qual tela de detalhes abrir, sem chamadas extras:
+
+  | `tipo` | Rota de detalhes |
+  |---|---|
+  | `PROFISSIONAL` | `GET /api/profissionais/{id}` |
+  | `ESPECIALISTA` | `GET /api/especialistas/{id}` |
+  | `ESPECIALISTA_PJ` | `GET /api/especialistas/pj/{id}` |
+
+- `registroConselho` vem preenchido para especialistas e PJ e `null` para profissionais comuns.
 
 ---
 
@@ -292,6 +311,7 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. Profissional 
 | `idPerfil` `null` (PATCH) | `400` | O perfil de acesso não pode ser nulo. |
 | `idPerfil` sem usuário cadastrado (PATCH) | `409` | Não é possível alterar o perfil: o profissional não possui usuário. |
 | `idPerfil` inexistente (PATCH) | `400` | Perfil não encontrado com ID: {id} |
+| Listagem: `tipo` ou `statusCadastro` inválido (inclusive `tipo=PESSOA`) | `400` | Valor inválido para 'tipo': {valor} / Valor inválido para 'statusCadastro': {valor} |
 
 ---
 
@@ -308,3 +328,7 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. Profissional 
 9. `PATCH /api/profissionais/{id}` do passo 2 com `{"idPerfil": 1}`. Esperado: `409` (sem usuário).
 10. `POST /api/profissionais/{id}/usuario` com `{"senha": "SenhaTeste123", "idPerfil": 1}`. Esperado: `201`; repetir o passo 9 agora retorna `200`.
 11. `DELETE /api/profissionais/{id}` do passo 5. Esperado: `204`; o login do passo 6 passa a falhar com `401`.
+12. `GET /api/profissionais`. Esperado: cada item com `tipo` (`PROFISSIONAL` nos dois profissionais acima).
+13. `GET /api/profissionais?tipo=ESPECIALISTA&tipo=ESPECIALISTA_PJ`. Esperado: só especialistas e PJ (ver `ESPECIALISTAS.md` para cadastrá-los).
+14. `GET /api/profissionais?statusCadastro=INATIVO`. Esperado: o profissional inativado no passo 11.
+15. `GET /api/profissionais?tipo=XYZ`. Esperado: `400` com `Valor inválido para 'tipo': XYZ`.

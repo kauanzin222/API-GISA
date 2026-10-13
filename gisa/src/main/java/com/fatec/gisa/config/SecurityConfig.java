@@ -1,7 +1,9 @@
 package com.fatec.gisa.config;
 
+import java.util.Arrays;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -27,6 +29,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private static final String ORIGEM_PADRAO = "http://localhost:4200";
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
@@ -41,10 +45,17 @@ public class SecurityConfig {
 
 
     // AUTORIZAÇÃO DE CORS PARA O ANGULAR :)
+    // Origens vêm de CORS_ORIGINS (separadas por vírgula); sem a variável, só o front local
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${cors.allowed-origins}") String origensPermitidas) {
+        List<String> origens = Arrays.stream(origensPermitidas.split(","))
+                .map(String::trim)
+                .filter(origem -> !origem.isEmpty())
+                .toList();
+
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:4200"));
+        config.setAllowedOrigins(origens.isEmpty() ? List.of(ORIGEM_PADRAO) : origens);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         config.setAllowCredentials(true);

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import org.junit.jupiter.api.Test;
 
 import com.fatec.gisa.entities.especialista.EspecialistaPJ;
+import com.fatec.gisa.enums.TipoCadastro;
 import com.fatec.gisa.services.PessoaMapper;
 
 class ProfissionalMapperTest {
@@ -30,5 +31,6 @@ class ProfissionalMapperTest {
         assertNotNull(response.especialista().profissional().pessoa());
         assertEquals(42L, response.especialista().profissional().pessoa().idCadastro());
         assertEquals("Ana Oliveira", response.especialista().profissional().pessoa().nome());
+        assertEquals(TipoCadastro.ESPECIALISTA_PJ, mapper.toResumoDTO(especialistaPJ).tipo());
     }
 }

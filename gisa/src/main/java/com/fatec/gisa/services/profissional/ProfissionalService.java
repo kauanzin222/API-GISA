@@ -1,5 +1,9 @@
 package com.fatec.gisa.services.profissional;
 
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -13,6 +17,7 @@ import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.enums.StatusCadastro;
+import com.fatec.gisa.enums.TipoCadastro;
 import com.fatec.gisa.exceptions.ConflitoException;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.repositories.PessoaRepository;
@@ -64,9 +69,26 @@ public class ProfissionalService {
         }
     }
 
+    // tipos e statusCadastro vazios/nulos não restringem a busca
     @Transactional(readOnly = true)
-    public Page<ProfissionalResumoDTO> listarPaginado(FiltroPessoaDTO filtro, Pageable pageable) {
-        return profissionalRepository.buscarPorCpfENome(filtro.cpf(), filtro.nome(), pageable)
+    public Page<ProfissionalResumoDTO> listarPaginado(FiltroPessoaDTO filtro, List<TipoCadastro> tipos,
+            StatusCadastro statusCadastro, Pageable pageable) {
+        Set<TipoCadastro> tiposFiltrados = tipos == null || tipos.isEmpty()
+                ? EnumSet.of(TipoCadastro.PROFISSIONAL, TipoCadastro.ESPECIALISTA, TipoCadastro.ESPECIALISTA_PJ)
+                : EnumSet.copyOf(tipos);
+        // PESSOA existe só para o usuário logado (administrador inicial), que não é profissional
+        if (tiposFiltrados.contains(TipoCadastro.PESSOA)) {
+            throw new IllegalArgumentException("Valor inválido para 'tipo': " + TipoCadastro.PESSOA);
+        }
+        Set<StatusCadastro> status = statusCadastro == null
+                ? EnumSet.allOf(StatusCadastro.class)
+                : EnumSet.of(statusCadastro);
+
+        return profissionalRepository.buscar(filtro.cpf(), filtro.nome(), status,
+                        tiposFiltrados.contains(TipoCadastro.PROFISSIONAL),
+                        tiposFiltrados.contains(TipoCadastro.ESPECIALISTA),
+                        tiposFiltrados.contains(TipoCadastro.ESPECIALISTA_PJ),
+                        pageable)
                 .map(profissionalMapper::toResumoDTO);
     }
 

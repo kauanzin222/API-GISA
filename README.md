@@ -34,13 +34,13 @@ Como trabalho de graduação em ADS, o projeto também tem finalidade acadêmica
 
 | Módulo | Principais recursos |
 |---|---|
-| **Autenticação e usuários** | login por CPF e senha com token JWT; troca da própria senha e redefinição pelo administrador, com encerramento das sessões abertas |
-| **Pacientes e responsáveis** | cadastro completo em uma requisição (prontuário, endereços, responsáveis, CIDs); busca por CPF ou nome; inclusão de responsável em paciente existente; inativação |
+| **Autenticação e usuários** | login por CPF e senha com token JWT; dados do usuário logado (nome, tipo, perfil e permissões); troca da própria senha e redefinição pelo administrador, com encerramento das sessões abertas |
+| **Pacientes e responsáveis** | cadastro completo em uma requisição (prontuário, endereços, responsáveis, CIDs); busca por CPF ou nome; inclusão de responsável em paciente existente; inativação; histórico de atividades do paciente (linha do tempo sem dados de saúde) |
 | **Escolas e CIDs** | busca de escolas para autocomplete; consulta de CID por código; cadastro de CIDs novos junto com o paciente |
-| **Equipe** | profissionais, especialistas e especialistas PJ, com especialidades e jornadas de trabalho; concessão de acesso ao sistema |
+| **Equipe** | profissionais, especialistas e especialistas PJ, com especialidades e jornadas de trabalho; listagem com filtro por tipo e status; concessão de acesso ao sistema |
 | **Cargos e CBOs** | cadastro e manutenção de cargos ligados ao CBO; detalhes com os profissionais de cada cargo |
 | **Perfis e permissões** | perfis de acesso com suas permissões e usuários |
-| **Terapias** | agendamento individual ou coletivo, com verificação de conflito de horário (inclusive para cadastros simultâneos); listagem geral e do especialista logado; registro de presença e falta, com liberação do horário em falta justificada |
+| **Terapias** | agendamento individual ou coletivo, com verificação de conflito de horário (inclusive para cadastros e edições simultâneos); edição de terapia agendada; mudança de status e cancelamento com motivo; listagem geral e do especialista logado, com filtros por dia, intervalo, paciente e especialista; registro de presença e falta, com liberação do horário em falta justificada |
 | **Auditoria** | registro de logins, alterações e consultas a dados sensíveis, com consulta filtrada para o administrador |
 
 Comum a todos os módulos:
@@ -88,6 +88,7 @@ Hospedagem atual: **Render** (`https://api-gisa.onrender.com`).
    | `DB_USER` | usuário do banco |
    | `DB_PASSWORD` | senha do banco |
    | `JWT_SECRET` | chave de assinatura dos tokens: texto aleatório com **pelo menos 32 caracteres** |
+   | `CORS_ORIGINS` | *(opcional)* origens do front liberadas no CORS, **separadas por vírgula** e sem barra no final (ex.: `https://gisa.exemplo.com,http://localhost:4200`). Sem a variável, vale só `http://localhost:4200`. Quando definida, **substitui** o padrão: inclua o `localhost` se ainda precisar dele. Não use `*` (a API envia credenciais) |
 
    ```bash
    export DB_HOST="localhost:5432"
@@ -95,6 +96,7 @@ Hospedagem atual: **Render** (`https://api-gisa.onrender.com`).
    export DB_USER="<usuario>"
    export DB_PASSWORD="<senha>"
    export JWT_SECRET="<chave_longa_e_aleatoria>"
+   export CORS_ORIGINS="https://<front-publicado>,http://localhost:4200"   # opcional
    ```
 
    Para gerar uma chave: `openssl rand -base64 48`.
@@ -122,8 +124,8 @@ A migration `V6` cria um administrador para o primeiro acesso. As credenciais es
 Não é preciso configurar nenhum banco:
 
 - **Testes de regra de negócio** usam o H2 em memória.
-- **`ApiPostgresTest`** sobe um **PostgreSQL real embarcado**, sem Docker, aplica todas as migrations e valida o esquema contra as entidades. Depois chama a API por HTTP com o administrador inicial: listagens, detalhes, erros, conflitos de horário, presença e auditoria.
-- **`TerapiaConcorrenciaTest`** dispara cadastros simultâneos de terapias no mesmo horário e confirma que só um é gravado.
+- **`ApiPostgresTest`** sobe um **PostgreSQL real embarcado**, sem Docker, aplica todas as migrations e valida o esquema contra as entidades. Depois chama a API por HTTP com o administrador inicial: listagens e filtros, detalhes, erros, conflitos de horário, edição e status de terapias, presença, histórico do paciente, usuário logado, CORS e auditoria.
+- **`TerapiaConcorrenciaTest`** dispara cadastros e edições simultâneos de terapias para o mesmo horário e confirma que só um é gravado.
 
 ---
 
@@ -149,7 +151,7 @@ Não é preciso configurar nenhum banco:
         │   └── validation/       # validações customizadas (ex.: sexo)
         ├── main/resources/
         │   ├── application.properties
-        │   └── db/migration/     # migrations do Flyway (V1 a V12)
+        │   └── db/migration/     # migrations do Flyway (V1 a V14)
         └── test/java/            # testes automatizados
 ```
 
@@ -162,15 +164,15 @@ Os documentos ficam em [`gisa/docs/`](./gisa/docs/). Comece pelo **`00-GERAL.md`
 | Documento | Conteúdo |
 |---|---|
 | [00-GERAL.md](./gisa/docs/00-GERAL.md) | autenticação, convenções, status HTTP, formato de erro, concessão de acesso |
-| [PACIENTES.md](./gisa/docs/PACIENTES.md) | pacientes e responsáveis |
+| [PACIENTES.md](./gisa/docs/PACIENTES.md) | pacientes, responsáveis e histórico do paciente |
 | [ESCOLAS.md](./gisa/docs/ESCOLAS.md) | busca e cadastro de escolas |
 | [CIDS.md](./gisa/docs/CIDS.md) | consulta de CID e fluxo de cadastro |
 | [PROFISSIONAIS.md](./gisa/docs/PROFISSIONAIS.md) | profissionais |
 | [ESPECIALISTAS.md](./gisa/docs/ESPECIALISTAS.md) | especialistas, especialistas PJ e especialidades |
 | [CARGOS.md](./gisa/docs/CARGOS.md) | cargos e CBOs |
 | [PERFIS.md](./gisa/docs/PERFIS.md) | perfis de acesso e permissões |
-| [TERAPIAS.md](./gisa/docs/TERAPIAS.md) | agendamento de terapias, conflitos de horário e presença |
-| [USUARIOS.md](./gisa/docs/USUARIOS.md) | troca e redefinição de senha |
+| [TERAPIAS.md](./gisa/docs/TERAPIAS.md) | agendamento, edição, status e filtros de terapias, conflitos de horário e presença |
+| [USUARIOS.md](./gisa/docs/USUARIOS.md) | usuário logado, troca e redefinição de senha |
 | [AUDITORIA.md](./gisa/docs/AUDITORIA.md) | trilha de auditoria |
 
 Cada documento termina com um **roteiro rápido de testes** para Postman ou similar.
@@ -179,10 +181,13 @@ Cada documento termina com um **roteiro rápido de testes** para Postman ou simi
 
 ## Estado do projeto e limitações conhecidas
 
-- **Permissões por rota:** os perfis e permissões já existem, mas só a redefinição de senha e a auditoria exigem permissão. Nas demais rotas, qualquer usuário autenticado acessa tudo. A verificação por permissão entra com a migration que definirá a lista definitiva de permissões.
-- **CORS:** liberado apenas para `http://localhost:4200`. A origem do front publicado precisa ser acrescentada antes do deploy dele.
+- **Permissões por rota:** os perfis e permissões já existem, mas só a redefinição de senha e a auditoria exigem permissão. Nas demais rotas, qualquer usuário autenticado acessa tudo (inclusive mudar status, editar e cancelar terapias). A verificação por permissão entra com a migration que definirá a lista definitiva de permissões.
+- **CORS:** configurável pela variável `CORS_ORIGINS` (ver [Configuração](#configuração-e-execução-local)); sem ela, só `http://localhost:4200`. A origem do front publicado precisa ser definida no ambiente do Render antes do deploy dele.
 - **Login sem limite de tentativas:** as tentativas que falham ficam na auditoria, mas não são bloqueadas.
-- **Terapias:** ainda não há cancelamento, mudança de status (em atendimento, concluída), inclusão de paciente em terapia coletiva já criada nem a visão por dia ("Consultas Diárias") com seus contadores.
+- **"Esqueci minha senha":** não há recuperação por e-mail. O usuário troca a própria senha (`/api/usuarios/minha-senha`) ou o administrador redefine.
+- **Terapias:** já há mudança de status (iniciar, concluir, cancelar com motivo), edição de terapia agendada (remarcar e trocar participantes) e filtros por dia, intervalo, paciente e especialista. Ainda não há contadores prontos da visão por dia ("Consultas Diárias"): o front calcula a partir de `GET /api/terapias/minhas?data=`. A API não confere a data ao iniciar ou concluir um atendimento, nem a jornada de trabalho do especialista ao agendar.
+- **Histórico do paciente:** começa nesta versão, sem carga retroativa: pacientes e terapias anteriores não têm eventos. Não registra início e conclusão de atendimento, nem alterações feitas direto no banco.
+- **Receita e atestado:** gerados e impressos só no front; a API não guarda esses documentos.
 - **Integração com API pública de CID:** não definida. Quando um CID não existe na base, o front precisa obter a descrição e enviá-la em `novosCids` no cadastro do paciente.
 - **CBOs:** a base vem só com o CBO de teste `999999`; os oficiais podem ser cadastrados por `POST /api/cbos` ou carregados por migration.
 

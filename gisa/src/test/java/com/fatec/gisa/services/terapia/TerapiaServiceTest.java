@@ -15,8 +15,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.dtos.terapia.FiltroTerapiaDTO;
 import com.fatec.gisa.dtos.terapia.request.PresencaRequestDTO;
+import com.fatec.gisa.dtos.terapia.request.StatusTerapiaRequestDTO;
 import com.fatec.gisa.dtos.terapia.request.TerapiaCadastroRequestDTO;
+import com.fatec.gisa.dtos.terapia.request.TerapiaPatchRequestDTO;
+import com.fatec.gisa.dtos.terapia.request.VerificacaoConflitoRequestDTO;
 import com.fatec.gisa.dtos.terapia.response.TerapiaDoEspecialistaDTO;
 import com.fatec.gisa.dtos.terapia.response.TerapiaListaDTO;
 import com.fatec.gisa.entities.Pessoa;
@@ -139,7 +143,7 @@ class TerapiaServiceTest {
         var existente = terapiaService.cadastrar(requisicao(
                 List.of(lucas.getIdCadastro()), List.of(ana.getIdCadastro()), "09:00", "10:00"));
 
-        var verificacao = terapiaService.verificarConflitos(requisicao(
+        var verificacao = terapiaService.verificarConflitos(verificacao(
                 List.of(lucas.getIdCadastro(), maria.getIdCadastro()), List.of(carlos.getIdCadastro()),
                 "09:30", "10:30"));
 
@@ -150,12 +154,12 @@ class TerapiaServiceTest {
             assertThat(conflito.idTerapia()).isEqualTo(existente.getIdTerapia());
             assertThat(conflito.horaInicio()).isEqualTo(LocalTime.of(9, 0));
         });
-        assertThat(terapiaService.listarPaginado(null, PageRequest.of(0, 6)).getTotalElements()).isEqualTo(1);
+        assertThat(terapiaService.listarPaginado(FiltroTerapiaDTO.semFiltro(), PageRequest.of(0, 6)).getTotalElements()).isEqualTo(1);
     }
 
     @Test
     void verificacaoSemConflito() {
-        var verificacao = terapiaService.verificarConflitos(requisicao(
+        var verificacao = terapiaService.verificarConflitos(verificacao(
                 List.of(lucas.getIdCadastro()), List.of(ana.getIdCadastro()), "09:00", "10:00"));
 
         assertThat(verificacao.possuiConflito()).isFalse();
@@ -200,7 +204,7 @@ class TerapiaServiceTest {
         entityManager.flush();
         entityManager.clear();
 
-        var pagina = terapiaService.listarDoEspecialista(ana.getCpf(), null, PageRequest.of(0, 3));
+        var pagina = terapiaService.listarDoEspecialista(ana.getCpf(), FiltroTerapiaDTO.semFiltro(), PageRequest.of(0, 3));
 
         assertThat(pagina.getTotalElements()).isEqualTo(1);
         TerapiaDoEspecialistaDTO terapia = pagina.getContent().get(0);
@@ -213,17 +217,335 @@ class TerapiaServiceTest {
         terapiaService.cadastrar(requisicao(
                 List.of(lucas.getIdCadastro()), List.of(ana.getIdCadastro()), "09:00", "10:00"));
 
-        assertThat(terapiaService.listarPaginado(List.of(StatusTerapia.AGENDADA), PageRequest.of(0, 6))
+        assertThat(terapiaService.listarPaginado(porStatus(StatusTerapia.AGENDADA), PageRequest.of(0, 6))
                 .getTotalElements()).isEqualTo(1);
-        assertThat(terapiaService.listarPaginado(List.of(StatusTerapia.CANCELADA), PageRequest.of(0, 6))
+        assertThat(terapiaService.listarPaginado(porStatus(StatusTerapia.CANCELADA), PageRequest.of(0, 6))
                 .getTotalElements()).isZero();
     }
 
     @Test
     void recusaUsuarioQueNaoEEspecialista() {
         assertThatThrownBy(() -> terapiaService.listarDoEspecialista(
-                lucas.getCpf(), null, PageRequest.of(0, 3)))
+                lucas.getCpf(), FiltroTerapiaDTO.semFiltro(), PageRequest.of(0, 3)))
                 .hasMessage("O usuário logado não é um especialista.");
+    }
+
+    // ---------- Filtros da listagem ----------
+
+    @Test
+    void filtraPorDiaEPorIntervaloComOsDoisDiasIncluidos() {
+        terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+        terapiaEm(DATA.plusDays(1), lucas, ana, "23:00", "23:50");
+        terapiaEm(DATA.plusDays(2), lucas, ana, "00:00", "00:50");
+
+        assertThat(total(filtro(null, DATA, null, null, null, null))).isEqualTo(1);
+        assertThat(total(filtro(null, null, DATA, DATA.plusDays(1), null, null))).isEqualTo(2);
+        assertThat(total(filtro(null, null, DATA.plusDays(1), null, null, null))).isEqualTo(2);
+        assertThat(total(filtro(null, null, null, DATA, null, null))).isEqualTo(1);
+        assertThat(total(filtro(null, null, DATA, DATA, null, null))).isEqualTo(1);
+        assertThat(total(filtro(null, DATA.minusDays(1), null, null, null, null))).isZero();
+    }
+
+    @Test
+    void filtraPorPacienteEEspecialistaSemRepetirTerapiaColetiva() {
+        terapiaService.cadastrar(requisicao(
+                List.of(lucas.getIdCadastro(), maria.getIdCadastro()),
+                List.of(ana.getIdCadastro(), carlos.getIdCadastro()), "09:00", "10:00"));
+        terapiaService.cadastrar(requisicao(
+                List.of(maria.getIdCadastro()), List.of(carlos.getIdCadastro()), "14:00", "15:00"));
+
+        assertThat(total(filtro(null, null, null, null, lucas.getIdCadastro(), null))).isEqualTo(1);
+        assertThat(total(filtro(null, null, null, null, maria.getIdCadastro(), null))).isEqualTo(2);
+        assertThat(total(filtro(null, null, null, null, null, ana.getIdCadastro()))).isEqualTo(1);
+        assertThat(total(filtro(null, null, null, null, null, carlos.getIdCadastro()))).isEqualTo(2);
+        // Combinados: Maria com Ana só na coletiva
+        assertThat(total(filtro(null, DATA, null, null, maria.getIdCadastro(), ana.getIdCadastro()))).isEqualTo(1);
+        // Filtro de ID que não participa de nada: página vazia, não erro
+        assertThat(total(filtro(null, null, null, null, 9999L, null))).isZero();
+    }
+
+    @Test
+    void combinaFiltrosComStatusEOrdenaPeloInicio() {
+        Long tarde = terapiaEm(DATA, lucas, ana, "14:00", "15:00");
+        Long manha = terapiaEm(DATA, maria, ana, "08:00", "09:00");
+        entityManager.find(Terapia.class, tarde).setStatus(StatusTerapia.CANCELADA);
+
+        var pagina = terapiaService.listarPaginado(filtro(List.of(StatusTerapia.AGENDADA), DATA, null, null,
+                null, ana.getIdCadastro()), PageRequest.of(0, 100));
+        assertThat(pagina.getContent()).extracting(TerapiaListaDTO::idTerapia).containsExactly(manha);
+
+        var crescente = terapiaService.listarPaginado(filtro(null, DATA, null, null, null, null),
+                PageRequest.of(0, 100, org.springframework.data.domain.Sort.by("dataHoraInicio").ascending()));
+        assertThat(crescente.getContent()).extracting(TerapiaListaDTO::idTerapia).containsExactly(manha, tarde);
+    }
+
+    @Test
+    void minhasTerapiasAceitamFiltroPorDia() {
+        terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+        terapiaEm(DATA.plusDays(1), lucas, ana, "09:00", "10:00");
+
+        assertThat(terapiaService.listarDoEspecialista(ana.getCpf(), filtro(null, DATA, null, null, null, null),
+                PageRequest.of(0, 3)).getTotalElements()).isEqualTo(1);
+        assertThat(terapiaService.listarDoEspecialista(ana.getCpf(),
+                filtro(null, null, DATA, DATA.plusDays(1), null, null), PageRequest.of(0, 3))
+                .getTotalElements()).isEqualTo(2);
+    }
+
+    @Test
+    void recusaFiltrosInvalidos() {
+        assertThatThrownBy(() -> filtro(null, DATA, DATA, null, null, null))
+                .hasMessage("Use 'data' ou o intervalo 'inicio'/'fim', não os dois juntos.");
+        assertThatThrownBy(() -> filtro(null, DATA, null, DATA, null, null))
+                .hasMessage("Use 'data' ou o intervalo 'inicio'/'fim', não os dois juntos.");
+        assertThatThrownBy(() -> filtro(null, null, DATA, DATA.minusDays(1), null, null))
+                .hasMessage("A data final deve ser igual ou posterior à data inicial.");
+        assertThatThrownBy(() -> filtro(null, null, null, null, 0L, null))
+                .hasMessage("Valor inválido para 'idPaciente': 0");
+        assertThatThrownBy(() -> filtro(null, null, null, null, null, -3L))
+                .hasMessage("Valor inválido para 'idEspecialista': -3");
+        assertThatThrownBy(() -> terapiaService.listarPaginado(FiltroTerapiaDTO.semFiltro(), PageRequest.of(0, 101)))
+                .hasMessage("O parâmetro 'size' deve ser no máximo 100.");
+        assertThatThrownBy(() -> terapiaService.listarDoEspecialista(ana.getCpf(), FiltroTerapiaDTO.semFiltro(),
+                PageRequest.of(0, 101)))
+                .hasMessage("O parâmetro 'size' deve ser no máximo 100.");
+    }
+
+    private long total(FiltroTerapiaDTO filtro) {
+        return terapiaService.listarPaginado(filtro, PageRequest.of(0, 100)).getTotalElements();
+    }
+
+    private FiltroTerapiaDTO filtro(List<StatusTerapia> status, LocalDate data, LocalDate inicio, LocalDate fim,
+            Long idPaciente, Long idEspecialista) {
+        return FiltroTerapiaDTO.de(status, data, inicio, fim, idPaciente, idEspecialista);
+    }
+
+    private FiltroTerapiaDTO porStatus(StatusTerapia status) {
+        return filtro(List.of(status), null, null, null, null, null);
+    }
+
+    // ---------- Status ----------
+
+    @Test
+    void percorreOFluxoAteConcluirEOStatusFinalNaoMudaMais() {
+        Long idTerapia = terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+
+        terapiaService.alterarStatus(idTerapia, new StatusTerapiaRequestDTO(StatusTerapia.EM_ATENDIMENTO, "ignorado"));
+        assertThat(terapiaService.buscarDetalhes(idTerapia).status()).isEqualTo(StatusTerapia.EM_ATENDIMENTO);
+        assertThat(terapiaService.buscarDetalhes(idTerapia).motivoCancelamento()).isNull();
+
+        terapiaService.alterarStatus(idTerapia, new StatusTerapiaRequestDTO(StatusTerapia.CONCLUIDA, null));
+        assertThat(terapiaService.buscarDetalhes(idTerapia).status()).isEqualTo(StatusTerapia.CONCLUIDA);
+
+        assertThatThrownBy(() -> terapiaService.alterarStatus(idTerapia,
+                new StatusTerapiaRequestDTO(StatusTerapia.CANCELADA, "Tarde demais")))
+                .hasMessage("A terapia está concluída e não pode mais mudar de status.");
+    }
+
+    @Test
+    void cancelaComMotivoELiberaOHorario() {
+        Long idTerapia = terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+
+        terapiaService.alterarStatus(idTerapia,
+                new StatusTerapiaRequestDTO(StatusTerapia.CANCELADA, "  Especialista em licença  "));
+
+        TerapiaListaDTO detalhes = terapiaService.buscarDetalhes(idTerapia);
+        assertThat(detalhes.status()).isEqualTo(StatusTerapia.CANCELADA);
+        assertThat(detalhes.motivoCancelamento()).isEqualTo("Especialista em licença");
+        assertThat(terapiaService.verificarConflitos(verificacao(
+                List.of(lucas.getIdCadastro()), List.of(ana.getIdCadastro()), "09:00", "10:00")).possuiConflito())
+                .isFalse();
+        assertThat(terapiaEm(DATA, lucas, ana, "09:00", "10:00")).isNotNull();
+
+        assertThatThrownBy(() -> terapiaService.alterarStatus(idTerapia,
+                new StatusTerapiaRequestDTO(StatusTerapia.AGENDADA, null)))
+                .hasMessage("A terapia está cancelada e não pode mais mudar de status.");
+    }
+
+    @Test
+    void cancelamentoEmAtendimentoTambemEPermitido() {
+        Long idTerapia = terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+        terapiaService.alterarStatus(idTerapia, new StatusTerapiaRequestDTO(StatusTerapia.EM_ATENDIMENTO, null));
+
+        terapiaService.alterarStatus(idTerapia, new StatusTerapiaRequestDTO(StatusTerapia.CANCELADA, "Queda de energia"));
+
+        assertThat(terapiaService.buscarDetalhes(idTerapia).status()).isEqualTo(StatusTerapia.CANCELADA);
+    }
+
+    @Test
+    void recusaTransicoesInvalidasECancelamentoSemMotivo() {
+        Long idTerapia = terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+
+        assertThatThrownBy(() -> terapiaService.alterarStatus(idTerapia,
+                new StatusTerapiaRequestDTO(StatusTerapia.CANCELADA, "   ")))
+                .hasMessage("Informe o motivo do cancelamento.");
+        assertThatThrownBy(() -> terapiaService.alterarStatus(idTerapia,
+                new StatusTerapiaRequestDTO(StatusTerapia.CONCLUIDA, null)))
+                .hasMessage("Não é possível alterar o status de AGENDADA para CONCLUIDA. "
+                        + "A partir de AGENDADA, os status permitidos são: EM_ATENDIMENTO, CANCELADA.");
+        assertThatThrownBy(() -> terapiaService.alterarStatus(idTerapia,
+                new StatusTerapiaRequestDTO(StatusTerapia.AGENDADA, null)))
+                .hasMessage("A terapia já está com o status AGENDADA.");
+
+        terapiaService.alterarStatus(idTerapia, new StatusTerapiaRequestDTO(StatusTerapia.EM_ATENDIMENTO, null));
+        assertThatThrownBy(() -> terapiaService.alterarStatus(idTerapia,
+                new StatusTerapiaRequestDTO(StatusTerapia.AGENDADA, null)))
+                .hasMessage("Não é possível alterar o status de EM_ATENDIMENTO para AGENDADA. "
+                        + "A partir de EM_ATENDIMENTO, os status permitidos são: CONCLUIDA, CANCELADA.");
+        assertThat(terapiaService.buscarDetalhes(idTerapia).status()).isEqualTo(StatusTerapia.EM_ATENDIMENTO);
+    }
+
+    @Test
+    void alterarStatusDeTerapiaInexistenteRetorna404() {
+        assertThatThrownBy(() -> terapiaService.alterarStatus(9999L,
+                new StatusTerapiaRequestDTO(StatusTerapia.EM_ATENDIMENTO, null)))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Terapia não encontrada com ID: 9999");
+    }
+
+    // ---------- Edição ----------
+
+    @Test
+    void remarcaMantendoPresencaEJustificativaDeQuemContinua() {
+        Long idTerapia = terapiaHoje(List.of(lucas, maria), ana, "09:00", "10:00");
+        terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.FALTA_JUSTIFICADA, "Consulta médica"));
+
+        TerapiaPatchRequestDTO dto = new TerapiaPatchRequestDTO();
+        dto.setData(HOJE.plusDays(1));
+        dto.setHoraInicio(LocalTime.of(11, 0));
+        dto.setHoraTermino(LocalTime.of(12, 0));
+        terapiaService.atualizar(idTerapia, dto);
+        entityManager.flush();
+        entityManager.clear();
+
+        TerapiaListaDTO detalhes = terapiaService.buscarDetalhes(idTerapia);
+        assertThat(detalhes.data()).isEqualTo(HOJE.plusDays(1));
+        assertThat(detalhes.horaInicio()).isEqualTo(LocalTime.of(11, 0));
+        assertThat(detalhes.horaTermino()).isEqualTo(LocalTime.of(12, 0));
+        assertThat(detalhes.pacientes()).extracting("presenca")
+                .containsExactly(StatusPresenca.FALTA_JUSTIFICADA, StatusPresenca.PENDENTE);
+        assertThat(detalhes.pacientes().get(0).justificativa()).isEqualTo("Consulta médica");
+        assertThat(detalhes.especialistas()).extracting("nome").containsExactly("Ana Souza");
+    }
+
+    @Test
+    void trocaParticipantesERecalculaAModalidade() {
+        Long idTerapia = terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+        Paciente bia = paciente("Beatriz Lima", "20000000003");
+
+        TerapiaPatchRequestDTO dto = new TerapiaPatchRequestDTO();
+        dto.setPacientesIds(List.of(lucas.getIdCadastro(), bia.getIdCadastro(), bia.getIdCadastro()));
+        dto.setEspecialistasIds(List.of(carlos.getIdCadastro()));
+        terapiaService.atualizar(idTerapia, dto);
+
+        TerapiaListaDTO coletiva = terapiaService.buscarDetalhes(idTerapia);
+        assertThat(coletiva.modalidade()).isEqualTo(Modalidade.COLETIVA);
+        assertThat(coletiva.titulo()).isEqualTo("Terapia coletiva");
+        assertThat(coletiva.pacientes()).extracting("nome").containsExactly("Beatriz Lima", "Lucas Martins");
+        assertThat(coletiva.especialistas()).extracting("nome").containsExactly("Carlos Lima");
+        assertThat(coletiva.horaInicio()).isEqualTo(LocalTime.of(9, 0));
+
+        TerapiaPatchRequestDTO volta = new TerapiaPatchRequestDTO();
+        volta.setPacientesIds(List.of(bia.getIdCadastro()));
+        terapiaService.atualizar(idTerapia, volta);
+        entityManager.flush();
+        entityManager.clear();
+
+        TerapiaListaDTO individual = terapiaService.buscarDetalhes(idTerapia);
+        assertThat(individual.modalidade()).isEqualTo(Modalidade.INDIVIDUAL);
+        assertThat(individual.titulo()).isEqualTo("Beatriz Lima");
+        // Ana saiu da terapia: o horário dela ficou livre
+        assertThat(terapiaEm(DATA, maria, ana, "09:00", "10:00")).isNotNull();
+    }
+
+    @Test
+    void edicaoIgnoraAPropriaTerapiaMasRecusaConflitoComOutras() {
+        Long idTerapia = terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+        terapiaEm(DATA, maria, ana, "11:00", "12:00");
+
+        TerapiaPatchRequestDTO sobreposta = new TerapiaPatchRequestDTO();
+        sobreposta.setHoraInicio(LocalTime.of(9, 30));
+        sobreposta.setHoraTermino(LocalTime.of(10, 30));
+        terapiaService.atualizar(idTerapia, sobreposta);
+        assertThat(terapiaService.buscarDetalhes(idTerapia).horaInicio()).isEqualTo(LocalTime.of(9, 30));
+
+        TerapiaPatchRequestDTO conflitante = new TerapiaPatchRequestDTO();
+        conflitante.setHoraInicio(LocalTime.of(11, 30));
+        conflitante.setHoraTermino(LocalTime.of(12, 30));
+        assertThatThrownBy(() -> terapiaService.atualizar(idTerapia, conflitante))
+                .hasMessage("Conflito de horário: Ana Souza (especialista) já tem terapia das 11:00 às 12:00.");
+    }
+
+    @Test
+    void verificacaoComTerapiaIgnoradaValidaAEdicaoAntesDeSalvar() {
+        Long idTerapia = terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+
+        assertThat(terapiaService.verificarConflitos(verificacao(
+                List.of(lucas.getIdCadastro()), List.of(ana.getIdCadastro()), "09:30", "10:30")).possuiConflito())
+                .isTrue();
+        assertThat(terapiaService.verificarConflitos(verificacao(
+                List.of(lucas.getIdCadastro()), List.of(ana.getIdCadastro()), "09:30", "10:30", idTerapia))
+                .possuiConflito())
+                .isFalse();
+        assertThatThrownBy(() -> terapiaService.verificarConflitos(verificacao(
+                List.of(lucas.getIdCadastro()), List.of(ana.getIdCadastro()), "09:30", "10:30", 9999L)))
+                .hasMessage("Terapia não encontrada com ID: 9999");
+    }
+
+    @Test
+    void soEditaTerapiaAgendada() {
+        Long idTerapia = terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+        terapiaService.alterarStatus(idTerapia, new StatusTerapiaRequestDTO(StatusTerapia.EM_ATENDIMENTO, null));
+
+        TerapiaPatchRequestDTO dto = new TerapiaPatchRequestDTO();
+        dto.setHoraInicio(LocalTime.of(8, 0));
+        assertThatThrownBy(() -> terapiaService.atualizar(idTerapia, dto))
+                .hasMessage("Só é possível editar terapias agendadas. Esta terapia está em atendimento.");
+
+        terapiaService.alterarStatus(idTerapia, new StatusTerapiaRequestDTO(StatusTerapia.CANCELADA, "Teste"));
+        assertThatThrownBy(() -> terapiaService.atualizar(idTerapia, dto))
+                .hasMessage("Só é possível editar terapias agendadas. Esta terapia está cancelada.");
+    }
+
+    @Test
+    void edicaoRevalidaCamposHorarioIdsECadastrosAtivos() {
+        Long idTerapia = terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+
+        TerapiaPatchRequestDTO dataNula = new TerapiaPatchRequestDTO();
+        dataNula.setData(null);
+        assertThatThrownBy(() -> terapiaService.atualizar(idTerapia, dataNula))
+                .hasMessage("A data não pode ser nula.");
+
+        TerapiaPatchRequestDTO semPacientes = new TerapiaPatchRequestDTO();
+        semPacientes.setPacientesIds(List.of());
+        assertThatThrownBy(() -> terapiaService.atualizar(idTerapia, semPacientes))
+                .hasMessage("A terapia deve ter ao menos um paciente.");
+
+        TerapiaPatchRequestDTO semEspecialistas = new TerapiaPatchRequestDTO();
+        semEspecialistas.setEspecialistasIds(null);
+        assertThatThrownBy(() -> terapiaService.atualizar(idTerapia, semEspecialistas))
+                .hasMessage("A terapia deve ter ao menos um especialista.");
+
+        // Só o término enviado: comparado com o início atual (09:00)
+        TerapiaPatchRequestDTO terminoAntes = new TerapiaPatchRequestDTO();
+        terminoAntes.setHoraTermino(LocalTime.of(8, 30));
+        assertThatThrownBy(() -> terapiaService.atualizar(idTerapia, terminoAntes))
+                .hasMessage("A hora de término deve ser posterior à hora de início.");
+
+        TerapiaPatchRequestDTO inexistente = new TerapiaPatchRequestDTO();
+        inexistente.setPacientesIds(List.of(lucas.getIdCadastro(), 9999L));
+        assertThatThrownBy(() -> terapiaService.atualizar(idTerapia, inexistente))
+                .hasMessage("Paciente(s) não encontrado(s): 9999");
+
+        maria.setStatusCadastro(com.fatec.gisa.enums.StatusCadastro.INATIVO);
+        TerapiaPatchRequestDTO inativo = new TerapiaPatchRequestDTO();
+        inativo.setPacientesIds(List.of(lucas.getIdCadastro(), maria.getIdCadastro()));
+        assertThatThrownBy(() -> terapiaService.atualizar(idTerapia, inativo))
+                .hasMessage("Paciente(s) inativo(s): Maria Costa");
+
+        assertThatThrownBy(() -> terapiaService.atualizar(9999L, new TerapiaPatchRequestDTO()))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Terapia não encontrada com ID: 9999");
     }
 
     // ---------- Presença ----------
@@ -353,6 +675,17 @@ class TerapiaServiceTest {
         return terapiaService.cadastrar(new TerapiaCadastroRequestDTO(
                 List.of(paciente.getIdCadastro()), List.of(especialista.getIdCadastro()),
                 data, LocalTime.parse(inicio), LocalTime.parse(termino))).getIdTerapia();
+    }
+
+    private VerificacaoConflitoRequestDTO verificacao(List<Long> pacientes, List<Long> especialistas,
+            String inicio, String termino) {
+        return verificacao(pacientes, especialistas, inicio, termino, null);
+    }
+
+    private VerificacaoConflitoRequestDTO verificacao(List<Long> pacientes, List<Long> especialistas,
+            String inicio, String termino, Long idTerapiaIgnorada) {
+        return new VerificacaoConflitoRequestDTO(pacientes, especialistas, DATA,
+                LocalTime.parse(inicio), LocalTime.parse(termino), idTerapiaIgnorada);
     }
 
     private TerapiaCadastroRequestDTO requisicao(List<Long> pacientes, List<Long> especialistas,

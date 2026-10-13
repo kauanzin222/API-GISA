@@ -3,8 +3,10 @@ package com.fatec.gisa;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -106,11 +108,11 @@ class ApiPostgresTest {
         List<String> indices = jdbcTemplate.queryForList(
                 "select indexname from pg_indexes where indexname like 'idx_%'", String.class);
 
-        assertThat(ultimaVersao).isEqualTo(12);
+        assertThat(ultimaVersao).isEqualTo(14);
         assertThat(indices).contains(
                 "idx_pessoa_nome_trgm", "idx_pessoa_cpf_trgm", "idx_escola_nome_trgm", "idx_cbo_titulo_trgm",
                 "idx_terapia_status_data_inicio", "idx_especialista_terapia_especialista",
-                "idx_paciente_terapia_terapia", "idx_log_auditoria_data_hora");
+                "idx_paciente_terapia_terapia", "idx_log_auditoria_data_hora", "idx_evento_paciente_data_hora");
     }
 
     // Cria um cenário completo pela API e consulta todas as listagens e detalhes
@@ -243,6 +245,258 @@ class ApiPostgresTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].acao").value("LOGIN"))
                 .andExpect(jsonPath("$.content[0].nomeUsuario").value("Administrador do Sistema"));
+    }
+
+    @Test
+    void filtrosDaListagemDeTerapiasFuncionamNoPostgres() throws Exception {
+        Cenario cenario = criarCenario();
+        criarCenario();
+
+        chamar(get("/api/terapias?data=%s&idPaciente=%d&idEspecialista=%d&status=AGENDADA&size=100&sort=dataHoraInicio,asc"
+                .formatted(cenario.dataTerapia(), cenario.idPaciente(), cenario.idEspecialista())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].idTerapia").value(cenario.idTerapia()))
+                .andExpect(jsonPath("$.page.size").value(100));
+        chamar(get("/api/terapias?inicio=%s&fim=%s&idPaciente=%d"
+                .formatted(cenario.dataTerapia(), cenario.dataTerapia(), cenario.idPaciente())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1));
+
+        chamar(get("/api/terapias?data=2026-13-01"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Valor inválido para 'data': 2026-13-01"));
+        chamar(get("/api/terapias?data=2026-10-01&inicio=2026-10-01"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Use 'data' ou o intervalo 'inicio'/'fim', não os dois juntos."));
+        chamar(get("/api/terapias?inicio=2026-10-10&fim=2026-10-01"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("A data final deve ser igual ou posterior à data inicial."));
+        chamar(get("/api/terapias?idPaciente=abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Valor inválido para 'idPaciente': abc"));
+        chamar(get("/api/terapias?size=101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("O parâmetro 'size' deve ser no máximo 100."));
+        chamar(get("/api/terapias/minhas?data=2026-10-01&fim=2026-10-02"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields").isEmpty());
+    }
+
+    @Test
+    void cancelamentoDeTerapiaPelaApi() throws Exception {
+        Cenario cenario = criarCenario();
+        String rota = "/api/terapias/" + cenario.idTerapia() + "/status";
+
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON).content("{ \"status\": \"CANCELADA\" }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Informe o motivo do cancelamento."));
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON).content("{ \"status\": \"XYZ\" }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Corpo da requisição inválido ou malformado."));
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.status").value("Informe o status"));
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON)
+                .content("{ \"status\": \"CANCELADA\", \"motivo\": \"%s\" }".formatted("x".repeat(256))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.motivo").value("O motivo deve ter no máximo 255 caracteres"));
+
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON)
+                .content("{ \"status\": \"CANCELADA\", \"motivo\": \"Especialista em licença\" }"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idTerapia").value(cenario.idTerapia()))
+                .andExpect(jsonPath("$.status").value("CANCELADA"))
+                .andExpect(jsonPath("$.motivoCancelamento").value("Especialista em licença"));
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON).content("{ \"status\": \"AGENDADA\" }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("A terapia está cancelada e não pode mais mudar de status."));
+        chamar(patch("/api/terapias/987654/status").contentType(MediaType.APPLICATION_JSON)
+                .content("{ \"status\": \"EM_ATENDIMENTO\" }"))
+                .andExpect(status().isNotFound());
+
+        // O horário cancelado fica livre para o mesmo especialista
+        chamar(post("/api/terapias").contentType(MediaType.APPLICATION_JSON).content("""
+                { "pacientesIds": [%d], "especialistasIds": [%d],
+                  "data": "%s", "horaInicio": "09:00", "horaTermino": "10:00" }
+                """.formatted(criarPaciente(), cenario.idEspecialista(), cenario.dataTerapia())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.motivoCancelamento").doesNotExist());
+    }
+
+    @Test
+    void edicaoDeTerapiaPelaApi() throws Exception {
+        Cenario cenario = criarCenario();
+        Long novoPaciente = criarPaciente();
+        String rota = "/api/terapias/" + cenario.idTerapia();
+
+        // Validação da edição antes de salvar: a própria terapia não conflita
+        String corpoVerificacao = """
+                { "pacientesIds": [%d], "especialistasIds": [%d],
+                  "data": "%s", "horaInicio": "09:30", "horaTermino": "10:30" %s }
+                """;
+        chamar(post("/api/terapias/verificar-conflitos").contentType(MediaType.APPLICATION_JSON)
+                .content(corpoVerificacao.formatted(cenario.idPaciente(), cenario.idEspecialista(),
+                        cenario.dataTerapia(), "")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.possuiConflito").value(true));
+        chamar(post("/api/terapias/verificar-conflitos").contentType(MediaType.APPLICATION_JSON)
+                .content(corpoVerificacao.formatted(cenario.idPaciente(), cenario.idEspecialista(),
+                        cenario.dataTerapia(), ", \"idTerapiaIgnorada\": " + cenario.idTerapia())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.possuiConflito").value(false));
+
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON).content("""
+                { "horaInicio": "09:30", "horaTermino": "10:30", "pacientesIds": [%d, %d] }
+                """.formatted(cenario.idPaciente(), novoPaciente)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.horaInicio").value("09:30"))
+                .andExpect(jsonPath("$.data").value(cenario.dataTerapia().toString()))
+                .andExpect(jsonPath("$.modalidade").value("COLETIVA"))
+                .andExpect(jsonPath("$.pacientes.length()").value(2))
+                .andExpect(jsonPath("$.pacientes[*].presenca", org.hamcrest.Matchers.everyItem(
+                        org.hamcrest.Matchers.is("PENDENTE"))));
+
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON).content("{ \"horaInicio\": \"9h\" }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Corpo da requisição inválido ou malformado."));
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON).content("{ \"pacientesIds\": [] }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("A terapia deve ter ao menos um paciente."));
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON).content("{ \"especialistasIds\": [null] }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields['especialistasIds[0]']").value("O ID do especialista não pode ser nulo"));
+        chamar(patch("/api/terapias/987654").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Terapia não encontrada com ID: 987654"));
+
+        chamar(patch(rota + "/status").contentType(MediaType.APPLICATION_JSON)
+                .content("{ \"status\": \"CANCELADA\", \"motivo\": \"Teste\" }"))
+                .andExpect(status().isOk());
+        chamar(patch(rota).contentType(MediaType.APPLICATION_JSON).content("{ \"horaInicio\": \"08:00\" }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Só é possível editar terapias agendadas. Esta terapia está cancelada."));
+    }
+
+    @Test
+    void listagemDeProfissionaisFiltraPorTipoEStatusNoPostgres() throws Exception {
+        Cenario cenario = criarCenario();
+        String cpfEspecialista = jdbcTemplate.queryForObject(
+                "select \"CPF\" from \"Pessoa\" where \"IDCadastro\" = ?", String.class, cenario.idEspecialista());
+        String cpfPJ = jdbcTemplate.queryForObject(
+                "select \"CPF\" from \"Pessoa\" where \"IDCadastro\" = ?", String.class, cenario.idPJ());
+
+        chamar(get("/api/profissionais?cpf=" + cpfPJ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].tipo").value("ESPECIALISTA_PJ"));
+        chamar(get("/api/profissionais?tipo=ESPECIALISTA&tipo=ESPECIALISTA_PJ&statusCadastro=ATIVO&cpf=" + cpfEspecialista))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].tipo").value("ESPECIALISTA"));
+        chamar(get("/api/profissionais?tipo=PROFISSIONAL&cpf=" + cpfEspecialista))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0));
+        chamar(get("/api/profissionais?statusCadastro=INATIVO&cpf=" + cpfPJ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0));
+
+        chamar(get("/api/profissionais?tipo=XYZ"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Valor inválido para 'tipo': XYZ"));
+        chamar(get("/api/profissionais?tipo=PESSOA"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Valor inválido para 'tipo': PESSOA"));
+        chamar(get("/api/profissionais?statusCadastro=XYZ"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Valor inválido para 'statusCadastro': XYZ"));
+    }
+
+    @Test
+    void historicoDoPacientePelaApi() throws Exception {
+        Cenario cenario = criarCenario();
+        String rota = "/api/pacientes/" + cenario.idPaciente() + "/historico";
+
+        chamar(patch("/api/pacientes/" + cenario.idPaciente()).contentType(MediaType.APPLICATION_JSON)
+                .content("{ \"statusPaciente\": \"ALTA\", \"prontuario\": { \"alergias\": \"Dipirona\" } }"))
+                .andExpect(status().isOk());
+        // Operação recusada não deixa evento
+        chamar(patch("/api/pacientes/" + cenario.idPaciente()).contentType(MediaType.APPLICATION_JSON)
+                .content("{ \"nome\": \"Outro nome\", \"responsaveis\": [] }"))
+                .andExpect(status().isBadRequest());
+
+        String resposta = chamar(get(rota))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.page.totalElements").value(5))
+                .andExpect(jsonPath("$.content[0].tipo").value("DADOS_ALTERADOS"))
+                .andExpect(jsonPath("$.content[0].descricao").value("Dados do cadastro alterados: informações clínicas."))
+                .andExpect(jsonPath("$.content[0].idTerapia").doesNotExist())
+                .andExpect(jsonPath("$.content[0].usuario.nome").value("Administrador do Sistema"))
+                .andExpect(jsonPath("$.content[1].tipo").value("STATUS_PACIENTE_ALTERADO"))
+                .andExpect(jsonPath("$.content[2].tipo").value("TERAPIA_AGENDADA"))
+                .andExpect(jsonPath("$.content[2].idTerapia").value(cenario.idTerapia()))
+                .andExpect(jsonPath("$.content[3].tipo").value("RESPONSAVEL_VINCULADO"))
+                .andExpect(jsonPath("$.content[4].tipo").value("CADASTRO"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(resposta).doesNotContain("Dipirona").doesNotContain("F84").doesNotContain("Outro nome");
+        assertThat((String) JsonPath.read(resposta, "$.content[0].dataHora")).endsWith("Z");
+
+        chamar(get(rota + "?tipo=CADASTRO&tipo=TERAPIA_AGENDADA&inicio=2000-01-01&fim=2999-12-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2));
+        chamar(get(rota + "?sort=dataHora,asc&size=1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].tipo").value("CADASTRO"))
+                .andExpect(jsonPath("$.page.totalPages").value(5));
+
+        chamar(get(rota + "?tipo=XYZ"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Valor inválido para 'tipo': XYZ"));
+        chamar(get(rota + "?inicio=2026-10-10&fim=2026-10-01"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("A data final deve ser igual ou posterior à data inicial."));
+        chamar(get("/api/pacientes/987654/historico"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Paciente não encontrado com ID: 987654"));
+
+        // Consulta comum: não vai para a auditoria
+        Integer auditados = jdbcTemplate.queryForObject(
+                "select count(*) from \"LogAuditoria\" where \"Caminho\" = ?", Integer.class, rota);
+        assertThat(auditados).isZero();
+    }
+
+    // Sem CORS_ORIGINS, só o front local é liberado
+    @Test
+    void corsPadraoLiberaSoOFrontLocal() throws Exception {
+        mockMvc.perform(options("/api/terapias")
+                        .header("Origin", "http://localhost:4200")
+                        .header("Access-Control-Request-Method", "PATCH"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"));
+        mockMvc.perform(options("/api/terapias")
+                        .header("Origin", "https://outro.exemplo.com")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void usuarioLogadoIdentificaOAdministradorSemAuditar() throws Exception {
+        Integer registrosAntes = jdbcTemplate.queryForObject(
+                "select count(*) from \"LogAuditoria\" where \"Caminho\" = '/api/usuarios/me'", Integer.class);
+
+        chamar(get("/api/usuarios/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("Administrador do Sistema"))
+                .andExpect(jsonPath("$.cpf").value(CPF_ADMIN))
+                .andExpect(jsonPath("$.tipoCadastro").value("PESSOA"))
+                .andExpect(jsonPath("$.perfil.nome").value("Administrador"))
+                .andExpect(jsonPath("$.permissoes[0].nome").value("ACESSO_TOTAL"))
+                .andExpect(jsonPath("$.permissoes.length()").value(5));
+
+        Integer registrosDepois = jdbcTemplate.queryForObject(
+                "select count(*) from \"LogAuditoria\" where \"Caminho\" = '/api/usuarios/me'", Integer.class);
+        assertThat(registrosDepois).isEqualTo(registrosAntes);
     }
 
     private record Cenario(Long idPaciente, String cpfPaciente, Long idResponsavel, Long idEspecialista,

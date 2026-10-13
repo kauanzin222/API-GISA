@@ -1,5 +1,7 @@
 package com.fatec.gisa.controllers.profissional;
 
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -25,6 +27,8 @@ import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
 import com.fatec.gisa.dtos.usuario.request.UsuarioRequestDTO;
 import com.fatec.gisa.dtos.usuario.response.UsuarioResumoDTO;
 import com.fatec.gisa.entities.profissional.Profissional;
+import com.fatec.gisa.enums.StatusCadastro;
+import com.fatec.gisa.enums.TipoCadastro;
 import com.fatec.gisa.services.cadastro.CadastroFacadeService;
 import com.fatec.gisa.services.profissional.ProfissionalService;
 
@@ -43,9 +47,12 @@ public class ProfissionalController {
     public ResponseEntity<Page<ProfissionalResumoDTO>> listarPaginado(
             @RequestParam(required = false) String cpf,
             @RequestParam(required = false) String nome,
+            // Aceita mais de um: ?tipo=ESPECIALISTA&tipo=ESPECIALISTA_PJ
+            @RequestParam(required = false) List<TipoCadastro> tipo,
+            @RequestParam(required = false) StatusCadastro statusCadastro,
             @PageableDefault(page = 0, size = 9, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
         Page<ProfissionalResumoDTO> pagina = profissionalService.listarPaginado(
-                FiltroPessoaDTO.de(cpf, nome), pageable);
+                FiltroPessoaDTO.de(cpf, nome), tipo, statusCadastro, pageable);
         return ResponseEntity.ok(pagina);
     }
 

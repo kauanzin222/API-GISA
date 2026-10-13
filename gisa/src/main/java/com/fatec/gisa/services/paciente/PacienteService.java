@@ -3,11 +3,17 @@ package com.fatec.gisa.services.paciente;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,8 +41,10 @@ import com.fatec.gisa.entities.paciente.Escola;
 import com.fatec.gisa.entities.paciente.Prontuario;
 import com.fatec.gisa.entities.paciente.Responsavel;
 import com.fatec.gisa.entities.paciente.VinculoResponsavel;
+import com.fatec.gisa.enums.GrauParentesco;
 import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.enums.StatusPaciente;
+import com.fatec.gisa.enums.TipoEventoPaciente;
 import com.fatec.gisa.repositories.PessoaRepository;
 import com.fatec.gisa.repositories.paciente.PacienteRepository;
 import com.fatec.gisa.repositories.paciente.ResponsavelRepository;
@@ -63,6 +71,7 @@ public class PacienteService {
     private final CidService cidService;
     private final ProntuarioService prontuarioService;
     private final ResponsavelService responsavelService;
+    private final HistoricoPacienteService historicoPacienteService;
 
     @Transactional(readOnly = true)
     public Page<PacienteResumoDTO> listarPaginado(FiltroPessoaDTO filtro, Pageable pageable) {
@@ -156,6 +165,8 @@ public class PacienteService {
         Paciente paciente = pacienteRepository.findById(idCadastro)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Paciente não encontrado com ID: " + idCadastro));
+        // Para o histórico: só o que realmente mudou vira evento (o front costuma reenviar o formulário inteiro)
+        DadosParaHistorico antes = DadosParaHistorico.de(paciente, pessoaMapper);
 
         pessoaService.aplicarAlteracoes(paciente, dto);
 
@@ -185,11 +196,55 @@ public class PacienteService {
         }
 
         Paciente pacienteAtualizado = pacienteRepository.save(paciente);
+        registrarAlteracoes(pacienteAtualizado, antes, DadosParaHistorico.de(pacienteAtualizado, pessoaMapper));
         if (!responsaveisDesvinculados.isEmpty()) {
             vinculoResponsavelRepository.flush();
             responsavelService.removerOrfaosSemVinculos(responsaveisDesvinculados);
         }
         return pacienteAtualizado;
+    }
+
+    private void registrarAlteracoes(Paciente paciente, DadosParaHistorico antes, DadosParaHistorico depois) {
+        if (antes.statusCadastro() != depois.statusCadastro()) {
+            if (depois.statusCadastro() == StatusCadastro.INATIVO) {
+                historicoPacienteService.registrar(paciente, TipoEventoPaciente.INATIVADO, "Cadastro inativado.");
+            } else {
+                historicoPacienteService.registrar(paciente, TipoEventoPaciente.REATIVADO, "Cadastro reativado.");
+            }
+        }
+        registrarMudancaDeStatus(paciente, antes.statusPaciente(), depois.statusPaciente());
+
+        List<String> alterados = antes.camposAlterados(depois);
+        if (!alterados.isEmpty()) {
+            historicoPacienteService.registrar(paciente, TipoEventoPaciente.DADOS_ALTERADOS,
+                    "Dados do cadastro alterados: " + TextoHistorico.lista(alterados) + ".");
+        }
+
+        depois.responsaveis().forEach((idResponsavel, vinculo) -> {
+            if (!antes.responsaveis().containsKey(idResponsavel)) {
+                registrarVinculo(paciente, vinculo.nome(), vinculo.grau());
+            }
+        });
+        antes.responsaveis().forEach((idResponsavel, vinculo) -> {
+            if (!depois.responsaveis().containsKey(idResponsavel)) {
+                historicoPacienteService.registrar(paciente, TipoEventoPaciente.RESPONSAVEL_DESVINCULADO,
+                        "Responsável %s (%s) desvinculado.".formatted(
+                                vinculo.nome(), TextoHistorico.parentesco(vinculo.grau())));
+            }
+        });
+    }
+
+    private void registrarMudancaDeStatus(Paciente paciente, StatusPaciente antes, StatusPaciente depois) {
+        if (antes != depois) {
+            historicoPacienteService.registrar(paciente, TipoEventoPaciente.STATUS_PACIENTE_ALTERADO,
+                    "Status do paciente alterado de %s para %s.".formatted(
+                            TextoHistorico.statusPaciente(antes), TextoHistorico.statusPaciente(depois)));
+        }
+    }
+
+    private void registrarVinculo(Paciente paciente, String nome, GrauParentesco grau) {
+        historicoPacienteService.registrar(paciente, TipoEventoPaciente.RESPONSAVEL_VINCULADO,
+                "Responsável %s (%s) vinculado.".formatted(nome, TextoHistorico.parentesco(grau)));
     }
 
     @Transactional
@@ -218,7 +273,9 @@ public class PacienteService {
         vinculo.setGrauParentesco(dto.getGrauParentesco());
         paciente.getResponsaveis().add(vinculo);
 
-        return pacienteRepository.save(paciente);
+        Paciente pacienteSalvo = pacienteRepository.save(paciente);
+        registrarVinculo(pacienteSalvo, responsavel.getNome(), dto.getGrauParentesco());
+        return pacienteSalvo;
     }
 
     @Transactional
@@ -226,11 +283,18 @@ public class PacienteService {
         Paciente paciente = pacienteRepository.findById(idCadastro)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Paciente não encontrado com ID: " + idCadastro));
+        StatusCadastro statusCadastroAnterior = paciente.getStatusCadastro();
+        StatusPaciente statusPacienteAnterior = paciente.getStatusPaciente();
 
         paciente.setStatusCadastro(StatusCadastro.INATIVO);
         if (paciente.getStatusPaciente() != StatusPaciente.ALTA) {
             paciente.setStatusPaciente(StatusPaciente.DESLIGADO);
         }
+
+        if (statusCadastroAnterior != StatusCadastro.INATIVO) {
+            historicoPacienteService.registrar(paciente, TipoEventoPaciente.INATIVADO, "Cadastro inativado.");
+        }
+        registrarMudancaDeStatus(paciente, statusPacienteAnterior, paciente.getStatusPaciente());
     }
 
     @Transactional
@@ -269,7 +333,68 @@ public class PacienteService {
         }
 
         pacienteSalvo.setResponsaveis(vinculos);
-        return pacienteRepository.save(pacienteSalvo);
+        Paciente pacienteCadastrado = pacienteRepository.save(pacienteSalvo);
+
+        historicoPacienteService.registrar(pacienteCadastrado, TipoEventoPaciente.CADASTRO, "Paciente cadastrado.");
+        for (VinculoResponsavel vinculo : vinculos) {
+            registrarVinculo(pacienteCadastrado, vinculo.getResponsavel().getNome(), vinculo.getGrauParentesco());
+        }
+        return pacienteCadastrado;
+    }
+
+    // Retrato do paciente antes e depois de um PATCH, sem guardar valores no histórico:
+    // só os nomes dos campos alterados vão para a descrição
+    private record DadosParaHistorico(
+            StatusCadastro statusCadastro,
+            StatusPaciente statusPaciente,
+            Map<String, Object> campos,
+            Map<Long, VinculoParaHistorico> responsaveis) {
+
+        static DadosParaHistorico de(Paciente paciente, PessoaMapper pessoaMapper) {
+            // A ordem é a usada na descrição. CIDs e prontuário aparecem só como "informações clínicas"
+            Map<String, Object> campos = new LinkedHashMap<>();
+            campos.put("nome", paciente.getNome());
+            campos.put("celular", paciente.getCelular());
+            campos.put("CNS", paciente.getNumCNS());
+            campos.put("estado civil", paciente.getEstadoCivil());
+            campos.put("endereços", new HashSet<>(pessoaMapper.toPessoaResponseDTO(paciente).enderecos()));
+            campos.put("convênio", paciente.getConvenio());
+            campos.put("escola", paciente.getEscola() == null ? null : paciente.getEscola().getIdEscola());
+            Prontuario prontuario = paciente.getProntuario();
+            campos.put("informações clínicas", Arrays.asList(
+                    paciente.getCids() == null ? Set.of()
+                            : paciente.getCids().stream().map(Cid::getCodigoCID).collect(Collectors.toSet()),
+                    prontuario == null ? null : Arrays.asList(
+                            prontuario.getAlergias(), prontuario.getComorbidade(), prontuario.getMobilidade())));
+
+            Map<Long, VinculoParaHistorico> responsaveis = new LinkedHashMap<>();
+            if (paciente.getResponsaveis() != null) {
+                paciente.getResponsaveis().forEach(vinculo -> responsaveis.put(
+                        vinculo.getResponsavel().getIdCadastro(),
+                        new VinculoParaHistorico(vinculo.getResponsavel().getNome(), vinculo.getGrauParentesco())));
+            }
+            return new DadosParaHistorico(
+                    paciente.getStatusCadastro(), paciente.getStatusPaciente(), campos, responsaveis);
+        }
+
+        List<String> camposAlterados(DadosParaHistorico depois) {
+            List<String> alterados = new ArrayList<>();
+            campos.forEach((campo, valor) -> {
+                if (!Objects.equals(valor, depois.campos().get(campo))) {
+                    alterados.add(campo);
+                }
+            });
+            responsaveis.forEach((idResponsavel, vinculo) -> {
+                VinculoParaHistorico atual = depois.responsaveis().get(idResponsavel);
+                if (atual != null && atual.grau() != vinculo.grau()) {
+                    alterados.add("parentesco de " + vinculo.nome());
+                }
+            });
+            return alterados;
+        }
+    }
+
+    private record VinculoParaHistorico(String nome, GrauParentesco grau) {
     }
 
     private int calcularIdade(LocalDate dataNascimento) {

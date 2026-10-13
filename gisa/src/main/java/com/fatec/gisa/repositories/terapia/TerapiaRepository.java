@@ -3,10 +3,12 @@ package com.fatec.gisa.repositories.terapia;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,15 +17,38 @@ import com.fatec.gisa.entities.terapia.Terapia;
 import com.fatec.gisa.enums.StatusPresenca;
 import com.fatec.gisa.enums.StatusTerapia;
 
+import jakarta.persistence.LockModeType;
+
 @Repository
 public interface TerapiaRepository extends JpaRepository<Terapia, Long> {
 
-    Page<Terapia> findByStatusIn(Collection<StatusTerapia> status, Pageable pageable);
+    // Filtros da listagem; idPaciente/idEspecialista = 0 não restringem (ver FiltroTerapiaDTO).
+    // A participação é verificada com exists, e não com join, para não repetir a terapia na página.
+    // O dia da terapia é o de dataHoraInicio (início e término caem no mesmo dia).
+    @Query("""
+            select t from Terapia t
+            where t.status in :status
+              and t.dataHoraInicio >= :inicio
+              and t.dataHoraInicio < :fim
+              and (:idPaciente = 0 or exists (
+                      select 1 from PresencaPaciente p
+                      where p.terapia = t and p.paciente.idCadastro = :idPaciente))
+              and (:idEspecialista = 0 or exists (
+                      select 1 from Terapia mesma join mesma.especialistas e
+                      where mesma = t and e.idCadastro = :idEspecialista))
+            """)
+    Page<Terapia> buscar(
+            @Param("status") Collection<StatusTerapia> status,
+            @Param("inicio") LocalDateTime inicio,
+            @Param("fim") LocalDateTime fim,
+            @Param("idPaciente") Long idPaciente,
+            @Param("idEspecialista") Long idEspecialista,
+            Pageable pageable);
 
-    Page<Terapia> findByEspecialistas_IdCadastro(Long idEspecialista, Pageable pageable);
-
-    Page<Terapia> findByEspecialistas_IdCadastroAndStatusIn(
-            Long idEspecialista, Collection<StatusTerapia> status, Pageable pageable);
+    // Mudança de status e edição: trava a terapia até o fim da transação
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from Terapia t where t.idTerapia = :idTerapia")
+    Optional<Terapia> buscarParaAlterar(@Param("idTerapia") Long idTerapia);
 
     // Trava as linhas das pessoas envolvidas até o fim da transação, para que dois
     // cadastros simultâneos com alguém em comum não passem juntos pela verificação de

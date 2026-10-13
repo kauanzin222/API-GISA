@@ -8,6 +8,7 @@ Autenticação, convenções, enums, formato de erro e regras comuns de PATCH/DE
 |---|---|---|
 | `GET` | `/api/pacientes` | lista pacientes (paginado), com busca por CPF ou nome |
 | `GET` | `/api/pacientes/{idCadastro}` | detalhes de um paciente |
+| `GET` | `/api/pacientes/{idCadastro}/historico` | linha do tempo do paciente (paginado) |
 | `POST` | `/api/pacientes` | cadastra paciente com prontuário, endereços, responsáveis e CIDs |
 | `PATCH` | `/api/pacientes/{idCadastro}` | atualiza paciente |
 | `POST` | `/api/pacientes/{idCadastro}/responsaveis` | cadastra um responsável e o vincula ao paciente |
@@ -155,6 +156,92 @@ Retorna dados pessoais, endereços, escola, CIDs, prontuário e responsáveis co
 - O `idCadastro` de cada `responsavel` é o valor usado como `idResponsavel` no PATCH do paciente e nas rotas `/api/responsaveis/{idResponsavel}`.
 
 **Resposta `404`** (paciente não existe): corpo de erro com `message` = `Paciente não encontrado com ID: {id}`.
+
+---
+
+## `GET /api/pacientes/{idCadastro}/historico` — histórico de atividades do paciente
+
+Linha do tempo exibida na tela do paciente: cadastro, mudanças de status, responsáveis e terapias.
+
+> **Não é a auditoria** (ver `AUDITORIA.md`). A auditoria registra toda requisição (quem, quando, rota, status) para fins de segurança. O histórico registra **eventos de negócio** com descrição legível, e:
+> - é gravado na **mesma transação** da operação: se ela falhar (ex.: `400`), o evento não fica gravado;
+> - **nunca** guarda dado de saúde (CIDs, prontuário, alergias) nem textos livres digitados pelos usuários (justificativa de falta e motivo de cancelamento), que podem conter esse tipo de dado. Alterações nesses campos aparecem só como "informações clínicas";
+> - nunca cita, no histórico de um paciente, os nomes dos outros pacientes de uma terapia coletiva;
+> - começa a partir desta versão da API: operações anteriores não têm evento (sem carga retroativa).
+
+**Query params (todos opcionais)**
+
+| Param | Padrão | Descrição |
+|---|---|---|
+| `tipo` | todos | um ou mais tipos de evento: `?tipo=TERAPIA_AGENDADA&tipo=TERAPIA_CANCELADA` |
+| `inicio` | — | data inicial (`yyyy-MM-dd`, horário de Brasília) em que o **evento** aconteceu |
+| `fim` | — | data final, **dia inteiro incluído** |
+| `page` | `0` | número da página |
+| `size` | `20` | itens por página |
+| `sort` | `dataHora,desc` | mais recentes primeiro; eventos da mesma operação vêm na ordem inversa à de gravação |
+
+> `inicio` e `fim` filtram pelo dia em que o evento foi registrado, não pelo dia da terapia. Para as terapias de um período, use `GET /api/terapias?idPaciente=`.
+
+**Resposta `200`**
+
+```json
+{
+  "content": [
+    {
+      "idEvento": 15,
+      "dataHora": "2026-10-13T17:32:10Z",
+      "tipo": "TERAPIA_AGENDADA",
+      "descricao": "Terapia agendada para 27/10/2026, das 09:00 às 10:00, com Ana Souza.",
+      "idTerapia": 3,
+      "usuario": { "idCadastro": 1, "nome": "Administrador do Sistema" }
+    },
+    {
+      "idEvento": 12,
+      "dataHora": "2026-10-13T14:05:41Z",
+      "tipo": "STATUS_PACIENTE_ALTERADO",
+      "descricao": "Status do paciente alterado de Matriculado para Alta.",
+      "idTerapia": null,
+      "usuario": { "idCadastro": 1, "nome": "Administrador do Sistema" }
+    }
+  ],
+  "page": { "size": 20, "number": 0, "totalElements": 2, "totalPages": 1 }
+}
+```
+
+- `dataHora` vem em UTC (o `Z` no final); converta para o horário local na tela.
+- `idTerapia` vem preenchido só nos eventos de terapia (use-o para abrir `GET /api/terapias/{idTerapia}`); nos demais, `null`.
+- `usuario` é quem fez a ação; `null` se não houver usuário identificado ou se o cadastro dessa pessoa tiver sido excluído.
+
+**Tipos de evento**
+
+| `tipo` | Quando | Exemplo de `descricao` |
+|---|---|---|
+| `CADASTRO` | `POST /api/pacientes` | Paciente cadastrado. |
+| `DADOS_ALTERADOS` | `PATCH` que **muda de fato** algum dado (reenviar o mesmo valor não gera evento) | Dados do cadastro alterados: nome, endereços e informações clínicas. |
+| `STATUS_PACIENTE_ALTERADO` | `statusPaciente` mudou (no `PATCH` ou na inativação) | Status do paciente alterado de Matriculado para Alta. |
+| `INATIVADO` | `DELETE` ou `PATCH` com `statusCadastro: INATIVO` | Cadastro inativado. |
+| `REATIVADO` | `PATCH` com `statusCadastro: ATIVO` em paciente inativo | Cadastro reativado. |
+| `RESPONSAVEL_VINCULADO` | responsável incluído no cadastro, no `PATCH` ou em `POST /responsaveis` | Responsável Maria Almeida Souza (mãe) vinculado. |
+| `RESPONSAVEL_DESVINCULADO` | responsável retirado no `PATCH` | Responsável Carlos Souza (pai) desvinculado. |
+| `TERAPIA_AGENDADA` | terapia cadastrada, ou paciente incluído numa terapia existente | Terapia agendada para 27/10/2026, das 09:00 às 10:00, com Ana Souza. / Paciente incluído na terapia de 28/10/2026, das 10:00 às 11:00, com Ana Souza. |
+| `TERAPIA_ALTERADA` | terapia editada (remarcada, especialistas ou pacientes trocados), ou paciente retirado dela | Terapia de 27/10/2026, das 09:00 às 10:00, alterada: remarcada para 28/10/2026, das 10:00 às 11:00. / Paciente retirado da terapia de 27/10/2026, das 09:00 às 10:00, com Ana Souza. |
+| `TERAPIA_CANCELADA` | terapia cancelada (`PATCH /status`) | Terapia de 27/10/2026, das 09:00 às 10:00, com Ana Souza, cancelada. |
+| `PRESENCA_REGISTRADA` | presença ou falta registrada (só quando o valor muda) | Presença registrada na terapia de 27/10/2026, das 09:00 às 10:00: falta justificada. |
+
+- Em terapia **coletiva**, os eventos de terapia entram no histórico de **cada** paciente envolvido. `PRESENCA_REGISTRADA` entra só no do paciente marcado.
+- Iniciar e concluir o atendimento (`EM_ATENDIMENTO`, `CONCLUIDA`) não geram evento.
+- Na descrição de `DADOS_ALTERADOS`, os campos se chamam: nome, celular, CNS, estado civil, endereços, convênio, escola, informações clínicas (CIDs e prontuário) e "parentesco de {responsável}".
+
+**Erros**
+
+| Situação | Status | Mensagem |
+|---|---|---|
+| Paciente inexistente | `404` | Paciente não encontrado com ID: {id} |
+| `tipo` inválido | `400` | Valor inválido para 'tipo': {valor} |
+| Data em formato errado | `400` | Valor inválido para 'inicio': {valor} |
+| `fim` antes de `inicio` | `400` | A data final deve ser igual ou posterior à data inicial. |
+
+O histórico é uma consulta comum: **não** gera registro na auditoria.
 
 ---
 
@@ -557,6 +644,8 @@ No PATCH, `responsaveis[].idResponsavel` e `responsaveis[].grauParentesco` ausen
 | `statusPaciente` `null` no PATCH | `400` | O status do paciente não pode ser nulo. |
 | Paciente inexistente | `404` | Paciente não encontrado com ID: {id} |
 
+Erros do histórico: ver a seção `GET /api/pacientes/{idCadastro}/historico`.
+
 ---
 
 ## Roteiro rápido de testes
@@ -575,3 +664,10 @@ No PATCH, `responsaveis[].idResponsavel` e `responsaveis[].grauParentesco` ausen
 12. Repetir o passo 11. Esperado: `400` com `Este responsável já está vinculado ao paciente.`
 13. `GET /api/pacientes?nome=LUC`. Esperado: o paciente aparece (busca sem diferenciar maiúsculas).
 14. `GET /api/responsaveis?cpf=567.890`. Esperado: a mãe aparece (máscara ignorada).
+
+**Histórico** (do paciente `{id}` dos passos acima)
+
+15. `GET /api/pacientes/{id}/historico`. Esperado: `page.size: 20`, o mais recente primeiro: `RESPONSAVEL_VINCULADO` (avó, passo 11), `STATUS_PACIENTE_ALTERADO` e `REATIVADO` (passo 10), `STATUS_PACIENTE_ALTERADO` e `INATIVADO` (passo 9), `RESPONSAVEL_DESVINCULADO` (pai, passo 6), `DADOS_ALTERADOS` com "nome" (passo 5), dois `RESPONSAVEL_VINCULADO` e `CADASTRO` (passo 1). Os passos 4, 7 e 12 (recusados) não geram evento. `usuario.nome` = "Administrador do Sistema".
+16. `PATCH /api/pacientes/{id}` com `{"prontuario": {"alergias": "Dipirona"}}` e depois o histórico. Esperado: `DADOS_ALTERADOS` com "informações clínicas", sem citar "Dipirona".
+17. Agendar uma terapia para o paciente (ver `TERAPIAS.md`) e `GET /api/pacientes/{id}/historico?tipo=TERAPIA_AGENDADA`. Esperado: um evento, com `idTerapia` preenchido.
+18. `GET /api/pacientes/{id}/historico?inicio=2026-10-10&fim=2026-10-01`. Esperado: `400`. `GET /api/pacientes/999999/historico`: `404`.

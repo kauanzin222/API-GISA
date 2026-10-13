@@ -1,9 +1,14 @@
 package com.fatec.gisa.controllers.paciente;
 
+import java.time.LocalDate;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,11 +24,14 @@ import com.fatec.gisa.dtos.FiltroPessoaDTO;
 import com.fatec.gisa.dtos.paciente.request.PacienteCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
+import com.fatec.gisa.dtos.paciente.response.EventoPacienteDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteCadastroResponseDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteDetalheDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteResumoDTO;
 import com.fatec.gisa.entities.paciente.Paciente;
+import com.fatec.gisa.enums.TipoEventoPaciente;
 import com.fatec.gisa.services.cadastro.CadastroFacadeService;
+import com.fatec.gisa.services.paciente.HistoricoPacienteService;
 import com.fatec.gisa.services.paciente.PacienteService;
 
 import jakarta.validation.Valid;
@@ -36,6 +44,7 @@ public class PacienteController {
 
     private final CadastroFacadeService cadastroFacadeService;
     private final PacienteService pacienteService;
+    private final HistoricoPacienteService historicoPacienteService;
 
     @GetMapping
     public ResponseEntity<Page<PacienteResumoDTO>> listarPaginado(
@@ -48,6 +57,17 @@ public class PacienteController {
     @GetMapping("/{idCadastro}")
     public ResponseEntity<PacienteDetalheDTO> buscarPorId(@PathVariable Long idCadastro) {
         return ResponseEntity.ok(pacienteService.buscarDetalhes(idCadastro));
+    }
+
+    // Linha do tempo do paciente (eventos de negócio, sem dado de saúde); não é a auditoria
+    @GetMapping("/{idCadastro}/historico")
+    public ResponseEntity<Page<EventoPacienteDTO>> listarHistorico(
+            @PathVariable Long idCadastro,
+            @RequestParam(required = false) List<TipoEventoPaciente> tipo,
+            @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate inicio,
+            @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate fim,
+            @PageableDefault(page = 0, size = 20, sort = "dataHora", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(historicoPacienteService.listar(idCadastro, tipo, inicio, fim, pageable));
     }
 
     @PatchMapping("/{idCadastro}")
