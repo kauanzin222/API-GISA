@@ -31,6 +31,13 @@ public class EspecialistaPJService {
                 .map(profissionalMapper::toEspecialistaPJResponseDTO);
     }
 
+    @Transactional(readOnly = true)
+    public EspecialistaPJ buscarParaConcederAcesso(Long idCadastro) {
+        return especialistaPJRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Especialista PJ não encontrado com ID: " + idCadastro));
+    }
+
     @Transactional
     public EspecialistaPJ cadastrar(EspecialistaPJCadastroRequestDTO dto) {
         EspecialistaPJ pj = new EspecialistaPJ();
@@ -48,7 +55,7 @@ public class EspecialistaPJService {
 
     @Transactional
     public EspecialistaPJ atualizar(Long idCadastro, EspecialistaPJPatchRequestDTO dto) {
-        especialistaService.atualizar(idCadastro, dto);
+        especialistaService.atualizarParaPJ(idCadastro, dto);
         EspecialistaPJ especialistaPJ = especialistaPJRepository.findById(idCadastro)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Especialista PJ não encontrado com ID: " + idCadastro));
@@ -75,6 +82,6 @@ public class EspecialistaPJService {
             throw new ResourceNotFoundException(
                     "Especialista PJ não encontrado com ID: " + idCadastro);
         }
-        especialistaService.inativar(idCadastro);
+        especialistaService.inativarParaPJ(idCadastro);
     }
 }

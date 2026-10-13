@@ -58,6 +58,13 @@ public class ProfissionalService {
                 .map(profissionalMapper::toProfissionalResponseDTO);
     }
 
+    @Transactional(readOnly = true)
+    public Profissional buscarParaConcederAcesso(Long idCadastro) {
+        return profissionalRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Profissional não encontrado com ID: " + idCadastro));
+    }
+
     @Transactional
     public Profissional atualizar(Long idCadastro, ProfissionalPatchRequestDTO dto) {
         Profissional profissional = profissionalRepository.findById(idCadastro)

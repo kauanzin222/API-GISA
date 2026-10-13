@@ -17,6 +17,7 @@ import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
+import com.fatec.gisa.entities.usuario.Usuario;
 import com.fatec.gisa.services.PessoaMapper;
 import com.fatec.gisa.dtos.usuario.response.PerfilResponseDTO;
 import com.fatec.gisa.dtos.usuario.response.PermissaoResumoDTO;
@@ -59,29 +60,32 @@ public class ProfissionalMapper {
     }
 
     public ProfissionalResponseDTO toProfissionalResponseDTO(Profissional profissional) {
-        var usuario = profissional.getUsuario();
-        UsuarioResumoDTO usuarioResponse = usuario == null
-                ? null
-                : new UsuarioResumoDTO(
-                        usuario.getIdCadastro(),
-                        usuario.getPerfil() == null
-                                ? null
-                                : new PerfilResponseDTO(
-                                        usuario.getPerfil().getIdPerfil(),
-                                        usuario.getPerfil().getNome()),
-                        usuario.getPerfil() == null || usuario.getPerfil().getPermissoes() == null
-                                ? List.of()
-                                : usuario.getPerfil().getPermissoes().stream()
-                                        .map(permissao -> new PermissaoResumoDTO(
-                                                permissao.getIdPermissao(),
-                                                permissao.getNome(),
-                                                permissao.getDescricao()))
-                                        .toList());
         return new ProfissionalResponseDTO(
                 pessoaMapper.toPessoaResponseDTO(profissional),
                 profissional.getEmail(),
                 toCargoResponseDTO(profissional.getCargo()),
-                usuarioResponse);
+                toUsuarioResumoDTO(profissional.getUsuario()));
+    }
+
+    public UsuarioResumoDTO toUsuarioResumoDTO(Usuario usuario) {
+        if (usuario == null) {
+            return null;
+        }
+        return new UsuarioResumoDTO(
+                usuario.getIdCadastro(),
+                usuario.getPerfil() == null
+                        ? null
+                        : new PerfilResponseDTO(
+                                usuario.getPerfil().getIdPerfil(),
+                                usuario.getPerfil().getNome()),
+                usuario.getPerfil() == null || usuario.getPerfil().getPermissoes() == null
+                        ? List.of()
+                        : usuario.getPerfil().getPermissoes().stream()
+                                .map(permissao -> new PermissaoResumoDTO(
+                                        permissao.getIdPermissao(),
+                                        permissao.getNome(),
+                                        permissao.getDescricao()))
+                                .toList());
     }
 
     public EspecialistaResponseDTO toEspecialistaResponseDTO(Especialista especialista) {

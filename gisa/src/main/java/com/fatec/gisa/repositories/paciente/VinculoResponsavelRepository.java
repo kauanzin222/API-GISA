@@ -14,6 +14,8 @@ import com.fatec.gisa.entities.paciente.pk.VinculoResponsavelPK;
 @Repository
 public interface VinculoResponsavelRepository extends JpaRepository<VinculoResponsavel, VinculoResponsavelPK> {
 
+    boolean existsByResponsavel_IdCadastro(Long idResponsavel);
+
     @Query("""
             select vinculo from VinculoResponsavel vinculo
             join fetch vinculo.responsavel

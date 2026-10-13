@@ -9,6 +9,7 @@ import com.fatec.gisa.dtos.especialista.request.EspecialistaPJCadastroRequestDTO
 import com.fatec.gisa.dtos.profissional.request.ProfissionalComUsuarioRequestDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.dtos.usuario.request.UsuarioRequestDTO;
+import com.fatec.gisa.dtos.usuario.response.UsuarioResumoDTO;
 import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.especialista.EspecialistaPJ;
@@ -19,6 +20,7 @@ import com.fatec.gisa.services.especialista.EspecialistaPJService;
 import com.fatec.gisa.services.especialista.EspecialistaService;
 import com.fatec.gisa.services.paciente.PacienteService;
 import com.fatec.gisa.services.profissional.ProfissionalService;
+import com.fatec.gisa.services.profissional.ProfissionalMapper;
 import com.fatec.gisa.services.usuario.UsuarioService;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,7 @@ public class CadastroFacadeService {
     private final EspecialistaPJService especialistaPJService;
     private final UsuarioService usuarioService;
     private final ProfissionalService profissionalService;
+    private final ProfissionalMapper profissionalMapper;
     private final PacienteService pacienteService;
 
     @Transactional
@@ -68,6 +71,24 @@ public class CadastroFacadeService {
     @Transactional
     public void criarUsuario(Pessoa pessoa, UsuarioRequestDTO dto) {
         usuarioService.criarUsuarioParaPessoa(pessoa, dto);
+    }
+
+    @Transactional
+    public UsuarioResumoDTO concederAcessoProfissional(Long idCadastro, UsuarioRequestDTO dto) {
+        return profissionalMapper.toUsuarioResumoDTO(usuarioService.criarAcessoParaPessoa(
+                profissionalService.buscarParaConcederAcesso(idCadastro), dto));
+    }
+
+    @Transactional
+    public UsuarioResumoDTO concederAcessoEspecialista(Long idCadastro, UsuarioRequestDTO dto) {
+        return profissionalMapper.toUsuarioResumoDTO(usuarioService.criarAcessoParaPessoa(
+                especialistaService.buscarParaConcederAcesso(idCadastro), dto));
+    }
+
+    @Transactional
+    public UsuarioResumoDTO concederAcessoEspecialistaPJ(Long idCadastro, UsuarioRequestDTO dto) {
+        return profissionalMapper.toUsuarioResumoDTO(usuarioService.criarAcessoParaPessoa(
+                especialistaPJService.buscarParaConcederAcesso(idCadastro), dto));
     }
 
     @Transactional

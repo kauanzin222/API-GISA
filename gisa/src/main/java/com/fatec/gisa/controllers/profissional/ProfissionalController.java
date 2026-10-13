@@ -20,6 +20,8 @@ import com.fatec.gisa.dtos.profissional.request.ProfissionalPatchRequestDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalCadastroResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
+import com.fatec.gisa.dtos.usuario.request.UsuarioRequestDTO;
+import com.fatec.gisa.dtos.usuario.response.UsuarioResumoDTO;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.services.cadastro.CadastroFacadeService;
 import com.fatec.gisa.services.profissional.ProfissionalService;
@@ -59,6 +61,14 @@ public class ProfissionalController {
     public ResponseEntity<Void> inativar(@PathVariable Long idCadastro) {
         profissionalService.inativar(idCadastro);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{idCadastro}/usuario")
+    public ResponseEntity<UsuarioResumoDTO> concederAcesso(
+            @PathVariable Long idCadastro,
+            @Valid @RequestBody UsuarioRequestDTO request) {
+        return ResponseEntity.status(201)
+                .body(cadastroFacadeService.concederAcessoProfissional(idCadastro, request));
     }
 
     @PostMapping

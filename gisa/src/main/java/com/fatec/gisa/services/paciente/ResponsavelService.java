@@ -1,5 +1,7 @@
 package com.fatec.gisa.services.paciente;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +15,8 @@ import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.repositories.PessoaRepository;
 import com.fatec.gisa.repositories.paciente.ResponsavelRepository;
+import com.fatec.gisa.repositories.paciente.VinculoResponsavelRepository;
+import com.fatec.gisa.repositories.usuario.UsuarioRepository;
 import com.fatec.gisa.services.PessoaMapper;
 import com.fatec.gisa.services.endereco.EnderecoService;
 
@@ -23,6 +27,8 @@ import lombok.RequiredArgsConstructor;
 public class ResponsavelService {
 
     private final ResponsavelRepository responsavelRepository;
+    private final VinculoResponsavelRepository vinculoResponsavelRepository;
+    private final UsuarioRepository usuarioRepository;
     private final PessoaRepository pessoaRepository;
     private final PessoaMapper pessoaMapper;
     private final EnderecoService enderecoService;
@@ -83,6 +89,20 @@ public class ResponsavelService {
     public void inativar(Long idResponsavel) {
         Responsavel responsavel = buscarResponsavel(idResponsavel);
         responsavel.setStatusCadastro(StatusCadastro.INATIVO);
+    }
+
+    @Transactional
+    public void removerOrfaosSemVinculos(Iterable<Responsavel> responsaveis) {
+        for (Responsavel responsavel : responsaveis) {
+            Long idResponsavel = responsavel.getIdCadastro();
+            if (vinculoResponsavelRepository.existsByResponsavel_IdCadastro(idResponsavel)
+                    || usuarioRepository.existsById(idResponsavel)) {
+                continue;
+            }
+
+            enderecoService.substituirEnderecos(responsavel, List.of());
+            responsavelRepository.delete(responsavel);
+        }
     }
 
     private Responsavel buscarResponsavel(Long idResponsavel) {

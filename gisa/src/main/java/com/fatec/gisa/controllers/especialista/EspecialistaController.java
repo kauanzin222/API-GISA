@@ -20,6 +20,8 @@ import com.fatec.gisa.dtos.especialista.response.EspecialistaCadastroResponseDTO
 import com.fatec.gisa.dtos.especialista.response.EspecialistaPJCadastroResponseDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaPJResponseDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaResponseDTO;
+import com.fatec.gisa.dtos.usuario.request.UsuarioRequestDTO;
+import com.fatec.gisa.dtos.usuario.response.UsuarioResumoDTO;
 import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.services.cadastro.CadastroFacadeService;
@@ -62,6 +64,14 @@ public class EspecialistaController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{idCadastro}/usuario")
+    public ResponseEntity<UsuarioResumoDTO> concederAcesso(
+            @PathVariable Long idCadastro,
+            @Valid @RequestBody UsuarioRequestDTO request) {
+        return ResponseEntity.status(201)
+                .body(cadastroFacadeService.concederAcessoEspecialista(idCadastro, request));
+    }
+
     @PatchMapping("/pj/{idCadastro}")
     public ResponseEntity<EspecialistaPJResponseDTO> atualizarPJ(
             @PathVariable Long idCadastro,
@@ -74,6 +84,14 @@ public class EspecialistaController {
     public ResponseEntity<Void> inativarPJ(@PathVariable Long idCadastro) {
         especialistaPJService.inativar(idCadastro);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/pj/{idCadastro}/usuario")
+    public ResponseEntity<UsuarioResumoDTO> concederAcessoPJ(
+            @PathVariable Long idCadastro,
+            @Valid @RequestBody UsuarioRequestDTO request) {
+        return ResponseEntity.status(201)
+                .body(cadastroFacadeService.concederAcessoEspecialistaPJ(idCadastro, request));
     }
 
     @PostMapping

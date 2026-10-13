@@ -180,11 +180,17 @@ public class PacienteService {
         if (dto.hasField("prontuario")) {
             atualizarProntuario(paciente, dto.getProntuario());
         }
+        List<Responsavel> responsaveisDesvinculados = List.of();
         if (dto.hasField("responsaveis")) {
-            substituirResponsaveis(paciente, dto.getResponsaveis());
+            responsaveisDesvinculados = substituirResponsaveis(paciente, dto.getResponsaveis());
         }
 
-        return pacienteRepository.save(paciente);
+        Paciente pacienteAtualizado = pacienteRepository.save(paciente);
+        if (!responsaveisDesvinculados.isEmpty()) {
+            vinculoResponsavelRepository.flush();
+            responsavelService.removerOrfaosSemVinculos(responsaveisDesvinculados);
+        }
+        return pacienteAtualizado;
     }
 
     @Transactional
@@ -297,7 +303,7 @@ public class PacienteService {
         }
     }
 
-    private void substituirResponsaveis(
+    private List<Responsavel> substituirResponsaveis(
             Paciente paciente,
             List<ResponsavelVinculoPatchDTO> responsaveisDTO) {
         if (responsaveisDTO == null || responsaveisDTO.isEmpty()) {
@@ -337,13 +343,18 @@ public class PacienteService {
 
         if (paciente.getResponsaveis() == null) {
             paciente.setResponsaveis(vinculosAtualizados);
-            return;
+            return List.of();
         }
+        List<Responsavel> desvinculados = vinculosExistentes.values().stream()
+                .map(VinculoResponsavel::getResponsavel)
+                .toList();
         paciente.getResponsaveis().removeAll(vinculosExistentes.values());
         for (VinculoResponsavel vinculo : vinculosAtualizados) {
             if (!paciente.getResponsaveis().contains(vinculo)) {
                 paciente.getResponsaveis().add(vinculo);
             }
         }
+        return desvinculados;
     }
+
 }
