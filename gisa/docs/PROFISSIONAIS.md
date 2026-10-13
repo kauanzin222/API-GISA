@@ -118,7 +118,7 @@ Lista os profissionais, incluindo especialistas e especialistas PJ, ativos e ina
 }
 ```
 
-**Resposta `404`** (profissional não existe): **sem corpo**.
+**Resposta `404`** (profissional não existe): `Profissional não encontrado com ID: {id}`.
 
 ---
 

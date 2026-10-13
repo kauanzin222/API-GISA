@@ -5,7 +5,6 @@ import java.util.List;
 
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -44,9 +43,6 @@ public class UsuarioDetailService implements UserDetailsService {
                         .map(authority -> (GrantedAuthority) authority)
                         .toList();
 
-        return User.withUsername(cpf)
-                .password(usuario.getSenha())
-                .authorities(authorities)
-                .build();
+        return new UsuarioAutenticado(cpf, usuario.getSenha(), authorities, usuario.getVersaoToken());
     }
 }

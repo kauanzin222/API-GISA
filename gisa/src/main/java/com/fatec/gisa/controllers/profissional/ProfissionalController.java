@@ -51,7 +51,7 @@ public class ProfissionalController {
 
     @GetMapping("/{idCadastro}")
     public ResponseEntity<ProfissionalResponseDTO> buscarPorId(@PathVariable Long idCadastro) {
-        return ResponseEntity.of(profissionalService.buscarDetalhes(idCadastro));
+        return ResponseEntity.ok(profissionalService.buscarDetalhes(idCadastro));
     }
 
     @PatchMapping("/{idCadastro}")
@@ -59,7 +59,7 @@ public class ProfissionalController {
             @PathVariable Long idCadastro,
             @Valid @RequestBody ProfissionalPatchRequestDTO request) {
         profissionalService.atualizar(idCadastro, request);
-        return ResponseEntity.of(profissionalService.buscarDetalhes(idCadastro));
+        return ResponseEntity.ok(profissionalService.buscarDetalhes(idCadastro));
     }
 
     @DeleteMapping("/{idCadastro}")

@@ -9,12 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fatec.gisa.dtos.EnderecoDTO;
 import com.fatec.gisa.dtos.FiltroPessoaDTO;
-import com.fatec.gisa.dtos.PessoaPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.response.ResponsavelDetalheDTO;
 import com.fatec.gisa.dtos.paciente.response.ResponsavelListaDTO;
-import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.paciente.Responsavel;
 import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
@@ -23,6 +21,7 @@ import com.fatec.gisa.repositories.paciente.ResponsavelRepository;
 import com.fatec.gisa.repositories.paciente.VinculoResponsavelRepository;
 import com.fatec.gisa.repositories.usuario.UsuarioRepository;
 import com.fatec.gisa.services.PessoaMapper;
+import com.fatec.gisa.services.PessoaService;
 import com.fatec.gisa.services.endereco.EnderecoService;
 
 import lombok.RequiredArgsConstructor;
@@ -37,10 +36,11 @@ public class ResponsavelService {
     private final PessoaRepository pessoaRepository;
     private final PessoaMapper pessoaMapper;
     private final EnderecoService enderecoService;
+    private final PessoaService pessoaService;
 
-    @Transactional
     // Responsáveis já cadastrados são reaproveitados sem alterar seus dados (inclusive endereços).
     // Um responsável novo recebe os endereços do paciente, salvo quando não reside com ele.
+    @Transactional
     public Responsavel obterOuCriar(ResponsavelCadastroRequestDTO dto, List<EnderecoDTO> enderecosPaciente) {
         if (dto.getIdResponsavel() != null) {
             Responsavel responsavel = responsavelRepository.findById(dto.getIdResponsavel())
@@ -95,13 +95,10 @@ public class ResponsavelService {
     @Transactional
     public ResponsavelDetalheDTO atualizar(Long idResponsavel, ResponsavelPatchRequestDTO dto) {
         Responsavel responsavel = buscarResponsavel(idResponsavel);
-        atualizarPessoa(responsavel, dto);
+        pessoaService.aplicarAlteracoes(responsavel, dto);
 
         if (dto.hasField("ocupacao")) {
             responsavel.setOcupacao(dto.getOcupacao());
-        }
-        if (dto.hasField("enderecos")) {
-            enderecoService.substituirEnderecos(responsavel, dto.getEnderecos());
         }
 
         responsavelRepository.save(responsavel);
@@ -134,33 +131,6 @@ public class ResponsavelService {
         return responsavelRepository.findById(idResponsavel)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Responsável não encontrado com ID: " + idResponsavel));
-    }
-
-    private void atualizarPessoa(Pessoa pessoa, PessoaPatchRequestDTO dto) {
-        if (dto.hasField("nome")) {
-            if (dto.getNome() == null || dto.getNome().isBlank()) {
-                throw new IllegalArgumentException("O nome não pode ser vazio.");
-            }
-            pessoa.setNome(dto.getNome());
-        }
-        if (dto.hasField("celular")) {
-            pessoa.setCelular(dto.getCelular());
-        }
-        if (dto.hasField("numCNS")) {
-            pessoa.setNumCNS(dto.getNumCNS());
-        }
-        if (dto.hasField("estadoCivil")) {
-            if (dto.getEstadoCivil() == null) {
-                throw new IllegalArgumentException("O estado civil não pode ser nulo.");
-            }
-            pessoa.setEstadoCivil(dto.getEstadoCivil());
-        }
-        if (dto.hasField("statusCadastro")) {
-            if (dto.getStatusCadastro() == null) {
-                throw new IllegalArgumentException("O status do cadastro não pode ser nulo.");
-            }
-            pessoa.setStatusCadastro(dto.getStatusCadastro());
-        }
     }
 
     private void validarCpf(ResponsavelCadastroRequestDTO dto, Responsavel responsavel) {

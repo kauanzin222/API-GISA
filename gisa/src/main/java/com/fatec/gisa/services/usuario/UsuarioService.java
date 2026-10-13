@@ -4,7 +4,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.dtos.usuario.request.AlterarSenhaRequestDTO;
+import com.fatec.gisa.dtos.usuario.request.RedefinirSenhaRequestDTO;
 import com.fatec.gisa.dtos.usuario.request.UsuarioRequestDTO;
+import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.usuario.Perfil;
 import com.fatec.gisa.entities.usuario.Usuario;
@@ -62,5 +65,40 @@ public class UsuarioService {
         usuario.setPerfil(perfil);
 
         return usuarioRepository.save(usuario);
+    }
+
+    // cpf vem do token do usuário logado
+    @Transactional
+    public void alterarMinhaSenha(String cpf, AlterarSenhaRequestDTO dto) {
+        Usuario usuario = usuarioRepository.findByPessoa_Cpf(cpf)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
+
+        // 400, e não 401: um 401 faria o front entender que a sessão expirou
+        if (!passwordEncoder.matches(dto.senhaAtual(), usuario.getSenha())) {
+            throw new IllegalArgumentException("A senha atual está incorreta.");
+        }
+        if (!dto.novaSenha().equals(dto.confirmacaoNovaSenha())) {
+            throw new IllegalArgumentException("A confirmação não corresponde à nova senha.");
+        }
+        if (dto.novaSenha().equals(dto.senhaAtual())) {
+            throw new IllegalArgumentException("A nova senha deve ser diferente da senha atual.");
+        }
+
+        trocarSenha(usuario, dto.novaSenha());
+    }
+
+    @Transactional
+    public void redefinirSenha(Long idCadastro, RedefinirSenhaRequestDTO dto) {
+        Usuario usuario = usuarioRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Este cadastro não possui usuário de acesso. ID: " + idCadastro));
+        trocarSenha(usuario, dto.novaSenha());
+    }
+
+    // Grava a nova senha e invalida os tokens emitidos antes da troca
+    private void trocarSenha(Usuario usuario, String novaSenha) {
+        usuario.setSenha(passwordEncoder.encode(novaSenha));
+        usuario.setVersaoToken(usuario.getVersaoToken() + 1);
+        usuarioRepository.save(usuario);
     }
 }

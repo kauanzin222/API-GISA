@@ -1,7 +1,6 @@
 package com.fatec.gisa.services.especialista;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
@@ -46,10 +45,12 @@ public class EspecialistaService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<EspecialistaResponseDTO> buscarDetalhes(Long idCadastro) {
+    public EspecialistaResponseDTO buscarDetalhes(Long idCadastro) {
         validarCadastroNaoPJ(idCadastro);
         return especialistaRepository.findById(idCadastro)
-                .map(profissionalMapper::toEspecialistaResponseDTO);
+                .map(profissionalMapper::toEspecialistaResponseDTO)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Especialista não encontrado com ID: " + idCadastro));
     }
 
     @Transactional

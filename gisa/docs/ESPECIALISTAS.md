@@ -73,7 +73,7 @@ Um **especialista** é um profissional (ver `PROFISSIONAIS.md`) com registro em 
 - O bloco `profissional` tem o mesmo formato do `GET /api/profissionais/{idCadastro}`, inclusive `usuario` (`null` quando não há acesso).
 - `diaSemana`: `1` = Segunda ... `7` = Domingo.
 
-**Respostas de erro:** `404` **sem corpo** quando o ID não é de um especialista; `400` quando é de um especialista PJ.
+**Respostas de erro:** `404` com `Especialista não encontrado com ID: {id}` quando o ID não é de um especialista; `400` quando é de um especialista PJ.
 
 ---
 
@@ -273,7 +273,7 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. Para reativar
 
 O bloco `especialista` tem o mesmo formato do `GET /api/especialistas/{idCadastro}`.
 
-**Resposta `404`** (ID não é de um especialista PJ): **sem corpo**.
+**Resposta `404`** (ID não é de um especialista PJ): `Especialista PJ não encontrado com ID: {id}`.
 
 ### `POST /api/especialistas/pj` — cadastrar especialista PJ
 

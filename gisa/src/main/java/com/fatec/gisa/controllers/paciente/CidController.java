@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.fatec.gisa.dtos.paciente.response.CidResponseDTO;
 import com.fatec.gisa.entities.paciente.Cid;
+import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.services.paciente.CidService;
 
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,9 @@ public class CidController {
 
     @GetMapping("/{codigoCID}")
     public ResponseEntity<CidResponseDTO> buscarPorCodigo(@PathVariable String codigoCID) {
-        return ResponseEntity.of(cidService.buscarPorCodigo(codigoCID).map(this::toResponse));
+        return ResponseEntity.ok(cidService.buscarPorCodigo(codigoCID)
+                .map(this::toResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("CID não encontrado: " + codigoCID)));
     }
 
     private CidResponseDTO toResponse(Cid cid) {

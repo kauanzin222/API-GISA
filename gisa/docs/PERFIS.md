@@ -5,7 +5,7 @@ Autenticação, convenções, enums e formato de erro: ver `00-GERAL.md`. Todos 
 - **Permissão** = uma funcionalidade do sistema (ex.: `CADASTRAR_PROFISSIONAL`). As permissões são definidas pelo próprio sistema, por migration; a API **só as consulta**.
 - **Perfil** = um conjunto de permissões (ex.: "Administrador", "Recepção"). Cada usuário de acesso tem exatamente um perfil. O perfil do usuário é escolhido ao conceder acesso (ver `00-GERAL.md`) e pode ser trocado pelo `idPerfil` no PATCH de profissional/especialista.
 
-> **Situação atual:** as permissões já são gravadas e retornadas, mas **ainda não restringem nenhuma rota**: qualquer usuário autenticado acessa todos os endpoints. A verificação por permissão entra quando a lista definitiva de permissões for criada.
+> **Situação atual:** só duas rotas exigem permissão: a redefinição de senha pelo administrador (`PATCH /api/usuarios/{idCadastro}/senha`, `ACESSO_TOTAL` ou `CADASTRAR_USUARIO`; ver `USUARIOS.md`) e a consulta da auditoria (`GET /api/auditoria`, `ACESSO_TOTAL`; ver `AUDITORIA.md`). Nas demais rotas, qualquer usuário autenticado ainda acessa tudo; a verificação por permissão entra quando a lista definitiva de permissões for criada.
 
 ## Rotas
 

@@ -1,5 +1,6 @@
 package com.fatec.gisa.repositories;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,6 +12,7 @@ import com.fatec.gisa.entities.Pessoa;
 @Repository 
 public interface PessoaRepository extends JpaRepository<Pessoa, Long> {
     Optional<Pessoa> findByCpf(String cpf);
+    List<Pessoa> findByCpfIn(Collection<String> cpfs);
     boolean existsByCpf(String cpf);
     List<Pessoa> findByNomeContainingIgnoreCase(String nome);
 }

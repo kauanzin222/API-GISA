@@ -15,6 +15,8 @@ Este documento reúne o que vale para **todos** os módulos da API: autenticaç�
 | `CARGOS.md` | cargos e CBOs |
 | `PERFIS.md` | perfis de acesso e permissões |
 | `TERAPIAS.md` | terapias (consultas), listagem geral e do especialista |
+| `USUARIOS.md` | alterar a própria senha e redefinição de senha pelo administrador |
+| `AUDITORIA.md` | trilha de auditoria: logins, alterações e consultas a dados sensíveis |
 
 ---
 
@@ -54,7 +56,8 @@ Credenciais administrativas iniciais (**somente para testes**; não use em produ
 Authorization: Bearer <token>
 ```
 
-- O token vale por **24 horas**.
+- O token vale por **24 horas**, ou até a senha do usuário ser trocada (ver `USUARIOS.md`).
+- Trocar a própria senha devolve um token novo; o front deve substituir o token salvo.
 - CPF ou senha errados, ou cadastro inativo: `401` com `message` = `Credenciais inválidas.`
 - Token ausente, inválido ou expirado nas demais rotas: `401` ou `403`.
 - Para encerrar a sessão, basta remover o token da aplicação.
@@ -100,13 +103,16 @@ Authorization: Bearer <token>
 | `201 Created` | cadastro realizado (inclusive concessão de acesso) |
 | `204 No Content` | inativação (DELETE) realizada |
 | `400 Bad Request` | validação de campos, corpo malformado ou regra de negócio violada |
-| `401` / `403` | credenciais inválidas; token ausente, inválido ou expirado |
+| `401` / `403` | credenciais inválidas; token ausente, inválido, expirado ou emitido antes da última troca de senha |
+| `403 Forbidden` (com corpo) | usuário logado sem a permissão exigida pela rota: `Você não tem permissão para realizar esta ação.` |
 | `404 Not Found` | recurso não encontrado |
+| `405 Method Not Allowed` | método HTTP que a rota não aceita (ex.: `DELETE /api/cbos`): `O método DELETE não é suportado nesta rota.` |
 | `409 Conflict` | operação incompatível com o estado do cadastro (ex.: alterar perfil de quem não tem usuário) ou, raramente, violação de restrição do banco (`Os dados informados violam uma regra de integridade do banco.`) |
+| `500 Internal Server Error` | erro inesperado no servidor: `Erro interno do servidor. Tente novamente mais tarde.` (o detalhe fica só no log do servidor) |
 
 > CPF, e-mail e CNPJ repetidos são recusados com `400` e mensagem simples: `CPF já cadastrado.`, `E-mail já cadastrado.` ou `CNPJ já cadastrado.`
 
-> Alguns `404` vêm **sem corpo** (GET de profissional, especialista, especialista PJ e CID) e outros com o corpo de erro padrão (paciente, responsável e PATCH/DELETE em geral). Trate o `404` pelo status, não pela presença de corpo.
+> Todo erro, inclusive `404`, `405` e `500`, vem com o corpo padrão abaixo. Rotas inexistentes respondem `404` com `Rota não encontrada.`
 
 ---
 
@@ -143,6 +149,13 @@ Todos os erros seguem o mesmo corpo.
 ```
 
 **Corpo malformado:** JSON inválido, valor de enum inexistente (ex.: `"grauParentesco": "TIO"`), data ou hora em formato errado e `sexo` com mais de um caractere não chegam à validação de campos. A resposta é `400` com `message` = `Corpo da requisição inválido ou malformado.` e `fields` vazio. Use seletores e máscaras no front para evitar esses casos.
+
+**Erros na URL** (também `400`, com `fields` vazio):
+
+| Situação | Exemplo | `message` |
+|---|---|---|
+| Parâmetro obrigatório ausente | — | O parâmetro '{nome}' é obrigatório. |
+| Valor inválido em parâmetro ou ID | `?status=XYZ`, `/api/profissionais/abc` | Valor inválido para 'status': XYZ |
 
 Regra prática para o front: se `fields` tiver itens, mostre cada mensagem no campo correspondente; se estiver vazio, mostre `message` como aviso geral.
 

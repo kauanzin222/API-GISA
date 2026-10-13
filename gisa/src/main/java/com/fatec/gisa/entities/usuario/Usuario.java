@@ -37,6 +37,10 @@ public class Usuario {
     @Column(name = "Senha")
     private String senha;
 
+    // Incrementada a cada troca de senha; tokens com versão anterior são recusados
+    @Column(name = "VersaoToken", nullable = false)
+    private int versaoToken;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "IDPerfil", nullable = false)
     private Perfil perfil;

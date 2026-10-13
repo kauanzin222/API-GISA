@@ -4,7 +4,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.Optional;
 
 import com.fatec.gisa.dtos.FiltroPessoaDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
@@ -19,6 +18,7 @@ import com.fatec.gisa.repositories.PessoaRepository;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.repositories.profissional.ProfissionalRepository;
 import com.fatec.gisa.repositories.usuario.PerfilRepository;
+import com.fatec.gisa.services.PessoaService;
 import com.fatec.gisa.services.endereco.EnderecoService;
 
 import lombok.RequiredArgsConstructor;
@@ -33,6 +33,7 @@ public class ProfissionalService {
     private final PerfilRepository perfilRepository;
     private final ProfissionalMapper profissionalMapper;
     private final EnderecoService enderecoService;
+    private final PessoaService pessoaService;
 
     @Transactional
     public Profissional criarProfissional(ProfissionalCadastroRequestDTO dto) {
@@ -69,9 +70,11 @@ public class ProfissionalService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<ProfissionalResponseDTO> buscarDetalhes(Long idCadastro) {
+    public ProfissionalResponseDTO buscarDetalhes(Long idCadastro) {
         return profissionalRepository.findById(idCadastro)
-                .map(profissionalMapper::toProfissionalResponseDTO);
+                .map(profissionalMapper::toProfissionalResponseDTO)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Profissional não encontrado com ID: " + idCadastro));
     }
 
     @Transactional(readOnly = true)
@@ -87,33 +90,8 @@ public class ProfissionalService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Profissional não encontrado com ID: " + idCadastro));
 
-        if (dto.hasField("nome")) {
-            if (dto.getNome() == null || dto.getNome().isBlank()) {
-                throw new IllegalArgumentException("O nome não pode ser vazio.");
-            }
-            profissional.setNome(dto.getNome());
-        }
-        if (dto.hasField("celular")) {
-            profissional.setCelular(dto.getCelular());
-        }
-        if (dto.hasField("numCNS")) {
-            profissional.setNumCNS(dto.getNumCNS());
-        }
-        if (dto.hasField("estadoCivil")) {
-            if (dto.getEstadoCivil() == null) {
-                throw new IllegalArgumentException("O estado civil não pode ser nulo.");
-            }
-            profissional.setEstadoCivil(dto.getEstadoCivil());
-        }
-        if (dto.hasField("statusCadastro")) {
-            if (dto.getStatusCadastro() == null) {
-                throw new IllegalArgumentException("O status do cadastro não pode ser nulo.");
-            }
-            profissional.setStatusCadastro(dto.getStatusCadastro());
-        }
-        if (dto.hasField("enderecos")) {
-            enderecoService.substituirEnderecos(profissional, dto.getEnderecos());
-        }
+        pessoaService.aplicarAlteracoes(profissional, dto);
+
         if (dto.hasField("email")) {
             if (dto.getEmail() == null || dto.getEmail().isBlank()) {
                 throw new IllegalArgumentException("O e-mail não pode ser vazio.");

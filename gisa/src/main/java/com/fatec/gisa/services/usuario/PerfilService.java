@@ -3,6 +3,8 @@ package com.fatec.gisa.services.usuario;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -32,12 +34,15 @@ public class PerfilService {
 
     @Transactional(readOnly = true)
     public List<PerfilListaDTO> listarTodos() {
+        Map<Long, Long> usuariosPorPerfil = usuarioRepository.contarPorPerfil().stream()
+                .collect(Collectors.toMap(linha -> (Long) linha[0], linha -> (Long) linha[1]));
+
         return perfilRepository.findAll(Sort.by("nome")).stream()
                 .map(perfil -> new PerfilListaDTO(
                         perfil.getIdPerfil(),
                         perfil.getNome(),
                         perfil.getPermissoes() == null ? 0 : perfil.getPermissoes().size(),
-                        usuarioRepository.countByPerfil_IdPerfil(perfil.getIdPerfil())))
+                        usuariosPorPerfil.getOrDefault(perfil.getIdPerfil(), 0L)))
                 .toList();
     }
 

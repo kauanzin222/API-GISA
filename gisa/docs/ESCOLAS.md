@@ -17,7 +17,7 @@ Não é uma listagem completa: serve para **autocomplete** ao digitar o nome da 
 
 - Busca por **trecho** do nome, sem diferenciar maiúsculas de minúsculas.
 - Retorna **no máximo 10** resultados, em ordem alfabética.
-- O parâmetro `nome` é obrigatório: se não for enviado, a API responde `400`. Se for enviado em branco, a resposta é `[]`.
+- O parâmetro `nome` é **opcional**: sem ele (ou em branco), a resposta traz as 10 primeiras escolas em ordem alfabética, útil para abrir o seletor já com opções.
 
 **Exemplo**
 
@@ -84,7 +84,6 @@ O `idEscola` retornado é o valor a enviar no campo `idEscola` ao cadastrar ou a
 | `nome` vazio no cadastro | `fields` | O nome da escola é obrigatório |
 | `tipoEscola` ausente | `fields` | O tipo da escola é obrigatório |
 | `tipoEscola` com valor fora do enum | `message` | Corpo da requisição inválido ou malformado. |
-| `GET` sem o parâmetro `nome` | `400` | parâmetro obrigatório ausente |
 
 Escola inexistente ao informar `idEscola` em um paciente: ver `PACIENTES.md`.
 
@@ -93,7 +92,7 @@ Escola inexistente ao informar `idEscola` em um paciente: ver `PACIENTES.md`.
 ## Roteiro rápido de testes
 
 1. `GET /api/escolas?nome=` com um trecho de nome. Esperado: lista (vazia se não houver escolas).
-2. `GET /api/escolas?nome=` (em branco). Esperado: `[]`.
+2. `GET /api/escolas` (sem `nome`). Esperado: até 10 escolas em ordem alfabética (`[]` se não houver nenhuma).
 3. `POST /api/escolas` com o exemplo acima. Esperado: `201` e o `idEscola`.
 4. `GET /api/escolas?nome=` com parte do nome cadastrado, em minúsculas. Esperado: a escola aparece na lista.
 5. `POST /api/escolas` sem `tipoEscola`. Esperado: `400` com a mensagem em `fields`.

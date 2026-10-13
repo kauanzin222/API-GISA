@@ -35,7 +35,6 @@ import com.fatec.gisa.entities.paciente.Escola;
 import com.fatec.gisa.entities.paciente.Prontuario;
 import com.fatec.gisa.entities.paciente.Responsavel;
 import com.fatec.gisa.entities.paciente.VinculoResponsavel;
-import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.enums.StatusPaciente;
 import com.fatec.gisa.repositories.PessoaRepository;
@@ -44,6 +43,7 @@ import com.fatec.gisa.repositories.paciente.ResponsavelRepository;
 import com.fatec.gisa.repositories.paciente.VinculoResponsavelRepository;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.services.PessoaMapper;
+import com.fatec.gisa.services.PessoaService;
 import com.fatec.gisa.services.endereco.EnderecoService;
 
 import lombok.RequiredArgsConstructor;
@@ -58,6 +58,7 @@ public class PacienteService {
     private final ResponsavelRepository responsavelRepository;
     private final PessoaMapper pessoaMapper;
     private final EnderecoService enderecoService;
+    private final PessoaService pessoaService;
     private final EscolaService escolaService;
     private final CidService cidService;
     private final ProntuarioService prontuarioService;
@@ -156,7 +157,7 @@ public class PacienteService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Paciente não encontrado com ID: " + idCadastro));
 
-        atualizarPessoa(paciente, dto);
+        pessoaService.aplicarAlteracoes(paciente, dto);
 
         if (dto.hasField("statusPaciente")) {
             if (dto.getStatusPaciente() == null) {
@@ -169,9 +170,6 @@ public class PacienteService {
         }
         if (dto.hasField("idEscola")) {
             paciente.setEscola(escolaService.buscarOpcional(dto.getIdEscola()));
-        }
-        if (dto.hasField("enderecos")) {
-            enderecoService.substituirEnderecos(paciente, dto.getEnderecos());
         }
         if (dto.hasField("codigosCid")) {
             paciente.setCids(cidService.obterOuCriar(
@@ -276,33 +274,6 @@ public class PacienteService {
 
     private int calcularIdade(LocalDate dataNascimento) {
         return Period.between(dataNascimento, LocalDate.now()).getYears();
-    }
-
-    private void atualizarPessoa(Pessoa pessoa, PacientePatchRequestDTO dto) {
-        if (dto.hasField("nome")) {
-            if (dto.getNome() == null || dto.getNome().isBlank()) {
-                throw new IllegalArgumentException("O nome não pode ser vazio.");
-            }
-            pessoa.setNome(dto.getNome());
-        }
-        if (dto.hasField("celular")) {
-            pessoa.setCelular(dto.getCelular());
-        }
-        if (dto.hasField("numCNS")) {
-            pessoa.setNumCNS(dto.getNumCNS());
-        }
-        if (dto.hasField("estadoCivil")) {
-            if (dto.getEstadoCivil() == null) {
-                throw new IllegalArgumentException("O estado civil não pode ser nulo.");
-            }
-            pessoa.setEstadoCivil(dto.getEstadoCivil());
-        }
-        if (dto.hasField("statusCadastro")) {
-            if (dto.getStatusCadastro() == null) {
-                throw new IllegalArgumentException("O status do cadastro não pode ser nulo.");
-            }
-            pessoa.setStatusCadastro(dto.getStatusCadastro());
-        }
     }
 
     private void atualizarProntuario(Paciente paciente, ProntuarioPatchRequestDTO dto) {

@@ -29,12 +29,11 @@ public class EscolaService {
     }
 
     @Transactional(readOnly = true)
+    // Sem nome (ou em branco), devolve as 10 primeiras em ordem alfabética
     public List<EscolaResponseDTO> buscarSugestoes(String nome) {
-        if (nome == null || nome.isBlank()) {
-            return List.of();
-        }
+        String trecho = nome == null ? "" : nome.trim();
 
-        return escolaRepository.findTop10ByNomeContainingIgnoreCaseOrderByNomeAsc(nome.trim())
+        return escolaRepository.findTop10ByNomeContainingIgnoreCaseOrderByNomeAsc(trecho)
                 .stream()
                 .map(escola -> new EscolaResponseDTO(
                         escola.getIdEscola(),

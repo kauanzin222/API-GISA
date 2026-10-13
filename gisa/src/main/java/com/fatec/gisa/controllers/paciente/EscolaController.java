@@ -26,7 +26,7 @@ public class EscolaController {
     private final EscolaService escolaService;
 
     @GetMapping
-    public ResponseEntity<List<EscolaResponseDTO>> buscarSugestoes(@RequestParam String nome) {
+    public ResponseEntity<List<EscolaResponseDTO>> buscarSugestoes(@RequestParam(required = false) String nome) {
         return ResponseEntity.ok(escolaService.buscarSugestoes(nome));
     }
 

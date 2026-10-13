@@ -42,12 +42,12 @@ public class EspecialistaController {
 
     @GetMapping("/{idCadastro}")
     public ResponseEntity<EspecialistaResponseDTO> buscarPorId(@PathVariable Long idCadastro) {
-        return ResponseEntity.of(especialistaService.buscarDetalhes(idCadastro));
+        return ResponseEntity.ok(especialistaService.buscarDetalhes(idCadastro));
     }
 
     @GetMapping("/pj/{idCadastro}")
     public ResponseEntity<EspecialistaPJResponseDTO> buscarPJPorId(@PathVariable Long idCadastro) {
-        return ResponseEntity.of(especialistaPJService.buscarDetalhes(idCadastro));
+        return ResponseEntity.ok(especialistaPJService.buscarDetalhes(idCadastro));
     }
 
     @PatchMapping("/{idCadastro}")
@@ -55,7 +55,7 @@ public class EspecialistaController {
             @PathVariable Long idCadastro,
             @Valid @RequestBody EspecialistaPatchRequestDTO request) {
         especialistaService.atualizar(idCadastro, request);
-        return ResponseEntity.of(especialistaService.buscarDetalhes(idCadastro));
+        return ResponseEntity.ok(especialistaService.buscarDetalhes(idCadastro));
     }
 
     @DeleteMapping("/{idCadastro}")
@@ -77,7 +77,7 @@ public class EspecialistaController {
             @PathVariable Long idCadastro,
             @Valid @RequestBody EspecialistaPJPatchRequestDTO request) {
         especialistaPJService.atualizar(idCadastro, request);
-        return ResponseEntity.of(especialistaPJService.buscarDetalhes(idCadastro));
+        return ResponseEntity.ok(especialistaPJService.buscarDetalhes(idCadastro));
     }
 
     @DeleteMapping("/pj/{idCadastro}")

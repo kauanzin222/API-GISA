@@ -29,7 +29,7 @@ GET /api/cids/F84.0
 }
 ```
 
-**Resposta `404`** (CID não encontrado): sem corpo. Significa que o CID ainda não existe na base e deve seguir o fluxo da próxima seção.
+**Resposta `404`** (CID não encontrado): corpo de erro padrão com `message` = `CID não encontrado: {código}`. Significa que o CID ainda não existe na base e deve seguir o fluxo da próxima seção.
 
 > **Importante:** a busca compara o código **exatamente como recebido**, sem ignorar maiúsculas/minúsculas nem formatação. `F84.0`, `f84.0` e `F840` são códigos diferentes. Padronize o código no front (sugestão: maiúsculas, sem espaços e sempre no mesmo formato) tanto ao buscar quanto ao cadastrar.
 
