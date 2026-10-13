@@ -1,6 +1,6 @@
 # API GISA — Sistema Clínico da APAE Sorocaba
 
-API REST voltada ao sistema clínico da **APAE Sorocaba**, desenvolvida também como **trabalho de graduação do curso de Análise e Desenvolvimento de Sistemas (ADS)**.
+API REST do sistema clínico da **APAE Sorocaba**, desenvolvida também como **trabalho de graduação do curso de Análise e Desenvolvimento de Sistemas (ADS)**.
 
 > ⚠️ **Projeto em desenvolvimento.** Funcionalidades, contratos de requisição/resposta e regras podem mudar ao longo do trabalho.
 
@@ -8,198 +8,183 @@ API REST voltada ao sistema clínico da **APAE Sorocaba**, desenvolvida também 
 
 ## Sumário
 
-- [API GISA — Sistema Clínico da APAE Sorocaba](#api-gisa--sistema-clínico-da-apae-sorocaba)
-  - [Sumário](#sumário)
-  - [Contexto e objetivo](#contexto-e-objetivo)
-  - [Funcionalidades documentadas](#funcionalidades-documentadas)
-    - [Autenticação e autorização](#autenticação-e-autorização)
-    - [Pacientes](#pacientes)
-    - [Escolas](#escolas)
-    - [CIDs](#cids)
-    - [Equipe: profissionais e especialistas](#equipe-profissionais-e-especialistas)
-    - [Validação e padrão de erros](#validação-e-padrão-de-erros)
-  - [Tecnologias](#tecnologias)
-  - [Configuração e execução local](#configuração-e-execução-local)
-    - [Usuário administrador inicial](#usuário-administrador-inicial)
-  - [Autenticação](#autenticação)
-  - [Estrutura do projeto](#estrutura-do-projeto)
-  - [Documentação da API](#documentação-da-api)
-  - [Estado do projeto e limitações conhecidas](#estado-do-projeto-e-limitações-conhecidas)
-  - [Licença e uso](#licença-e-uso)
+- [Contexto e objetivo](#contexto-e-objetivo)
+- [Funcionalidades](#funcionalidades)
+- [Tecnologias](#tecnologias)
+- [Configuração e execução local](#configuração-e-execução-local)
+- [Testes](#testes)
+- [Estrutura do projeto](#estrutura-do-projeto)
+- [Documentação da API](#documentação-da-api)
+- [Estado do projeto e limitações conhecidas](#estado-do-projeto-e-limitações-conhecidas)
+- [Licença e uso](#licença-e-uso)
 
 ---
 
 ## Contexto e objetivo
 
-A APAE Sorocaba atende pessoas com deficiência intelectual e múltipla, e o dia a dia de um atendimento clínico envolve muitas informações: dados de pacientes e de seus responsáveis, escola, diagnósticos (CID) e a equipe de profissionais e especialistas.
+A APAE Sorocaba atende pessoas com deficiência intelectual e múltipla, e o dia a dia de um atendimento clínico envolve muitas informações: dados de pacientes e de seus responsáveis, escola, diagnósticos (CID), a equipe de profissionais e especialistas e a agenda de terapias.
 
-Esta API existe para **centralizar o cadastro e a consulta dessas informações em um único serviço**, que outras aplicações (como uma interface web) podem consumir por meio de requisições HTTP. Em termos simples: a API é a "camada de dados e regras" do sistema. Ela recebe os dados, valida, aplica as regras de negócio e os armazena, de modo que as telas do sistema não precisem repetir essa lógica.
+Esta API **centraliza o cadastro e a consulta dessas informações em um único serviço**, consumido por outras aplicações (como a interface web) por meio de requisições HTTP. Ela recebe os dados, valida, aplica as regras de negócio e os armazena, de modo que as telas não precisem repetir essa lógica.
 
 Como trabalho de graduação em ADS, o projeto também tem finalidade acadêmica: aplicar, em um problema real, práticas de modelagem, desenvolvimento back-end, segurança e documentação de software.
 
-> Este README descreve o que está documentado no projeto. Não há, aqui, qualquer afirmação sobre uso em produção ou sobre resultados obtidos na instituição.
-
 ---
 
-## Funcionalidades documentadas
+## Funcionalidades
 
-As funcionalidades abaixo constam nos documentos [`CADASTROS-API.md`](./CADASTROS-API.md) e [`PACIENTES-ESCOLAS-CIDS-API.md`](./PACIENTES-ESCOLAS-CIDS-API.md). Os detalhes de payloads, regras e mensagens de erro estão nesses arquivos.
+| Módulo | Principais recursos |
+|---|---|
+| **Autenticação e usuários** | login por CPF e senha com token JWT; troca da própria senha e redefinição pelo administrador, com encerramento das sessões abertas |
+| **Pacientes e responsáveis** | cadastro completo em uma requisição (prontuário, endereços, responsáveis, CIDs); busca por CPF ou nome; inclusão de responsável em paciente existente; inativação |
+| **Escolas e CIDs** | busca de escolas para autocomplete; consulta de CID por código; cadastro de CIDs novos junto com o paciente |
+| **Equipe** | profissionais, especialistas e especialistas PJ, com especialidades e jornadas de trabalho; concessão de acesso ao sistema |
+| **Cargos e CBOs** | cadastro e manutenção de cargos ligados ao CBO; detalhes com os profissionais de cada cargo |
+| **Perfis e permissões** | perfis de acesso com suas permissões e usuários |
+| **Terapias** | agendamento individual ou coletivo, com verificação de conflito de horário (inclusive para cadastros simultâneos); listagem geral e do especialista logado; registro de presença e falta, com liberação do horário em falta justificada |
+| **Auditoria** | registro de logins, alterações e consultas a dados sensíveis, com consulta filtrada para o administrador |
 
-### Autenticação e autorização
-- Login por CPF e senha (`POST /api/auth/login`), com retorno de token JWT.
-- Todos os demais endpoints exigem o token no cabeçalho `Authorization: Bearer <token>`.
-- Respostas `401`/`403` para token ausente, inválido ou expirado.
+Comum a todos os módulos:
 
-### Pacientes
-- Listagem paginada e ordenável (`GET /api/pacientes`), sem filtros. A resposta inclui responsáveis, CIDs e idade calculada pela API.
-- Cadastro (`POST /api/pacientes`) em uma única requisição, contemplando:
-  - dados pessoais e endereços;
-  - prontuário (alergias, comorbidade e mobilidade);
-  - vínculo opcional com uma escola;
-  - responsáveis, com regras de endereço, reaproveitamento por CPF e validação de duplicidade;
-  - CIDs já existentes e CIDs novos.
-- Status do paciente definido automaticamente no cadastro (`MATRICULADO`), assim como a data de cadastro.
+- validação dos dados de entrada;
+- respostas de erro em um formato único;
+- listagens paginadas;
+- buscas com índices no banco.
 
-### Escolas
-- Busca por trecho do nome (`GET /api/escolas?nome=`), pensada para autocomplete, com no máximo 10 resultados.
-- Cadastro de escola (`POST /api/escolas`), com tipo `PUBLICA` ou `PARTICULAR`.
-
-### CIDs
-- Consulta pelo código (`GET /api/cids/{codigoCID}`), com `404` quando o código não existe na base.
-- Não há endpoint separado para cadastrar CID: novos CIDs são cadastrados junto com o paciente, pelo campo `novosCids`.
-- A busca compara o código exatamente como recebido (sem normalizar maiúsculas/minúsculas ou formatação).
-
-### Equipe: profissionais e especialistas
-- Cadastro de profissional (`POST /api/profissionais`).
-- Cadastro de especialista (`POST /api/especialistas`), com especialidades existentes ou novas e jornadas semanais.
-- Cadastro de especialista pessoa jurídica (`POST /api/especialistas/pj`), com CNPJ, razão social, nome fantasia e inscrição estadual.
-- Variantes **com usuário de acesso**, que criam o cadastro e o usuário de acesso ao sistema na mesma requisição:
-  - `POST /api/profissionais/com-usuario`
-  - `POST /api/especialistas/com-usuario`
-  - `POST /api/especialistas/pj/com-usuario`
-
-### Validação e padrão de erros
-- Validação de campos (por exemplo, CPF com 11 dígitos numéricos, sexo `F`/`M`/`O`, datas no formato `yyyy-MM-dd`).
-- Resposta de erro padronizada (`timestamp`, `status`, `error`, `message`, `path` e, em erros de validação, `fields`).
+O detalhamento de cada módulo está na [documentação da API](#documentação-da-api).
 
 ---
 
 ## Tecnologias
 
-Stack indicada para o projeto (gerenciada via `pom.xml`):
-
 | Tecnologia | Uso |
 |---|---|
-| Java 21 | Linguagem |
-| Spring Boot | Framework da aplicação |
-| Maven | Build e gerenciamento de dependências |
+| Java 21 | linguagem |
+| Spring Boot 4 | framework da aplicação |
 | Spring Web MVC | API REST |
-| Spring Data JPA | Persistência |
-| Spring Security | Autenticação e autorização (JWT) |
-| Bean Validation | Validação dos dados de entrada |
-| Flyway | Versionamento do esquema do banco |
-| PostgreSQL | Banco de dados relacional |
-| H2 | Banco em memória (testes/desenvolvimento) |
+| Spring Data JPA (Hibernate) | persistência |
+| Spring Security + JWT (jjwt) | autenticação e autorização |
+| Bean Validation | validação dos dados de entrada |
+| Flyway | versionamento do esquema do banco (`src/main/resources/db/migration`) |
+| PostgreSQL | banco de dados (com a extensão `pg_trgm` para buscas por trecho) |
+| Maven | build e dependências |
+| JUnit 5, MockMvc, H2 e embedded-postgres | testes |
+| Docker | imagem para o deploy (`Dockerfile`) |
 
-> Os documentos de API mencionam o uso de token JWT, paginação no padrão `Page` do Spring e hospedagem em plano gratuito do Render, o que é coerente com a stack acima. A presença de uma dependência no `pom.xml` não implica, por si só, que ela esteja configurada para uso (por exemplo, qual banco é utilizado em cada perfil de execução).
+Hospedagem atual: **Render** (`https://api-gisa.onrender.com`).
 
 ---
 
 ## Configuração e execução local
 
-Pré-requisitos indicados pela stack:
+**Pré-requisitos:** JDK 21 e um PostgreSQL acessível. O Maven não precisa estar instalado: use o wrapper `./mvnw`.
 
-- JDK 21
-- Maven
-- Um banco PostgreSQL acessível (ou o H2, caso o projeto esteja configurado para isso)
+1. Clone o repositório e entre na pasta `gisa`.
+2. Defina as variáveis de ambiente lidas pelo `application.properties`, **sem versionar valores reais**:
 
-Passos gerais:
-
-1. Clone o repositório e acesse a pasta do projeto.
-2. Configure a conexão com o banco e o segredo de assinatura do JWT por **variáveis de ambiente** ou pelo arquivo de configuração da aplicação, **sem versionar valores reais**. Exemplo de nomes ilustrativos:
+   | Variável | Conteúdo |
+   |---|---|
+   | `DB_HOST` | host e porta do PostgreSQL (ex.: `localhost:5432`) |
+   | `DB_NAME` | nome do banco |
+   | `DB_USER` | usuário do banco |
+   | `DB_PASSWORD` | senha do banco |
+   | `JWT_SECRET` | chave de assinatura dos tokens: texto aleatório com **pelo menos 32 caracteres** |
 
    ```bash
-   export DB_URL="jdbc:postgresql://localhost:5432/<nome_do_banco>"
-   export DB_USERNAME="<usuario>"
+   export DB_HOST="localhost:5432"
+   export DB_NAME="gisa"
+   export DB_USER="<usuario>"
    export DB_PASSWORD="<senha>"
-   export JWT_SECRET="<segredo_longo_e_aleatorio>"
+   export JWT_SECRET="<chave_longa_e_aleatoria>"
    ```
 
-   > Os nomes acima são apenas exemplos. Use os nomes realmente lidos pelo `application.properties`/`application.yml` do projeto.
+   Para gerar uma chave: `openssl rand -base64 48`.
 
-3. Execute a aplicação com Maven:
+3. Rode a aplicação:
 
    ```bash
-   mvn spring-boot:run
+   ./mvnw spring-boot:run
    ```
 
-4. O esquema do banco é controlado pelo Flyway (migrations), aplicadas na inicialização quando configurado.
+4. Na inicialização, o Flyway cria ou atualiza o esquema do banco. O usuário do banco precisa de permissão para `CREATE EXTENSION pg_trgm` (migration `V11`).
 
 ### Usuário administrador inicial
-A documentação informa a existência de um usuário administrador inicial, destinado **somente a testes**. As credenciais não estão neste README: consulte-as com a equipe do projeto e **não as utilize em ambientes reais**.
+
+A migration `V6` cria um administrador para o primeiro acesso. As credenciais estão em `gisa/docs/00-GERAL.md`. **Troque a senha dele logo após o primeiro login** em qualquer ambiente publicado (`PATCH /api/usuarios/minha-senha`, ver `USUARIOS.md`), pois a senha inicial é conhecida por quem tem acesso ao repositório.
 
 ---
 
-## Autenticação
+## Testes
 
-Fluxo resumido:
+```bash
+./mvnw test
+```
 
-1. Faça login:
+Não é preciso configurar nenhum banco:
 
-   ```http
-   POST /api/auth/login
-   Content-Type: application/json
-
-   {
-     "cpf": "<cpf_sem_mascara>",
-     "senha": "<senha>"
-   }
-   ```
-
-2. Use o token retornado nas demais requisições:
-
-   ```http
-   Authorization: Bearer <token>
-   ```
-
-3. Para encerrar a sessão, basta descartar o token no cliente.
-
-> A documentação sinaliza que o nome do campo do token na resposta e o formato do cabeçalho ainda deviam ser conferidos com o back-end.
+- **Testes de regra de negócio** usam o H2 em memória.
+- **`ApiPostgresTest`** sobe um **PostgreSQL real embarcado**, sem Docker, aplica todas as migrations e valida o esquema contra as entidades. Depois chama a API por HTTP com o administrador inicial: listagens, detalhes, erros, conflitos de horário, presença e auditoria.
+- **`TerapiaConcorrenciaTest`** dispara cadastros simultâneos de terapias no mesmo horário e confirma que só um é gravado.
 
 ---
 
 ## Estrutura do projeto
 
-Os arquivos Markdown de documentação ficam na raiz do projeto:
-
 ```
 .
-├── README.md                        # Este arquivo
-├── CADASTROS-API.md                 # Profissionais, especialistas e especialistas PJ
-├── PACIENTES-ESCOLAS-CIDS-API.md    # Pacientes, escolas e CIDs
-└── pom.xml                          # Dependências e build (Maven)
+├── README.md                     # este arquivo
+└── gisa/
+    ├── docs/                     # documentação da API, um arquivo por módulo
+    ├── Dockerfile                # imagem usada no deploy
+    ├── pom.xml
+    └── src/
+        ├── main/java/com/fatec/gisa/
+        │   ├── config/           # segurança, JWT, interceptor de auditoria
+        │   ├── controllers/      # rotas REST, por módulo
+        │   ├── dtos/             # contratos de requisição e resposta
+        │   ├── entities/         # entidades JPA
+        │   ├── enums/
+        │   ├── exceptions/       # exceções e formato padrão de erro
+        │   ├── repositories/     # acesso ao banco (Spring Data)
+        │   ├── services/         # regras de negócio
+        │   └── validation/       # validações customizadas (ex.: sexo)
+        ├── main/resources/
+        │   ├── application.properties
+        │   └── db/migration/     # migrations do Flyway (V1 a V12)
+        └── test/java/            # testes automatizados
 ```
-
-> A organização interna do código-fonte (pacotes, camadas, migrations) ainda não está descrita aqui. Esta seção deve ser complementada com a estrutura real de `src/main/java` e `src/main/resources`.
 
 ---
 
 ## Documentação da API
 
+Os documentos ficam em [`gisa/docs/`](./gisa/docs/). Comece pelo **`00-GERAL.md`**, que traz autenticação, convenções, enums, formato de erro e as regras comuns de PATCH e DELETE.
+
 | Documento | Conteúdo |
 |---|---|
-| [CADASTROS-API.md](./CADASTROS-API.md) | Autenticação, convenções, padrão de erros e cadastros de profissionais, especialistas e especialistas PJ (com e sem usuário de acesso) |
-| [PACIENTES-ESCOLAS-CIDS-API.md](./PACIENTES-ESCOLAS-CIDS-API.md) | Listagem e cadastro de pacientes, busca e cadastro de escolas, consulta de CIDs, fluxo de CID, roteiro de testes e mensagens de erro |
+| [00-GERAL.md](./gisa/docs/00-GERAL.md) | autenticação, convenções, status HTTP, formato de erro, concessão de acesso |
+| [PACIENTES.md](./gisa/docs/PACIENTES.md) | pacientes e responsáveis |
+| [ESCOLAS.md](./gisa/docs/ESCOLAS.md) | busca e cadastro de escolas |
+| [CIDS.md](./gisa/docs/CIDS.md) | consulta de CID e fluxo de cadastro |
+| [PROFISSIONAIS.md](./gisa/docs/PROFISSIONAIS.md) | profissionais |
+| [ESPECIALISTAS.md](./gisa/docs/ESPECIALISTAS.md) | especialistas, especialistas PJ e especialidades |
+| [CARGOS.md](./gisa/docs/CARGOS.md) | cargos e CBOs |
+| [PERFIS.md](./gisa/docs/PERFIS.md) | perfis de acesso e permissões |
+| [TERAPIAS.md](./gisa/docs/TERAPIAS.md) | agendamento de terapias, conflitos de horário e presença |
+| [USUARIOS.md](./gisa/docs/USUARIOS.md) | troca e redefinição de senha |
+| [AUDITORIA.md](./gisa/docs/AUDITORIA.md) | trilha de auditoria |
+
+Cada documento termina com um **roteiro rápido de testes** para Postman ou similar.
 
 ---
 
 ## Estado do projeto e limitações conhecidas
 
-- A API está **em desenvolvimento**.
-- **Integração com API pública de CID:** ainda **não definida**. Hoje, quando um CID não existe na base, o front-end precisa obter a descrição por outro meio e enviá-la em `novosCids` no cadastro do paciente. Não há integração pronta com serviço externo de CID.
-- Não há endpoint dedicado para cadastrar ou editar CIDs.
-- A listagem de pacientes não oferece filtros, apenas paginação e ordenação.
-- O reaproveitamento de responsáveis por CPF não atualiza os dados já cadastrados.
+- **Permissões por rota:** os perfis e permissões já existem, mas só a redefinição de senha e a auditoria exigem permissão. Nas demais rotas, qualquer usuário autenticado acessa tudo. A verificação por permissão entra com a migration que definirá a lista definitiva de permissões.
+- **CORS:** liberado apenas para `http://localhost:4200`. A origem do front publicado precisa ser acrescentada antes do deploy dele.
+- **Login sem limite de tentativas:** as tentativas que falham ficam na auditoria, mas não são bloqueadas.
+- **Terapias:** ainda não há cancelamento, mudança de status (em atendimento, concluída), inclusão de paciente em terapia coletiva já criada nem a visão por dia ("Consultas Diárias") com seus contadores.
+- **Integração com API pública de CID:** não definida. Quando um CID não existe na base, o front precisa obter a descrição e enviá-la em `novosCids` no cadastro do paciente.
+- **CBOs:** a base vem só com o CBO de teste `999999`; os oficiais podem ser cadastrados por `POST /api/cbos` ou carregados por migration.
 
 ---
 

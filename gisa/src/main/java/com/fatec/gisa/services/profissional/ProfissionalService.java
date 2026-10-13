@@ -13,6 +13,7 @@ import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.enums.StatusCadastro;
+import com.fatec.gisa.exceptions.ConflitoException;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.repositories.PessoaRepository;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
@@ -43,7 +44,7 @@ public class ProfissionalService {
 
         Cargo cargo = cargoRepository.findById(dto.getIdCargo())
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "Cargo nao encontrado com ID: " + dto.getIdCargo()));
+                        "Cargo não encontrado com ID: " + dto.getIdCargo()));
 
         profissionalMapper.preencherProfissional(profissional, dto, cargo);
 
@@ -106,8 +107,9 @@ public class ProfissionalService {
             if (dto.getIdCargo() == null) {
                 throw new IllegalArgumentException("O cargo não pode ser nulo.");
             }
+            // ID enviado no corpo: inexistente torna o pedido inválido (400), não a rota (404)
             Cargo cargo = cargoRepository.findById(dto.getIdCargo())
-                    .orElseThrow(() -> new ResourceNotFoundException(
+                    .orElseThrow(() -> new IllegalArgumentException(
                             "Cargo não encontrado com ID: " + dto.getIdCargo()));
             profissional.setCargo(cargo);
         }
@@ -116,11 +118,11 @@ public class ProfissionalService {
                 throw new IllegalArgumentException("O perfil de acesso não pode ser nulo.");
             }
             if (profissional.getUsuario() == null) {
-                throw new IllegalStateException(
+                throw new ConflitoException(
                         "Não é possível alterar o perfil: o profissional não possui usuário.");
             }
             profissional.getUsuario().setPerfil(perfilRepository.findById(dto.getIdPerfil())
-                    .orElseThrow(() -> new ResourceNotFoundException(
+                    .orElseThrow(() -> new IllegalArgumentException(
                             "Perfil não encontrado com ID: " + dto.getIdPerfil())));
         }
 

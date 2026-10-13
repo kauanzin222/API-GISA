@@ -36,7 +36,7 @@ public class UsuarioService {
     // Método chamado dentro do fluxo de cadastro de Profissional
     @Transactional
     public Usuario criarUsuarioParaPessoa(Pessoa pessoa, UsuarioRequestDTO dto) {
-        return criarUsuario(pessoa, dto, false);
+        return criarUsuario(pessoa, dto);
     }
 
     @Transactional
@@ -45,19 +45,16 @@ public class UsuarioService {
             throw new IllegalArgumentException(
                     "Não é possível conceder acesso a um cadastro inativo.");
         }
-        return criarUsuario(pessoa, dto, true);
+        return criarUsuario(pessoa, dto);
     }
 
-    private Usuario criarUsuario(Pessoa pessoa, UsuarioRequestDTO dto, boolean erroComoRequisicaoInvalida) {
+    private Usuario criarUsuario(Pessoa pessoa, UsuarioRequestDTO dto) {
         if (usuarioRepository.existsById(pessoa.getIdCadastro())) {
-            if (erroComoRequisicaoInvalida) {
-                throw new IllegalArgumentException("Esta pessoa já possui um usuário cadastrado.");
-            }
-            throw new IllegalStateException("Esta pessoa já possui um usuário cadastrado.");
+            throw new IllegalArgumentException("Esta pessoa já possui um usuário cadastrado.");
         }
 
         Perfil perfil = perfilRepository.findById(dto.idPerfil())
-                .orElseThrow(() -> new IllegalArgumentException("Perfil de acesso não encontrado."));
+                .orElseThrow(() -> new IllegalArgumentException("Perfil não encontrado com ID: " + dto.idPerfil()));
 
         Usuario usuario = new Usuario();
         usuario.setPessoa(pessoa); // O @MapsId vai atribuir o mesmo IDCadastro de Pessoa

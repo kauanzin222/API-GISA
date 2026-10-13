@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.dtos.terapia.request.PresencaRequestDTO;
 import com.fatec.gisa.dtos.terapia.request.TerapiaCadastroRequestDTO;
 import com.fatec.gisa.dtos.terapia.response.TerapiaDoEspecialistaDTO;
 import com.fatec.gisa.dtos.terapia.response.TerapiaListaDTO;
@@ -23,11 +24,13 @@ import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.paciente.Paciente;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Cbo;
+import com.fatec.gisa.entities.terapia.Terapia;
 import com.fatec.gisa.enums.EstadoCivil;
 import com.fatec.gisa.enums.Modalidade;
 import com.fatec.gisa.enums.StatusPaciente;
 import com.fatec.gisa.enums.StatusPresenca;
 import com.fatec.gisa.enums.StatusTerapia;
+import com.fatec.gisa.exceptions.ResourceNotFoundException;
 
 import jakarta.persistence.EntityManager;
 
@@ -44,6 +47,7 @@ import jakarta.persistence.EntityManager;
 class TerapiaServiceTest {
 
     private static final LocalDate DATA = LocalDate.of(2026, 10, 27);
+    private static final LocalDate HOJE = LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo"));
 
     @Autowired
     private TerapiaService terapiaService;
@@ -220,6 +224,135 @@ class TerapiaServiceTest {
         assertThatThrownBy(() -> terapiaService.listarDoEspecialista(
                 lucas.getCpf(), null, PageRequest.of(0, 3)))
                 .hasMessage("O usuário logado não é um especialista.");
+    }
+
+    // ---------- Presença ----------
+
+    @Test
+    void registraPresencaNoDiaDaTerapia() {
+        Long idTerapia = terapiaHoje(lucas, ana, "09:00", "10:00");
+
+        terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.PRESENTE, "texto ignorado"));
+
+        var paciente = terapiaService.buscarDetalhes(idTerapia).pacientes().get(0);
+        assertThat(paciente.presenca()).isEqualTo(StatusPresenca.PRESENTE);
+        assertThat(paciente.justificativa()).isNull();
+    }
+
+    @Test
+    void recusaPresencaEFaltaAntesDoDiaDaTerapia() {
+        Long idTerapia = terapiaEm(HOJE.plusDays(7), lucas, ana, "09:00", "10:00");
+
+        for (StatusPresenca presenca : List.of(StatusPresenca.PRESENTE, StatusPresenca.FALTA_INJUSTIFICADA)) {
+            assertThatThrownBy(() -> terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                    new PresencaRequestDTO(presenca, null)))
+                    .hasMessage("Presença e falta só podem ser registradas a partir do dia da terapia.");
+        }
+    }
+
+    @Test
+    void faltaJustificadaPodeSerAvisadaAntesEExigeJustificativa() {
+        Long idTerapia = terapiaEm(HOJE.plusDays(7), lucas, ana, "09:00", "10:00");
+
+        assertThatThrownBy(() -> terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.FALTA_JUSTIFICADA, "  ")))
+                .hasMessage("Informe a justificativa da falta.");
+
+        terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.FALTA_JUSTIFICADA, "  Atestado médico  "));
+        assertThat(terapiaService.buscarDetalhes(idTerapia).pacientes().get(0).justificativa())
+                .isEqualTo("Atestado médico");
+    }
+
+    @Test
+    void recusaPacienteQueNaoFazParteDaTerapia() {
+        Long idTerapia = terapiaHoje(lucas, ana, "09:00", "10:00");
+
+        assertThatThrownBy(() -> terapiaService.registrarPresenca(idTerapia, maria.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.PRESENTE, null)))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void recusaPresencaEmTerapiaCancelada() {
+        Long idTerapia = terapiaHoje(lucas, ana, "09:00", "10:00");
+        entityManager.find(Terapia.class, idTerapia).setStatus(StatusTerapia.CANCELADA);
+
+        assertThatThrownBy(() -> terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.PRESENTE, null)))
+                .hasMessage("Não é possível registrar presença em uma terapia cancelada.");
+    }
+
+    @Test
+    void faltaJustificadaDeTodosLiberaOHorario() {
+        Long idTerapia = terapiaHoje(lucas, ana, "09:00", "10:00");
+
+        terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.FALTA_JUSTIFICADA, "Doente"));
+
+        assertThat(terapiaService.buscarDetalhes(idTerapia).horarioLiberado()).isTrue();
+        // O especialista recebe outro paciente no horário liberado...
+        assertThat(terapiaHoje(maria, ana, "09:00", "10:00")).isNotNull();
+        // ...e o paciente que justificou a falta também fica livre naquele horário
+        assertThat(terapiaHoje(lucas, carlos, "09:00", "10:00")).isNotNull();
+    }
+
+    @Test
+    void faltaJustificadaDeUmSoPacienteNaoLiberaOHorarioDoEspecialista() {
+        Long idTerapia = terapiaHoje(List.of(lucas, maria), ana, "09:00", "10:00");
+
+        terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.FALTA_JUSTIFICADA, "Doente"));
+
+        assertThat(terapiaService.buscarDetalhes(idTerapia).horarioLiberado()).isFalse();
+        assertThatThrownBy(() -> terapiaHoje(List.of(paciente("Outro", "20000000009")), ana, "09:00", "10:00"))
+                .hasMessageStartingWith("Conflito de horário: Ana Souza (especialista)");
+    }
+
+    @Test
+    void naoDesfazFaltaJustificadaSeOHorarioJaFoiOcupado() {
+        Long idTerapia = terapiaHoje(lucas, ana, "09:00", "10:00");
+        terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.FALTA_JUSTIFICADA, "Doente"));
+        terapiaHoje(maria, ana, "09:00", "10:00");
+
+        assertThatThrownBy(() -> terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.PENDENTE, null)))
+                .hasMessageStartingWith("Não é possível desfazer a falta justificada: o horário já foi ocupado")
+                .hasMessageContaining("Ana Souza (especialista)");
+    }
+
+    @Test
+    void desfazFaltaJustificadaQuandoOHorarioContinuaLivre() {
+        Long idTerapia = terapiaHoje(lucas, ana, "09:00", "10:00");
+        terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.FALTA_JUSTIFICADA, "Doente"));
+
+        terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.PENDENTE, null));
+
+        var detalhes = terapiaService.buscarDetalhes(idTerapia);
+        assertThat(detalhes.horarioLiberado()).isFalse();
+        assertThat(detalhes.pacientes().get(0).presenca()).isEqualTo(StatusPresenca.PENDENTE);
+        assertThat(detalhes.pacientes().get(0).justificativa()).isNull();
+    }
+
+    private Long terapiaHoje(Paciente paciente, Especialista especialista, String inicio, String termino) {
+        return terapiaEm(HOJE, paciente, especialista, inicio, termino);
+    }
+
+    private Long terapiaHoje(List<Paciente> pacientes, Especialista especialista, String inicio, String termino) {
+        return terapiaService.cadastrar(new TerapiaCadastroRequestDTO(
+                pacientes.stream().map(Paciente::getIdCadastro).toList(), List.of(especialista.getIdCadastro()),
+                HOJE, LocalTime.parse(inicio), LocalTime.parse(termino))).getIdTerapia();
+    }
+
+    private Long terapiaEm(LocalDate data, Paciente paciente, Especialista especialista,
+            String inicio, String termino) {
+        return terapiaService.cadastrar(new TerapiaCadastroRequestDTO(
+                List.of(paciente.getIdCadastro()), List.of(especialista.getIdCadastro()),
+                data, LocalTime.parse(inicio), LocalTime.parse(termino))).getIdTerapia();
     }
 
     private TerapiaCadastroRequestDTO requisicao(List<Long> pacientes, List<Long> especialistas,

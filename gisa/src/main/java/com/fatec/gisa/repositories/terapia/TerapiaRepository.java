@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.fatec.gisa.entities.terapia.Terapia;
+import com.fatec.gisa.enums.StatusPresenca;
 import com.fatec.gisa.enums.StatusTerapia;
 
 @Repository
@@ -35,13 +36,18 @@ public interface TerapiaRepository extends JpaRepository<Terapia, Long> {
             """, nativeQuery = true)
     List<Long> bloquearPessoas(@Param("ids") Collection<Long> ids);
 
-    // Terapias não canceladas dos especialistas que se sobrepõem ao horário
+    // Terapias que ocupam o horário dos especialistas: não canceladas, diferentes de idTerapiaIgnorada
+    // (a própria terapia, ao revalidar) e com ao menos um paciente sem falta justificada; se todos
+    // justificaram a falta, o horário do especialista está liberado
     @Query("""
             select new com.fatec.gisa.repositories.terapia.OcupacaoHorario(
                 e.idCadastro, e.nome, t.idTerapia, t.dataHoraInicio, t.dataHoraFim)
             from Terapia t join t.especialistas e
             where e.idCadastro in :ids
               and t.status <> :cancelada
+              and t.idTerapia <> :idTerapiaIgnorada
+              and exists (select 1 from PresencaPaciente outra
+                          where outra.terapia = t and outra.presenca <> :justificada)
               and t.dataHoraInicio < :fim
               and t.dataHoraFim > :inicio
             order by e.nome, t.dataHoraInicio
@@ -50,15 +56,20 @@ public interface TerapiaRepository extends JpaRepository<Terapia, Long> {
             @Param("ids") Collection<Long> ids,
             @Param("inicio") LocalDateTime inicio,
             @Param("fim") LocalDateTime fim,
-            @Param("cancelada") StatusTerapia cancelada);
+            @Param("cancelada") StatusTerapia cancelada,
+            @Param("justificada") StatusPresenca justificada,
+            @Param("idTerapiaIgnorada") Long idTerapiaIgnorada);
 
-    // Terapias não canceladas dos pacientes que se sobrepõem ao horário
+    // Terapias que ocupam o horário dos pacientes: não canceladas, diferentes de idTerapiaIgnorada e
+    // em que o paciente não justificou a falta (falta justificada libera o horário dele)
     @Query("""
             select new com.fatec.gisa.repositories.terapia.OcupacaoHorario(
                 p.paciente.idCadastro, p.paciente.nome, t.idTerapia, t.dataHoraInicio, t.dataHoraFim)
             from Terapia t join t.presencaPacientes p
             where p.paciente.idCadastro in :ids
               and t.status <> :cancelada
+              and t.idTerapia <> :idTerapiaIgnorada
+              and p.presenca <> :justificada
               and t.dataHoraInicio < :fim
               and t.dataHoraFim > :inicio
             order by p.paciente.nome, t.dataHoraInicio
@@ -67,5 +78,7 @@ public interface TerapiaRepository extends JpaRepository<Terapia, Long> {
             @Param("ids") Collection<Long> ids,
             @Param("inicio") LocalDateTime inicio,
             @Param("fim") LocalDateTime fim,
-            @Param("cancelada") StatusTerapia cancelada);
+            @Param("cancelada") StatusTerapia cancelada,
+            @Param("justificada") StatusPresenca justificada,
+            @Param("idTerapiaIgnorada") Long idTerapiaIgnorada);
 }

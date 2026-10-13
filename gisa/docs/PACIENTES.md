@@ -548,7 +548,7 @@ No PATCH, `responsaveis[].idResponsavel` e `responsaveis[].grauParentesco` ausen
 | `idEscola` inexistente | `400` | Escola não encontrada com ID: {id} |
 | CID inexistente em `codigosCid` | `400` | CID(s) não encontrado(s): {códigos} |
 | `idResponsavel` inexistente (POST) | `400` | Responsável não encontrado com ID: {id} |
-| `idResponsavel` inexistente (PATCH) | `404` | Responsável não encontrado com ID: {id} |
+| `idResponsavel` inexistente (PATCH) | `400` | Responsável não encontrado com ID: {id} |
 | CPF não corresponde ao `idResponsavel` | `400` | O CPF informado não corresponde ao responsável selecionado |
 | CPF pertence a pessoa que não é responsável | `400` | O CPF informado pertence a uma pessoa que não está cadastrada como responsável |
 | `nome` vazio no PATCH | `400` | O nome não pode ser vazio. |

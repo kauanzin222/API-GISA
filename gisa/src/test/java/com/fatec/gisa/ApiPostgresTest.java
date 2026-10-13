@@ -3,6 +3,7 @@ package com.fatec.gisa;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -187,6 +188,32 @@ class ApiPostgresTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
                         org.hamcrest.Matchers.startsWith("Conflito de horário: Especialista")));
+    }
+
+    @Test
+    void faltaJustificadaLiberaOHorarioNoPostgres() throws Exception {
+        Cenario cenario = criarCenario();
+
+        chamar(patch("/api/terapias/" + cenario.idTerapia() + "/pacientes/" + cenario.idPaciente() + "/presenca")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{ \"presenca\": \"FALTA_JUSTIFICADA\", \"justificativa\": \"Atestado médico\" }"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.horarioLiberado").value(true))
+                .andExpect(jsonPath("$.pacientes[0].justificativa").value("Atestado médico"));
+
+        // Mesmo especialista e horário: aceito, porque o horário foi liberado
+        chamar(post("/api/terapias").contentType(MediaType.APPLICATION_JSON).content("""
+                { "pacientesIds": [%d], "especialistasIds": [%d],
+                  "data": "%s", "horaInicio": "09:00", "horaTermino": "10:00" }
+                """.formatted(criarPaciente(), cenario.idEspecialista(), cenario.dataTerapia())))
+                .andExpect(status().isCreated());
+
+        chamar(patch("/api/terapias/" + cenario.idTerapia() + "/pacientes/" + cenario.idPaciente() + "/presenca")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{ \"presenca\": \"PENDENTE\" }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.startsWith("Não é possível desfazer a falta justificada")));
     }
 
     @Test

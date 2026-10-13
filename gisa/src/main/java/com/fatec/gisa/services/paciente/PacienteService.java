@@ -328,7 +328,7 @@ public class PacienteService {
             VinculoResponsavel vinculo = vinculosExistentes.remove(dto.idResponsavel());
             if (vinculo == null) {
                 Responsavel responsavel = responsavelRepository.findById(dto.idResponsavel())
-                        .orElseThrow(() -> new ResourceNotFoundException(
+                        .orElseThrow(() -> new IllegalArgumentException(
                                 "Responsável não encontrado com ID: " + dto.idResponsavel()));
                 vinculo = new VinculoResponsavel();
                 vinculo.setPaciente(paciente);

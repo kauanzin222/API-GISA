@@ -105,7 +105,7 @@ Authorization: Bearer <token>
 | `400 Bad Request` | validação de campos, corpo malformado ou regra de negócio violada |
 | `401` / `403` | credenciais inválidas; token ausente, inválido, expirado ou emitido antes da última troca de senha |
 | `403 Forbidden` (com corpo) | usuário logado sem a permissão exigida pela rota: `Você não tem permissão para realizar esta ação.` |
-| `404 Not Found` | recurso não encontrado |
+| `404 Not Found` | o recurso da **URL** não existe (ex.: `GET /api/pacientes/999`). Um ID inexistente enviado no **corpo** (ex.: `idCargo` em um PATCH) torna o pedido inválido e responde `400` |
 | `405 Method Not Allowed` | método HTTP que a rota não aceita (ex.: `DELETE /api/cbos`): `O método DELETE não é suportado nesta rota.` |
 | `409 Conflict` | operação incompatível com o estado do cadastro (ex.: alterar perfil de quem não tem usuário) ou, raramente, violação de restrição do banco (`Os dados informados violam uma regra de integridade do banco.`) |
 | `500 Internal Server Error` | erro inesperado no servidor: `Erro interno do servidor. Tente novamente mais tarde.` (o detalhe fica só no log do servidor) |
@@ -230,7 +230,7 @@ Profissionais, especialistas e especialistas PJ já cadastrados **sem usuário**
 | ID de PJ na rota de especialista | `400` | Este cadastro é de um especialista PJ. Use /api/especialistas/pj/{idCadastro}. |
 | Cadastro já tem usuário | `400` | Esta pessoa já possui um usuário cadastrado. |
 | Cadastro inativo | `400` | Não é possível conceder acesso a um cadastro inativo. |
-| Perfil inexistente | `400` | Perfil de acesso não encontrado. |
+| Perfil inexistente | `400` | Perfil não encontrado com ID: {id} |
 | Cadastro inexistente | `404` | Profissional / Especialista / Especialista PJ não encontrado com ID: {id} |
 
 Depois de criado o acesso, o login funciona com o CPF do cadastro e a senha enviada, e o PATCH com `idPerfil` passa a funcionar para esse cadastro (antes, era recusado com `409` por não haver usuário).

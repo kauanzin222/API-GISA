@@ -269,7 +269,7 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. Profissional 
 | `email` | O e-mail é obrigatório / Formato de e-mail inválido |
 | `idCargo` | O ID do cargo é obrigatório / O ID do cargo deve ser positivo (PATCH) |
 | `idPerfil` (PATCH) | O ID do perfil deve ser positivo |
-| `profissional` / `usuario` | Os dados do profissional sao obrigatorios. / Os dados do usuario sao obrigatorios. |
+| `profissional` / `usuario` | Os dados do profissional são obrigatórios. / Os dados do usuário são obrigatórios. |
 | `usuario.senha` | A senha é obrigatória. / A senha deve conter entre 8 e 30 caracteres. |
 | `usuario.idPerfil` | O ID do perfil é obrigatório. |
 
@@ -279,8 +279,8 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. Profissional 
 |---|---|---|
 | CPF já cadastrado (POST) | `400` | CPF já cadastrado. |
 | E-mail já cadastrado (POST) | `400` | E-mail já cadastrado. |
-| `idCargo` inexistente (POST) | `400` | Cargo nao encontrado com ID: {id} |
-| `idPerfil` inexistente (POST com usuário) | `400` | Perfil de acesso não encontrado. |
+| `idCargo` inexistente (POST) | `400` | Cargo não encontrado com ID: {id} |
+| `idPerfil` inexistente (POST com usuário) | `400` | Perfil não encontrado com ID: {id} |
 | Profissional inexistente (PATCH/DELETE) | `404` | Profissional não encontrado com ID: {id} |
 | `nome` vazio (PATCH) | `400` | O nome não pode ser vazio. |
 | `estadoCivil` `null` (PATCH) | `400` | O estado civil não pode ser nulo. |
@@ -288,10 +288,10 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. Profissional 
 | `email` vazio (PATCH) | `400` | O e-mail não pode ser vazio. |
 | `email` de outro profissional (PATCH) | `400` | E-mail já cadastrado. |
 | `idCargo` `null` (PATCH) | `400` | O cargo não pode ser nulo. |
-| `idCargo` inexistente (PATCH) | `404` | Cargo não encontrado com ID: {id} |
+| `idCargo` inexistente (PATCH) | `400` | Cargo não encontrado com ID: {id} |
 | `idPerfil` `null` (PATCH) | `400` | O perfil de acesso não pode ser nulo. |
 | `idPerfil` sem usuário cadastrado (PATCH) | `409` | Não é possível alterar o perfil: o profissional não possui usuário. |
-| `idPerfil` inexistente (PATCH) | `404` | Perfil não encontrado com ID: {id} |
+| `idPerfil` inexistente (PATCH) | `400` | Perfil não encontrado com ID: {id} |
 
 ---
 

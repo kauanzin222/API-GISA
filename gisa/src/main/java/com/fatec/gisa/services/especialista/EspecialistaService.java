@@ -140,7 +140,7 @@ public class EspecialistaService {
 
         Cargo cargo = cargoRepository.findById(dto.getIdCargo())
             .orElseThrow(() -> new IllegalArgumentException(
-                "Cargo nao encontrado com ID: " + dto.getIdCargo()));
+                "Cargo não encontrado com ID: " + dto.getIdCargo()));
         profissionalMapper.preencherProfissional(especialista, dto, cargo);
         especialista.setRegistroConselho(dto.getRegistroConselho());
         especialista.setEspecialidades(new java.util.ArrayList<>(especialidadeService.obterOuCriar(

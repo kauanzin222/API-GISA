@@ -2,15 +2,14 @@ package com.fatec.gisa.services.paciente;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.services.BuscaPorIds;
 import com.fatec.gisa.dtos.paciente.request.CidCadastroRequestDTO;
 import com.fatec.gisa.entities.paciente.Cid;
 import com.fatec.gisa.repositories.paciente.CidRepository;
@@ -32,21 +31,8 @@ public class CidService {
     public List<Cid> obterOuCriar(List<String> codigosCid, List<CidCadastroRequestDTO> novosCids) {
         Map<String, Cid> resultado = new LinkedHashMap<>();
 
-        if (codigosCid != null && !codigosCid.isEmpty()) {
-            Set<String> codigosUnicos = new LinkedHashSet<>(codigosCid);
-            List<Cid> encontrados = cidRepository.findAllById(codigosUnicos);
-            Map<String, Cid> encontradosPorCodigo = new LinkedHashMap<>();
-            encontrados.forEach(cid -> encontradosPorCodigo.put(cid.getCodigoCID(), cid));
-
-            Set<String> codigosNaoEncontrados = new LinkedHashSet<>(codigosUnicos);
-            codigosNaoEncontrados.removeAll(encontradosPorCodigo.keySet());
-            if (!codigosNaoEncontrados.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "CID(s) não encontrado(s): " + String.join(", ", codigosNaoEncontrados));
-            }
-
-            codigosUnicos.forEach(codigo -> resultado.put(codigo, encontradosPorCodigo.get(codigo)));
-        }
+        BuscaPorIds.buscarTodos(codigosCid, cidRepository::findAllById, Cid::getCodigoCID, "CID(s) não encontrado(s)")
+                .forEach(cid -> resultado.put(cid.getCodigoCID(), cid));
 
         if (novosCids != null) {
             for (CidCadastroRequestDTO novoDto : novosCids) {

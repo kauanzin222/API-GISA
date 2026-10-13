@@ -29,7 +29,7 @@ public class UsuarioDetailService implements UserDetailsService {
     public UserDetails loadUserByUsername(String cpf) throws UsernameNotFoundException {
         Usuario usuario = usuarioRepository.findByPessoa_Cpf(cpf)
                 .orElseThrow(() -> new UsernameNotFoundException(
-                        "Usuario nao encontrado para o CPF informado."));
+                        "Usuário não encontrado para o CPF informado."));
         if (usuario.getPessoa().getStatusCadastro() == StatusCadastro.INATIVO) {
             throw new UsernameNotFoundException("O cadastro deste usuário está inativo.");
         }

@@ -18,6 +18,8 @@ public record TerapiaDoEspecialistaDTO(
         @JsonFormat(pattern = "HH:mm") LocalTime horaInicio,
         @JsonFormat(pattern = "HH:mm") LocalTime horaTermino,
         StatusTerapia status,
+        // Todos os pacientes justificaram a falta: o horário dos especialistas está livre
+        boolean horarioLiberado,
         List<TerapiaPacienteDTO> pacientes,
         List<String> outrosEspecialistas) {
 }

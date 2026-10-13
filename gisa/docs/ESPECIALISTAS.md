@@ -441,7 +441,7 @@ Valem também todas as mensagens de profissional (ver `PROFISSIONAIS.md`).
 | `novasEspecialidades[].nome` | O nome da especialidade é obrigatório |
 | `cnpj` | O CNPJ é obrigatório / O CNPJ deve conter 14 dígitos numéricos |
 | `razaoSocial` | A razão social é obrigatória |
-| `especialista` / `especialistaPJ` | Os dados do especialista sao obrigatorios. / Os dados do especialista PJ sao obrigatorios. |
+| `especialista` / `especialistaPJ` | Os dados do especialista são obrigatórios. / Os dados do especialista PJ são obrigatórios. |
 | especialidade: `nome` | O nome da especialidade é obrigatório |
 
 Hora em formato diferente de `HH:mm` (ex.: `"8h"`) não chega à validação de campo: a API responde `400` com `Corpo da requisição inválido ou malformado.`
@@ -456,7 +456,7 @@ Hora em formato diferente de `HH:mm` (ex.: `"8h"`) não chega à validação de 
 | Especialidade com nome já existente (`POST /api/especialidades`) | `400` | Já existe uma especialidade com esse nome. |
 | `jornadas` vazia ou `null` no PATCH | `400` | O especialista deve possuir ao menos uma jornada de trabalho. |
 | `razaoSocial` vazia no PATCH | `400` | A razão social não pode ser vazia. |
-| `idCargo` inexistente (POST) | `400` | Cargo nao encontrado com ID: {id} |
+| `idCargo` inexistente (POST) | `400` | Cargo não encontrado com ID: {id} |
 | CPF já cadastrado | `400` | CPF já cadastrado. |
 | E-mail já cadastrado | `400` | E-mail já cadastrado. |
 | CNPJ já cadastrado (PJ) | `400` | CNPJ já cadastrado. |

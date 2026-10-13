@@ -1,13 +1,12 @@
 package com.fatec.gisa.services.terapia;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -17,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.dtos.terapia.request.PresencaRequestDTO;
 import com.fatec.gisa.dtos.terapia.request.TerapiaCadastroRequestDTO;
 import com.fatec.gisa.dtos.terapia.response.ConflitoHorarioDTO;
 import com.fatec.gisa.dtos.terapia.response.TerapiaDoEspecialistaDTO;
@@ -39,6 +39,7 @@ import com.fatec.gisa.repositories.especialista.EspecialistaRepository;
 import com.fatec.gisa.repositories.paciente.PacienteRepository;
 import com.fatec.gisa.repositories.terapia.OcupacaoHorario;
 import com.fatec.gisa.repositories.terapia.TerapiaRepository;
+import com.fatec.gisa.services.BuscaPorIds;
 
 import lombok.RequiredArgsConstructor;
 
@@ -48,6 +49,9 @@ public class TerapiaService {
 
     private static final String TITULO_COLETIVA = "Terapia coletiva";
     private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
+    private static final Long NENHUMA_TERAPIA = 0L;
+    // O servidor (Render) roda em UTC; "hoje" para a presença é o dia em Sorocaba
+    private static final ZoneId FUSO = ZoneId.of("America/Sao_Paulo");
 
     private final TerapiaRepository terapiaRepository;
     private final PacienteRepository pacienteRepository;
@@ -86,6 +90,76 @@ public class TerapiaService {
         }
 
         return terapiaRepository.save(terapiaSalva);
+    }
+
+    @Transactional
+    public Terapia registrarPresenca(Long idTerapia, Long idPaciente, PresencaRequestDTO dto) {
+        Terapia terapia = terapiaRepository.findById(idTerapia)
+                .orElseThrow(() -> new ResourceNotFoundException("Terapia não encontrada com ID: " + idTerapia));
+        PresencaPaciente presenca = terapia.getPresencaPacientes().stream()
+                .filter(item -> item.getPaciente().getIdCadastro().equals(idPaciente))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "O paciente com ID " + idPaciente + " não faz parte desta terapia."));
+
+        if (terapia.getStatus() == StatusTerapia.CANCELADA) {
+            throw new IllegalArgumentException("Não é possível registrar presença em uma terapia cancelada.");
+        }
+
+        StatusPresenca nova = dto.presenca();
+        // Falta justificada pode ser avisada com antecedência; presença e falta, só a partir do dia
+        boolean exigeDiaDaTerapia = nova == StatusPresenca.PRESENTE || nova == StatusPresenca.FALTA_INJUSTIFICADA;
+        if (exigeDiaDaTerapia && terapia.getDataHoraInicio().toLocalDate().isAfter(LocalDate.now(FUSO))) {
+            throw new IllegalArgumentException(
+                    "Presença e falta só podem ser registradas a partir do dia da terapia.");
+        }
+
+        String justificativa = null;
+        if (nova == StatusPresenca.FALTA_JUSTIFICADA) {
+            if (dto.justificativa() == null || dto.justificativa().isBlank()) {
+                throw new IllegalArgumentException("Informe a justificativa da falta.");
+            }
+            justificativa = dto.justificativa().trim();
+        }
+
+        boolean desfazendoFaltaJustificada = presenca.getPresenca() == StatusPresenca.FALTA_JUSTIFICADA
+                && nova != StatusPresenca.FALTA_JUSTIFICADA;
+        if (desfazendoFaltaJustificada) {
+            validarHorarioAindaLivre(terapia, idPaciente);
+        }
+
+        presenca.setPresenca(nova);
+        presenca.setJustificativa(justificativa);
+        return terapiaRepository.save(terapia);
+    }
+
+    // A falta justificada libera o horário do paciente (e, se todos justificaram, o dos especialistas).
+    // Ao desfazê-la, o horário volta a ser ocupado; se outra terapia já o ocupou, o pedido é recusado
+    // para não gerar agendamento duplo. Usa a mesma trava do cadastro contra pedidos simultâneos.
+    private void validarHorarioAindaLivre(Terapia terapia, Long idPaciente) {
+        boolean horarioDosEspecialistasEstavaLiberado = horarioLiberado(terapia);
+        List<Long> idsEspecialistas = horarioDosEspecialistasEstavaLiberado
+                ? terapia.getEspecialistas().stream().map(Especialista::getIdCadastro).toList()
+                : List.of();
+
+        List<Long> idsEnvolvidos = new ArrayList<>(idsEspecialistas);
+        idsEnvolvidos.add(idPaciente);
+        terapiaRepository.bloquearPessoas(idsEnvolvidos);
+
+        List<ConflitoHorarioDTO> conflitos = buscarConflitos(List.of(idPaciente), idsEspecialistas,
+                terapia.getDataHoraInicio(), terapia.getDataHoraFim(), terapia.getIdTerapia());
+        if (!conflitos.isEmpty()) {
+            throw new IllegalArgumentException("Não é possível desfazer a falta justificada: o horário já foi "
+                    + "ocupado por outra terapia. " + mensagemDeConflito(conflitos));
+        }
+    }
+
+    // Todos os pacientes justificaram a falta: o horário dos especialistas fica livre
+    private boolean horarioLiberado(Terapia terapia) {
+        return terapia.getStatus() != StatusTerapia.CANCELADA
+                && !terapia.getPresencaPacientes().isEmpty()
+                && terapia.getPresencaPacientes().stream()
+                        .allMatch(presenca -> presenca.getPresenca() == StatusPresenca.FALTA_JUSTIFICADA);
     }
 
     // Mesmas validações do cadastro, sem gravar: permite ao front avisar antes de salvar
@@ -132,6 +206,7 @@ public class TerapiaService {
                 terapia.getDataHoraInicio().toLocalTime(),
                 terapia.getDataHoraFim().toLocalTime(),
                 terapia.getStatus(),
+                horarioLiberado(terapia),
                 pacientes(terapia),
                 terapia.getEspecialistas().stream()
                         .filter(outro -> !outro.getIdCadastro().equals(idEspecialista))
@@ -143,16 +218,7 @@ public class TerapiaService {
     // IDs repetidos são unificados; IDs inexistentes ou de cadastros inativos são recusados
     private <T extends Pessoa> List<T> buscarAtivos(
             List<Long> ids, Function<Set<Long>, List<T>> buscar, String rotulo) {
-        Set<Long> idsUnicos = ids.stream()
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        List<T> encontrados = buscar.apply(idsUnicos);
-
-        Set<Long> naoEncontrados = new LinkedHashSet<>(idsUnicos);
-        encontrados.forEach(pessoa -> naoEncontrados.remove(pessoa.getIdCadastro()));
-        if (!naoEncontrados.isEmpty()) {
-            throw new IllegalArgumentException(rotulo + " não encontrado(s): " + juntar(naoEncontrados));
-        }
+        List<T> encontrados = BuscaPorIds.buscarTodos(ids, buscar, Pessoa::getIdCadastro, rotulo + " não encontrado(s)");
 
         List<String> inativos = encontrados.stream()
                 .filter(pessoa -> pessoa.getStatusCadastro() == StatusCadastro.INATIVO)
@@ -182,14 +248,26 @@ public class TerapiaService {
                 dto.data().atTime(dto.horaTermino()));
     }
 
+    // Terapia nova: ainda não existe, então não há o que ignorar
     private List<ConflitoHorarioDTO> buscarConflitos(Participantes participantes) {
+        return buscarConflitos(participantes.idsPacientes(), participantes.idsEspecialistas(),
+                participantes.inicio(), participantes.fim(), NENHUMA_TERAPIA);
+    }
+
+    // idTerapiaIgnorada: a terapia que está sendo revalidada não conflita consigo mesma
+    private List<ConflitoHorarioDTO> buscarConflitos(List<Long> idsPacientes, List<Long> idsEspecialistas,
+            LocalDateTime inicio, LocalDateTime fim, Long idTerapiaIgnorada) {
         List<ConflitoHorarioDTO> conflitos = new ArrayList<>();
-        terapiaRepository.buscarOcupacoesDeEspecialistas(
-                participantes.idsEspecialistas(), participantes.inicio(), participantes.fim(), StatusTerapia.CANCELADA)
-                .forEach(ocupacao -> conflitos.add(toConflitoDTO("ESPECIALISTA", ocupacao)));
-        terapiaRepository.buscarOcupacoesDePacientes(
-                participantes.idsPacientes(), participantes.inicio(), participantes.fim(), StatusTerapia.CANCELADA)
-                .forEach(ocupacao -> conflitos.add(toConflitoDTO("PACIENTE", ocupacao)));
+        if (!idsEspecialistas.isEmpty()) {
+            terapiaRepository.buscarOcupacoesDeEspecialistas(idsEspecialistas, inicio, fim,
+                    StatusTerapia.CANCELADA, StatusPresenca.FALTA_JUSTIFICADA, idTerapiaIgnorada)
+                    .forEach(ocupacao -> conflitos.add(toConflitoDTO("ESPECIALISTA", ocupacao)));
+        }
+        if (!idsPacientes.isEmpty()) {
+            terapiaRepository.buscarOcupacoesDePacientes(idsPacientes, inicio, fim,
+                    StatusTerapia.CANCELADA, StatusPresenca.FALTA_JUSTIFICADA, idTerapiaIgnorada)
+                    .forEach(ocupacao -> conflitos.add(toConflitoDTO("PACIENTE", ocupacao)));
+        }
         return conflitos;
     }
 
@@ -239,6 +317,7 @@ public class TerapiaService {
                 terapia.getDataHoraInicio().toLocalTime(),
                 terapia.getDataHoraFim().toLocalTime(),
                 terapia.getStatus(),
+                horarioLiberado(terapia),
                 pacientes(terapia),
                 terapia.getEspecialistas().stream()
                         .sorted(Comparator.comparing(Especialista::getNome))
@@ -270,7 +349,4 @@ public class TerapiaService {
                 .toList();
     }
 
-    private String juntar(Collection<Long> ids) {
-        return ids.stream().map(String::valueOf).collect(Collectors.joining(", "));
-    }
 }

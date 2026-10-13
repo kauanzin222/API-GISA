@@ -111,9 +111,11 @@ public class RestExceptionHandler {
         return response(HttpStatus.BAD_REQUEST, exception.getMessage(), request, Map.of());
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiErrorResponse> handleIllegalState(
-            IllegalStateException exception,
+    // Só conflitos lançados de propósito pela API; uma IllegalStateException qualquer
+    // (vinda do framework, por exemplo) é erro inesperado e cai no 500
+    @ExceptionHandler(ConflitoException.class)
+    public ResponseEntity<ApiErrorResponse> handleConflito(
+            ConflitoException exception,
             HttpServletRequest request) {
         return response(HttpStatus.CONFLICT, exception.getMessage(), request, Map.of());
     }

@@ -1,16 +1,13 @@
 package com.fatec.gisa.services.usuario;
 
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.services.BuscaPorIds;
 import com.fatec.gisa.dtos.usuario.response.PermissaoResumoDTO;
 import com.fatec.gisa.entities.usuario.Permissao;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
@@ -44,18 +41,8 @@ public class PermissaoService {
     // IDs repetidos são unificados; IDs inexistentes são listados no erro
     @Transactional(readOnly = true)
     public List<Permissao> buscarPorIds(Collection<Long> idsPermissoes) {
-        Set<Long> idsUnicos = idsPermissoes.stream()
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        List<Permissao> encontradas = permissaoRepository.findAllById(idsUnicos);
-
-        Set<Long> idsNaoEncontrados = new LinkedHashSet<>(idsUnicos);
-        encontradas.forEach(permissao -> idsNaoEncontrados.remove(permissao.getIdPermissao()));
-        if (!idsNaoEncontrados.isEmpty()) {
-            throw new IllegalArgumentException("Permissão(ões) não encontrada(s): "
-                    + idsNaoEncontrados.stream().map(String::valueOf).collect(Collectors.joining(", ")));
-        }
-        return encontradas;
+        return BuscaPorIds.buscarTodos(idsPermissoes, permissaoRepository::findAllById,
+                Permissao::getIdPermissao, "Permissão(ões) não encontrada(s)");
     }
 
     public PermissaoResumoDTO toResumoDTO(Permissao permissao) {

@@ -17,6 +17,7 @@ Uma **terapia** (consulta) reúne um ou mais pacientes e um ou mais especialista
 | `GET` | `/api/terapias/{idTerapia}` | detalhes de uma terapia |
 | `POST` | `/api/terapias/verificar-conflitos` | verifica conflitos de horário **sem gravar** |
 | `POST` | `/api/terapias` | cadastra terapia |
+| `PATCH` | `/api/terapias/{idTerapia}/pacientes/{idPaciente}/presenca` | registra presença ou falta de um paciente |
 
 ---
 
@@ -35,7 +36,7 @@ Corresponde à tela "Criar Consulta".
 **Regras**
 
 - Pacientes e especialistas precisam existir e estar **ativos**.
-- **Conflito de horário:** um especialista ou paciente não pode estar em duas terapias ao mesmo tempo. Terapias `CANCELADA` não contam. Encostar não é conflito: uma terapia que começa às 10:00 pode vir logo depois de outra que termina às 10:00. A mensagem de erro lista **todos** os conflitos encontrados.
+- **Conflito de horário:** um especialista ou paciente não pode estar em duas terapias ao mesmo tempo. Terapias `CANCELADA` não contam. **Falta justificada libera horário:** o paciente que justificou a falta fica livre naquele horário, e quando todos os pacientes de uma terapia justificam, o horário do especialista também fica livre (ver "Registrar presença"). Encostar não é conflito: uma terapia que começa às 10:00 pode vir logo depois de outra que termina às 10:00. A mensagem de erro lista **todos** os conflitos encontrados.
 - **Cadastros simultâneos:** se dois usuários salvarem ao mesmo tempo terapias conflitantes, só a primeira é gravada; a segunda recebe o erro de conflito. Antes de verificar, o cadastro trava no banco os pacientes e especialistas envolvidos, e um segundo cadastro com alguém em comum espera o primeiro terminar.
 - A API **não** verifica a jornada de trabalho do especialista nem impede datas passadas.
 
@@ -116,6 +117,7 @@ GET /api/terapias?status=AGENDADA
       "horaInicio": "10:00",
       "horaTermino": "11:00",
       "status": "AGENDADA",
+      "horarioLiberado": false,
       "pacientes": [
         { "idCadastro": 4, "nome": "Beatriz Lima", "presenca": "PENDENTE", "justificativa": null },
         { "idCadastro": 1, "nome": "Roberto Almeida", "presenca": "PENDENTE", "justificativa": null }
@@ -132,6 +134,7 @@ GET /api/terapias?status=AGENDADA
       "horaInicio": "09:00",
       "horaTermino": "09:50",
       "status": "AGENDADA",
+      "horarioLiberado": false,
       "pacientes": [
         { "idCadastro": 7, "nome": "Lucas Oliveira Santos", "presenca": "PENDENTE", "justificativa": null }
       ],
@@ -175,6 +178,7 @@ Aceita os mesmos parâmetros da listagem geral (`status`, `page`, `sort`), com `
       "horaInicio": "14:00",
       "horaTermino": "15:30",
       "status": "CONCLUIDA",
+      "horarioLiberado": false,
       "pacientes": [
         { "idCadastro": 1, "nome": "Roberto Almeida", "presenca": "PRESENTE", "justificativa": null },
         { "idCadastro": 4, "nome": "Beatriz Lima", "presenca": "FALTA_JUSTIFICADA", "justificativa": "Atestado médico" }
@@ -199,6 +203,48 @@ Aceita os mesmos parâmetros da listagem geral (`status`, `page`, `sort`), com `
 ## `GET /api/terapias/{idTerapia}` — detalhes da terapia
 
 Mesmo formato de um item da listagem geral. **`404`:** `Terapia não encontrada com ID: {id}`.
+
+---
+
+## `PATCH /api/terapias/{idTerapia}/pacientes/{idPaciente}/presenca` — registrar presença
+
+Corresponde aos botões **Compareceu**, **Falta justificada** e **Falta** da tela "Consultas Diárias". Registra a presença de **um** paciente; nas terapias coletivas, cada paciente é marcado separadamente.
+
+| Campo | Obrigatório | Observação |
+|---|---|---|
+| `presenca` | sim | `PRESENTE`, `FALTA_JUSTIFICADA`, `FALTA_INJUSTIFICADA` ou `PENDENTE` (desfaz uma marcação feita por engano) |
+| `justificativa` | só para `FALTA_JUSTIFICADA` | até 255 caracteres; ignorada (e apagada) nos demais casos |
+
+```json
+{
+  "presenca": "FALTA_JUSTIFICADA",
+  "justificativa": "Atestado médico apresentado pela mãe"
+}
+```
+
+**Resposta `200`:** os detalhes atualizados da terapia (mesmo formato do `GET /api/terapias/{idTerapia}`), para a tela redesenhar o card.
+
+**Regras**
+
+| Situação | Regra |
+|---|---|
+| `PRESENTE` ou `FALTA_INJUSTIFICADA` | só a partir do **dia da terapia** (horário de Brasília) |
+| `FALTA_JUSTIFICADA` | pode ser registrada **com antecedência** (ex.: a família avisa que o paciente vai faltar amanhã) |
+| Terapia `CANCELADA` | não aceita marcação |
+| Paciente que não é desta terapia | `404` |
+
+**Horário liberado**
+
+A falta justificada libera horários para novos agendamentos:
+
+- O **paciente** que justificou a falta fica livre naquele horário e pode ser agendado em outra terapia.
+- Quando **todos** os pacientes da terapia justificam, o horário do **especialista** também fica livre, e a resposta passa a ter `"horarioLiberado": true`. É o selo "Horário liberado" da tela. Numa terapia coletiva em que só parte dos pacientes justificou, o especialista continua ocupado.
+
+**Desfazer uma falta justificada** (trocar para outro valor) volta a ocupar o horário. Se, nesse meio-tempo, outra terapia foi agendada no horário liberado, o pedido é recusado com `400`, porque desfazer criaria um agendamento duplo:
+
+`Não é possível desfazer a falta justificada: o horário já foi ocupado por outra terapia. Conflito de horário: Ana Souza (especialista) já tem terapia das 09:00 às 10:00.`
+
+Nesse caso, a outra terapia precisa ser cancelada ou remarcada antes.
 
 ---
 
@@ -228,10 +274,17 @@ Data ou hora em formato errado (ex.: `"9h"`): `400` com `Corpo da requisição i
 | Paciente inativo | `400` | Paciente(s) inativo(s): {nomes} |
 | Especialista inativo | `400` | Especialista(s) inativo(s): {nomes} |
 | Paciente ou especialista ocupado no horário (só no cadastro) | `400` | Conflito de horário: {nome} ({paciente\|especialista}) já tem terapia das {HH:mm} às {HH:mm}; ... |
-
-Exemplo: `Conflito de horário: Ana Souza (especialista) já tem terapia das 09:00 às 10:00; Lucas Martins (paciente) já tem terapia das 09:00 às 10:00.`
 | `/minhas` com usuário que não é especialista | `400` | O usuário logado não é um especialista. |
 | Terapia inexistente | `404` | Terapia não encontrada com ID: {id} |
+| Presença: paciente não é desta terapia | `404` | O paciente com ID {id} não faz parte desta terapia. |
+| Presença: terapia cancelada | `400` | Não é possível registrar presença em uma terapia cancelada. |
+| Presença ou falta antes do dia da terapia | `400` | Presença e falta só podem ser registradas a partir do dia da terapia. |
+| Falta justificada sem justificativa | `400` | Informe a justificativa da falta. |
+| Desfazer falta justificada com horário já reocupado | `400` | Não é possível desfazer a falta justificada: o horário já foi ocupado por outra terapia. Conflito de horário: ... |
+
+Exemplo de conflito: `Conflito de horário: Ana Souza (especialista) já tem terapia das 09:00 às 10:00; Lucas Martins (paciente) já tem terapia das 09:00 às 10:00.`
+
+Na presença, `presenca` ausente gera `fields.presenca` = "Informe a presença"; justificativa com mais de 255 caracteres gera `fields.justificativa`.
 
 ---
 
@@ -248,3 +301,11 @@ Pré-requisito: dois pacientes ativos (`{p1}`, `{p2}`) e dois especialistas (`{e
 7. `GET /api/terapias?status=CANCELADA`. Esperado: `content: []`.
 8. Login com o CPF de `{e1}` e `GET /api/terapias/minhas`. Esperado: só a terapia do passo 1, com `outrosEspecialistas` contendo `{e2}`.
 9. `GET /api/terapias/minhas` com o token do administrador. Esperado: `400` (não é especialista).
+
+**Presença** (use uma terapia de **hoje**, com um só paciente `{p1}` e o especialista `{e1}`; chame-a de `{t}`):
+
+10. `PATCH /api/terapias/{t}/pacientes/{p1}/presenca` com `{"presenca": "PRESENTE"}`. Esperado: `200` e o paciente com `presenca: "PRESENTE"`.
+11. O mesmo em uma terapia de **amanhã**. Esperado: `400` (antes do dia da terapia).
+12. Na terapia de amanhã, `{"presenca": "FALTA_JUSTIFICADA"}` sem justificativa. Esperado: `400`. Com `"justificativa": "Consulta médica"`: `200` e `horarioLiberado: true`.
+13. `POST /api/terapias` com outro paciente e o mesmo `{e1}` no horário da terapia de amanhã. Esperado: `201` (horário liberado).
+14. Na terapia de amanhã, `{"presenca": "PENDENTE"}`. Esperado: `400` (o horário foi reocupado no passo 13).
