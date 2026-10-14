@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -43,6 +44,7 @@ public class ProfissionalController {
     private final ProfissionalService profissionalService;
     private final CadastroFacadeService cadastroFacadeService;
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PROFISSIONAIS', 'VISUALIZAR_TERAPIAS')")
     @GetMapping
     public ResponseEntity<Page<ProfissionalResumoDTO>> listarPaginado(
             @RequestParam(required = false) String cpf,
@@ -56,11 +58,13 @@ public class ProfissionalController {
         return ResponseEntity.ok(pagina);
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PROFISSIONAIS')")
     @GetMapping("/{idCadastro}")
     public ResponseEntity<ProfissionalResponseDTO> buscarPorId(@PathVariable Long idCadastro) {
         return ResponseEntity.ok(profissionalService.buscarDetalhes(idCadastro));
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'EDITAR_PROFISSIONAL')")
     @PatchMapping("/{idCadastro}")
     public ResponseEntity<ProfissionalResponseDTO> atualizar(
             @PathVariable Long idCadastro,
@@ -69,12 +73,14 @@ public class ProfissionalController {
         return ResponseEntity.ok(profissionalService.buscarDetalhes(idCadastro));
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'INATIVAR_PROFISSIONAL')")
     @DeleteMapping("/{idCadastro}")
     public ResponseEntity<Void> inativar(@PathVariable Long idCadastro) {
         profissionalService.inativar(idCadastro);
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'GERENCIAR_USUARIOS')")
     @PostMapping("/{idCadastro}/usuario")
     public ResponseEntity<UsuarioResumoDTO> concederAcesso(
             @PathVariable Long idCadastro,
@@ -83,6 +89,7 @@ public class ProfissionalController {
                 .body(cadastroFacadeService.concederAcessoProfissional(idCadastro, request));
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'CADASTRAR_PROFISSIONAL')")
     @PostMapping
     public ResponseEntity<ProfissionalCadastroResponseDTO> cadastrar(
             @Valid @RequestBody ProfissionalCadastroRequestDTO request) {
@@ -90,6 +97,9 @@ public class ProfissionalController {
         return ResponseEntity.status(201).body(toResponse(profissional, false));
     }
 
+    // Cria o usuário já com um perfil: escolher perfil é gerenciar usuários (como o idPerfil no PATCH)
+    @PreAuthorize("hasAuthority('ACESSO_TOTAL')"
+            + " or (hasAuthority('CADASTRAR_PROFISSIONAL') and hasAuthority('GERENCIAR_USUARIOS'))")
     @PostMapping("/com-usuario")
     public ResponseEntity<ProfissionalCadastroResponseDTO> cadastrarComUsuario(
             @Valid @RequestBody ProfissionalComUsuarioRequestDTO request) {

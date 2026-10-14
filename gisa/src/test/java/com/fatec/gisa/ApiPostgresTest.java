@@ -108,11 +108,41 @@ class ApiPostgresTest {
         List<String> indices = jdbcTemplate.queryForList(
                 "select indexname from pg_indexes where indexname like 'idx_%'", String.class);
 
-        assertThat(ultimaVersao).isEqualTo(14);
+        assertThat(ultimaVersao).isEqualTo(15);
         assertThat(indices).contains(
                 "idx_pessoa_nome_trgm", "idx_pessoa_cpf_trgm", "idx_escola_nome_trgm", "idx_cbo_titulo_trgm",
                 "idx_terapia_status_data_inicio", "idx_especialista_terapia_especialista",
                 "idx_paciente_terapia_terapia", "idx_log_auditoria_data_hora", "idx_evento_paciente_data_hora");
+    }
+
+    // V15: lista definitiva de permissões e permissões exatas dos perfis padrão
+    @Test
+    void migracaoCriaAsPermissoesEOsPerfisPadrao() {
+        assertThat(jdbcTemplate.queryForObject(
+                "select \"Nome\" from \"Permissao\" where \"IDPermissao\" = 5", String.class))
+                .isEqualTo("GERENCIAR_USUARIOS");
+        assertThat(jdbcTemplate.queryForList("select \"Nome\" from \"Permissao\"", String.class))
+                .hasSize(26)
+                .doesNotContain("CADASTRAR_USUARIO")
+                .contains("VISUALIZAR_PACIENTES", "EMITIR_RECUSA", "GERENCIAR_ESPECIALIDADES", "VISUALIZAR_AUDITORIA");
+
+        assertThat(permissoesDoPerfil("Administrador")).containsExactly("ACESSO_TOTAL");
+        assertThat(permissoesDoPerfil("Recepção")).containsExactly(
+                "AGENDAR_TERAPIA", "ALTERAR_STATUS_TERAPIA", "EDITAR_PACIENTE", "EDITAR_TERAPIA", "EMITIR_RECUSA",
+                "REGISTRAR_PRESENCA", "VISUALIZAR_HISTORICO_PACIENTE", "VISUALIZAR_PACIENTES", "VISUALIZAR_TERAPIAS");
+        assertThat(permissoesDoPerfil("Especialista")).containsExactly(
+                "EMITIR_ATESTADO", "EMITIR_RECEITA", "VISUALIZAR_HISTORICO_PACIENTE", "VISUALIZAR_PACIENTES");
+        assertThat(permissoesDoPerfil("Assistente Social")).containsExactly(
+                "VISUALIZAR_HISTORICO_PACIENTE", "VISUALIZAR_PACIENTES");
+    }
+
+    private List<String> permissoesDoPerfil(String perfil) {
+        return jdbcTemplate.queryForList("""
+                select permissao."Nome" from "Perfil" perfil
+                join "Perfil_Permissao" vinculo on vinculo."IDPerfil" = perfil."IDPerfil"
+                join "Permissao" permissao on permissao."IDPermissao" = vinculo."IDPermissao"
+                where perfil."Nome" = ? order by permissao."Nome"
+                """, String.class, perfil);
     }
 
     // Cria um cenário completo pela API e consulta todas as listagens e detalhes
@@ -129,7 +159,9 @@ class ApiPostgresTest {
                 "/api/especialidades", "/api/cargos", "/api/cargos/1", "/api/cbos?titulo=teste", "/api/cbos/999999",
                 "/api/perfis", "/api/perfis/1", "/api/permissoes",
                 "/api/terapias", "/api/terapias?status=AGENDADA", "/api/terapias/" + cenario.idTerapia(),
-                "/api/escolas", "/api/escolas?nome=escola", "/api/cids/F84.0", "/api/auditoria")) {
+                "/api/escolas", "/api/escolas?nome=escola&tipoEscola=PUBLICA", "/api/escolas/sugestoes?nome=escola",
+                "/api/especialidades/1", "/api/usuarios", "/api/usuarios?tipoCadastro=PESSOA&idPerfil=1",
+                "/api/pacientes?idEscola=1", "/api/cids/F84.0", "/api/auditoria")) {
             assertThat(chamar(get(rota)).andReturn().getResponse().getStatus())
                     .as("GET %s", rota)
                     .isEqualTo(200);
@@ -146,7 +178,10 @@ class ApiPostgresTest {
     void escolaSemNomeRetornaSugestoes() throws Exception {
         criarEscola();
 
-        chamar(get("/api/escolas")).andExpect(status().isOk()).andExpect(jsonPath("$[0].idEscola").exists());
+        chamar(get("/api/escolas/sugestoes")).andExpect(status().isOk()).andExpect(jsonPath("$[0].idEscola").exists());
+        chamar(get("/api/escolas")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].quantidadePacientes").exists())
+                .andExpect(jsonPath("$.page.size").value(9));
     }
 
     @Test
@@ -497,11 +532,184 @@ class ApiPostgresTest {
                 .andExpect(jsonPath("$.tipoCadastro").value("PESSOA"))
                 .andExpect(jsonPath("$.perfil.nome").value("Administrador"))
                 .andExpect(jsonPath("$.permissoes[0].nome").value("ACESSO_TOTAL"))
-                .andExpect(jsonPath("$.permissoes.length()").value(5));
+                .andExpect(jsonPath("$.permissoes.length()").value(1));
 
         Integer registrosDepois = jdbcTemplate.queryForObject(
                 "select count(*) from \"LogAuditoria\" where \"Caminho\" = '/api/usuarios/me'", Integer.class);
         assertThat(registrosDepois).isEqualTo(registrosAntes);
+    }
+
+    // ---------- Permissões dos perfis padrão (V15) ----------
+
+    @Test
+    void recepcaoEditaPacientesEAgendaMasNaoCadastraNemInativa() throws Exception {
+        Cenario cenario = criarCenario();
+        String recepcao = tokenComPerfil("Recepção");
+        String paciente = "/api/pacientes/" + cenario.idPaciente();
+
+        assertThat(statusCom(recepcao, get("/api/pacientes"))).isEqualTo(200);
+        assertThat(statusCom(recepcao, json(patch(paciente), "{ \"nome\": \"Paciente Editado\" }"))).isEqualTo(200);
+        assertThat(statusCom(recepcao, json(post("/api/terapias"),
+                corpoTerapia(cenario.idPaciente(), cenario.idEspecialista())))).isEqualTo(201);
+        // Lista especialistas para agendar, mas não abre o cadastro deles
+        assertThat(statusCom(recepcao, get("/api/profissionais"))).isEqualTo(200);
+        assertThat(statusCom(recepcao, get("/api/escolas/sugestoes"))).isEqualTo(200);
+
+        mockMvc.perform(json(post("/api/pacientes"), corpoPaciente(cpfNovo(), null))
+                        .header("Authorization", "Bearer " + recepcao))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Você não tem permissão para realizar esta ação."));
+        for (MockHttpServletRequestBuilder proibida : List.of(
+                delete(paciente), get("/api/profissionais/" + cenario.idEspecialista()), get("/api/auditoria"),
+                get("/api/perfis"), get("/api/usuarios"), get("/api/escolas"), get("/api/cargos/1"))) {
+            assertThat(statusCom(recepcao, proibida)).as(proibida.toString()).isEqualTo(403);
+        }
+
+        // A tentativa recusada também fica na auditoria
+        assertThat(jdbcTemplate.queryForObject("""
+                select count(*) from "LogAuditoria"
+                where "Metodo" = 'DELETE' and "Caminho" = ? and "StatusHttp" = 403
+                """, Integer.class, paciente)).isEqualTo(1);
+    }
+
+    @Test
+    void especialistaVeSoAsTerapiasDeQueParticipa() throws Exception {
+        Cenario seu = criarCenario();
+        Cenario outro = criarCenario();
+        String cpf = jdbcTemplate.queryForObject(
+                "select \"CPF\" from \"Pessoa\" where \"IDCadastro\" = ?", String.class, seu.idEspecialista());
+        String especialista = concederAcesso("/api/especialistas/" + seu.idEspecialista(), cpf, "Especialista");
+
+        assertThat(statusCom(especialista, get("/api/terapias/" + seu.idTerapia()))).isEqualTo(200);
+        assertThat(statusCom(especialista, get("/api/terapias/" + outro.idTerapia()))).isEqualTo(403);
+        assertThat(statusCom(especialista, get("/api/terapias/999999"))).isEqualTo(403);
+        assertThat(statusCom(especialista, get("/api/terapias"))).isEqualTo(403);
+
+        mockMvc.perform(get("/api/terapias/minhas?idPaciente=" + seu.idPaciente())
+                        .header("Authorization", "Bearer " + especialista))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(1));
+        mockMvc.perform(get("/api/terapias/minhas?idPaciente=" + outro.idPaciente())
+                        .header("Authorization", "Bearer " + especialista))
+                .andExpect(jsonPath("$.page.totalElements").value(0));
+
+        assertThat(statusCom(especialista, get("/api/pacientes/" + seu.idPaciente() + "/historico"))).isEqualTo(200);
+        assertThat(statusCom(especialista, json(patch("/api/terapias/" + seu.idTerapia() + "/status"),
+                "{ \"status\": \"EM_ATENDIMENTO\" }"))).isEqualTo(403);
+        assertThat(statusCom(especialista, json(post("/api/terapias"),
+                corpoTerapia(seu.idPaciente(), seu.idEspecialista())))).isEqualTo(403);
+    }
+
+    @Test
+    void assistenteSocialSoLePacientes() throws Exception {
+        Cenario cenario = criarCenario();
+        String assistente = tokenComPerfil("Assistente Social");
+
+        for (String permitida : List.of("/api/pacientes", "/api/pacientes/" + cenario.idPaciente(),
+                "/api/pacientes/" + cenario.idPaciente() + "/historico", "/api/responsaveis",
+                "/api/especialidades")) {
+            assertThat(statusCom(assistente, get(permitida))).as(permitida).isEqualTo(200);
+        }
+        for (MockHttpServletRequestBuilder proibida : List.of(
+                get("/api/terapias"), get("/api/profissionais"), get("/api/cids/F84.0"),
+                json(patch("/api/pacientes/" + cenario.idPaciente()), "{ \"nome\": \"Outro\" }"))) {
+            assertThat(statusCom(assistente, proibida)).as(proibida.toString()).isEqualTo(403);
+        }
+    }
+
+    // ---------- Escolas ----------
+
+    @Test
+    void gestaoDeEscolas() throws Exception {
+        String nome = "Escola Gestão " + SEQUENCIA.incrementAndGet();
+        Long idEscola = criar("/api/escolas", "{ \"nome\": \"%s\", \"tipoEscola\": \"PUBLICA\" }".formatted(nome),
+                "$.idEscola");
+        String rota = "/api/escolas/" + idEscola;
+
+        chamar(get("/api/escolas?nome=" + nome.toUpperCase() + "&tipoEscola=PUBLICA"))
+                .andExpect(jsonPath("$.content[0].idEscola").value(idEscola))
+                .andExpect(jsonPath("$.content[0].quantidadePacientes").value(0));
+        chamar(get("/api/escolas?nome=" + nome + "&tipoEscola=PARTICULAR"))
+                .andExpect(jsonPath("$.page.totalElements").value(0));
+
+        chamar(json(patch(rota), "{ \"tipoEscola\": \"PARTICULAR\", \"telefone\": \"1533334444\" }"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipoEscola").value("PARTICULAR"))
+                .andExpect(jsonPath("$.nome").value(nome));
+        chamar(json(patch(rota), "{ \"telefone\": null }")).andExpect(jsonPath("$.telefone").doesNotExist());
+        chamar(json(patch(rota), "{ \"nome\": \" \" }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("O nome da escola não pode ser vazio."));
+        chamar(json(patch(rota), "{ \"tipoEscola\": null }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("O tipo da escola não pode ser nulo."));
+
+        // Com paciente vinculado (mesmo inativo), a exclusão é recusada
+        Long idPaciente = criar("/api/pacientes", corpoPaciente(cpfNovo(), idEscola));
+        chamar(delete("/api/pacientes/" + idPaciente)).andExpect(status().isNoContent());
+        chamar(get(rota)).andExpect(jsonPath("$.quantidadePacientes").value(1));
+        chamar(get("/api/pacientes?idEscola=" + idEscola))
+                .andExpect(jsonPath("$.content[0].idCadastro").value(idPaciente))
+                .andExpect(jsonPath("$.page.totalElements").value(1));
+        chamar(delete(rota))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Não é possível excluir a escola: há pacientes vinculados a ela."));
+
+        Long semPacientes = criar("/api/escolas", "{ \"nome\": \"Escola Vazia\", \"tipoEscola\": \"PUBLICA\" }",
+                "$.idEscola");
+        chamar(delete("/api/escolas/" + semPacientes)).andExpect(status().isNoContent());
+        chamar(get("/api/escolas/" + semPacientes))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Escola não encontrada com ID: " + semPacientes));
+    }
+
+    // ---------- Especialidades ----------
+
+    @Test
+    void gestaoDeEspecialidades() throws Exception {
+        String nome = "Musicoterapia " + SEQUENCIA.incrementAndGet();
+        Long idEspecialidade = criar("/api/especialidades",
+                "{ \"nome\": \"%s\", \"descricao\": \"Terapia com música\" }".formatted(nome), "$.idEspecialidade");
+        String rota = "/api/especialidades/" + idEspecialidade;
+
+        Long idEspecialista = criar("/api/especialistas", """
+                { "nome": "Especialista %1$s", "cpf": "%1$s", "dataNascimento": "1985-08-20", "sexo": "F",
+                  "estadoCivil": "CASADO", "email": "esp%1$s@email.com", "idCargo": 1,
+                  "registroConselho": "CRP-%1$s", "especialidadesIds": [%2$d],
+                  "jornadas": [ { "diaSemana": 2, "horaInicio": "08:00", "horaTermino": "12:00" } ] }
+                """.formatted(cpfNovo(), idEspecialidade));
+
+        chamar(get("/api/especialidades"))
+                .andExpect(jsonPath("$[?(@.idEspecialidade == %d)].quantidadeEspecialistas".formatted(idEspecialidade))
+                        .value(1));
+        chamar(get(rota))
+                .andExpect(jsonPath("$.quantidadeEspecialistas").value(1))
+                .andExpect(jsonPath("$.especialistas[0].idCadastro").value(idEspecialista))
+                .andExpect(jsonPath("$.especialistas[0].tipo").value("ESPECIALISTA"))
+                .andExpect(jsonPath("$.especialistas[0].statusCadastro").value("ATIVO"));
+
+        chamar(json(patch(rota), "{ \"nome\": \"psicologia\" }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Já existe uma especialidade com esse nome."));
+        chamar(json(patch(rota), "{ \"nome\": \"\" }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("O nome da especialidade não pode ser vazio."));
+        chamar(json(patch(rota), "{ \"nome\": \"%s\", \"descricao\": null }".formatted(nome.toUpperCase())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value(nome.toUpperCase()))
+                .andExpect(jsonPath("$.descricao").doesNotExist());
+
+        chamar(delete(rota))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Não é possível excluir a especialidade: há especialistas vinculados a ela."));
+
+        Long semEspecialistas = criar("/api/especialidades",
+                "{ \"nome\": \"Equoterapia %d\" }".formatted(SEQUENCIA.incrementAndGet()), "$.idEspecialidade");
+        chamar(delete("/api/especialidades/" + semEspecialistas)).andExpect(status().isNoContent());
+        chamar(get("/api/especialidades/" + semEspecialistas))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Especialidade não encontrada com ID: " + semEspecialistas));
     }
 
     private record Cenario(Long idPaciente, String cpfPaciente, Long idResponsavel, Long idEspecialista,
@@ -530,7 +738,7 @@ class ApiPostgresTest {
                   "cnpj": "%2$s", "razaoSocial": "Clínica %1$s Ltda" }
                 """.formatted(cpfPJ, "000" + cpfPJ));
 
-        LocalDate data = LocalDate.of(2027, 1, 1).plusDays(SEQUENCIA.incrementAndGet());
+        LocalDate data = LocalDate.of(2099, 1, 1).plusDays(SEQUENCIA.incrementAndGet());
         Long idTerapia = criar("/api/terapias", """
                 { "pacientesIds": [%d], "especialistasIds": [%d],
                   "data": "%s", "horaInicio": "09:00", "horaTermino": "10:00" }
@@ -544,9 +752,13 @@ class ApiPostgresTest {
     }
 
     private Long criarPaciente(String cpf) throws Exception {
-        return criar("/api/pacientes", """
+        return criar("/api/pacientes", corpoPaciente(cpf, null));
+    }
+
+    private String corpoPaciente(String cpf, Long idEscola) {
+        return """
                 { "nome": "Paciente %1$s", "cpf": "%1$s", "dataNascimento": "2015-03-21", "sexo": "M",
-                  "estadoCivil": "SOLTEIRO",
+                  "estadoCivil": "SOLTEIRO", "idEscola": %3$s,
                   "enderecos": [ { "cep": "18010000", "rua": "Rua das Flores", "numero": "%1$s",
                                    "bairro": "Centro", "cidade": "Sorocaba", "estado": "SP" } ],
                   "novosCids": [ { "codigoCID": "F84.0", "descricao": "Autismo infantil" } ],
@@ -554,7 +766,47 @@ class ApiPostgresTest {
                   "responsaveis": [ { "nome": "Responsável %2$s", "cpf": "%2$s", "dataNascimento": "1988-07-02",
                                       "sexo": "F", "estadoCivil": "CASADO", "grauParentesco": "MAE",
                                       "naoResideComPaciente": false } ] }
-                """.formatted(cpf, cpfNovo()));
+                """.formatted(cpf, cpfNovo(), idEscola);
+    }
+
+    // Profissional novo com acesso no perfil padrão informado (criado pela migration V15)
+    private String tokenComPerfil(String perfil) throws Exception {
+        String cpf = cpfNovo();
+        Long idProfissional = criar("/api/profissionais", """
+                { "nome": "Profissional %1$s", "cpf": "%1$s", "dataNascimento": "1990-05-10", "sexo": "F",
+                  "estadoCivil": "SOLTEIRO", "email": "prof%1$s@email.com", "idCargo": 1 }
+                """.formatted(cpf));
+        return concederAcesso("/api/profissionais/" + idProfissional, cpf, perfil);
+    }
+
+    private String concederAcesso(String rotaDoCadastro, String cpf, String perfil) throws Exception {
+        Long idPerfil = jdbcTemplate.queryForObject(
+                "select \"IDPerfil\" from \"Perfil\" where \"Nome\" = ?", Long.class, perfil);
+        chamar(post(rotaDoCadastro + "/usuario").contentType(MediaType.APPLICATION_JSON)
+                .content("{ \"senha\": \"SenhaTeste123\", \"idPerfil\": %d }".formatted(idPerfil)))
+                .andExpect(status().isCreated());
+        String resposta = mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"cpf\": \"%s\", \"senha\": \"SenhaTeste123\" }".formatted(cpf)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(resposta, "$.token");
+    }
+
+    // Status de cada requisição feita com o token; corpo JSON quando informado
+    private int statusCom(String tokenDoUsuario, MockHttpServletRequestBuilder requisicao) throws Exception {
+        return mockMvc.perform(requisicao.header("Authorization", "Bearer " + tokenDoUsuario))
+                .andReturn().getResponse().getStatus();
+    }
+
+    private MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder requisicao, String corpo) {
+        return requisicao.contentType(MediaType.APPLICATION_JSON).content(corpo);
+    }
+
+    private String corpoTerapia(Long idPaciente, Long idEspecialista) {
+        return """
+                { "pacientesIds": [%d], "especialistasIds": [%d],
+                  "data": "%s", "horaInicio": "14:00", "horaTermino": "15:00" }
+                """.formatted(idPaciente, idEspecialista, LocalDate.of(2099, 6, 1).plusDays(SEQUENCIA.incrementAndGet()));
     }
 
     private void criarEscola() throws Exception {

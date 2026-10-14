@@ -8,6 +8,8 @@ Autenticação, convenções, enums e formato de erro: ver `00-GERAL.md`. Todos 
 |---|---|---|
 | `GET` | `/api/cids/{codigoCID}` | busca um CID pelo código |
 
+**Permissão:** `CADASTRAR_PACIENTE` ou `EDITAR_PACIENTE` (ou `ACESSO_TOTAL`). A busca de CID só é usada nos formulários do paciente. Sem a permissão: `403`.
+
 > **Não existe endpoint nem tela separada para cadastrar CID.** Todo CID novo é cadastrado pelo campo `novosCids` do cadastro de paciente (`POST /api/pacientes`, ver `PACIENTES.md`).
 
 ---

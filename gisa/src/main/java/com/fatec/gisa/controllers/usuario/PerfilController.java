@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -27,10 +28,13 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/perfis")
+// Todas as rotas exigem GERENCIAR_PERFIS, exceto a listagem (usada para conceder acesso)
+@PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'GERENCIAR_PERFIS')")
 public class PerfilController {
 
     private final PerfilService perfilService;
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'GERENCIAR_PERFIS', 'GERENCIAR_USUARIOS')")
     @GetMapping
     public ResponseEntity<List<PerfilListaDTO>> listarTodos() {
         return ResponseEntity.ok(perfilService.listarTodos());

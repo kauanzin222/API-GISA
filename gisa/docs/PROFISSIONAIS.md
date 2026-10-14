@@ -6,15 +6,17 @@ Especialistas e especialistas PJ também são profissionais, mas têm rotas pró
 
 ## Rotas
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/api/profissionais` | lista profissionais (paginado), incluindo especialistas e PJ, com busca por CPF ou nome e filtros por tipo e status |
-| `GET` | `/api/profissionais/{idCadastro}` | detalhes de um profissional |
-| `POST` | `/api/profissionais` | cadastra profissional sem acesso ao sistema |
-| `POST` | `/api/profissionais/com-usuario` | cadastra profissional e cria o usuário de acesso |
-| `POST` | `/api/profissionais/{idCadastro}/usuario` | concede acesso a um profissional já cadastrado (ver `00-GERAL.md`) |
-| `PATCH` | `/api/profissionais/{idCadastro}` | atualiza profissional |
-| `DELETE` | `/api/profissionais/{idCadastro}` | inativa profissional |
+| Método | Rota | Permissão | Descrição |
+|---|---|---|---|
+| `GET` | `/api/profissionais` | `VISUALIZAR_PROFISSIONAIS` ou `VISUALIZAR_TERAPIAS` | lista profissionais (paginado), incluindo especialistas e PJ, com busca por CPF ou nome e filtros por tipo e status |
+| `GET` | `/api/profissionais/{idCadastro}` | `VISUALIZAR_PROFISSIONAIS` | detalhes de um profissional |
+| `POST` | `/api/profissionais` | `CADASTRAR_PROFISSIONAL` | cadastra profissional sem acesso ao sistema |
+| `POST` | `/api/profissionais/com-usuario` | `CADASTRAR_PROFISSIONAL` **e** `GERENCIAR_USUARIOS` | cadastra profissional e cria o usuário de acesso |
+| `POST` | `/api/profissionais/{idCadastro}/usuario` | `GERENCIAR_USUARIOS` | concede acesso a um profissional já cadastrado (ver `00-GERAL.md`) |
+| `PATCH` | `/api/profissionais/{idCadastro}` | `EDITAR_PROFISSIONAL` (+ `GERENCIAR_USUARIOS` com `idPerfil`) | atualiza profissional |
+| `DELETE` | `/api/profissionais/{idCadastro}` | `INATIVAR_PROFISSIONAL` | inativa profissional |
+
+`ACESSO_TOTAL` também libera todas as rotas. Sem a permissão: `403`. A listagem aceita também `VISUALIZAR_TERAPIAS` porque a recepção escolhe os especialistas ao agendar. Os motivos de `/com-usuario` e do `idPerfil` exigirem `GERENCIAR_USUARIOS` estão em `00-GERAL.md` ("Permissões por rota").
 
 ---
 
@@ -251,7 +253,7 @@ Segue as regras comuns de PATCH (`00-GERAL.md`).
 | `enderecos` | substitui a lista; `[]` remove todos |
 | `email` | não pode ser vazio nem `null`; formato válido; não pode ser de outro profissional |
 | `idCargo` | não pode ser `null`; o cargo precisa existir |
-| `idPerfil` | altera o perfil do usuário de acesso; **só funciona se o profissional já tiver usuário**. Não cria usuário e não altera senha |
+| `idPerfil` | altera o perfil do usuário de acesso; **só funciona se o profissional já tiver usuário**. Não cria usuário e não altera senha. Exige **também** `GERENCIAR_USUARIOS` (sem ela: `403`, e nada do PATCH é gravado) e segue as travas de `PATCH /api/usuarios/{idCadastro}/perfil` (ver `USUARIOS.md`), que faz o mesmo para qualquer tipo de cadastro |
 
 **Ignorados (somente leitura):** `cpf`, `dataNascimento`, `sexo`.
 
@@ -311,6 +313,8 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. Profissional 
 | `idPerfil` `null` (PATCH) | `400` | O perfil de acesso não pode ser nulo. |
 | `idPerfil` sem usuário cadastrado (PATCH) | `409` | Não é possível alterar o perfil: o profissional não possui usuário. |
 | `idPerfil` inexistente (PATCH) | `400` | Perfil não encontrado com ID: {id} |
+| `idPerfil` que deixaria o sistema sem administrador ativo (PATCH) | `400` | O sistema precisa de ao menos um usuário ativo com acesso total. |
+| `idPerfil` no PATCH sem `GERENCIAR_USUARIOS`, ou rota sem a permissão exigida | `403` | Você não tem permissão para realizar esta ação. |
 | Listagem: `tipo` ou `statusCadastro` inválido (inclusive `tipo=PESSOA`) | `400` | Valor inválido para 'tipo': {valor} / Valor inválido para 'statusCadastro': {valor} |
 
 ---
@@ -332,3 +336,9 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. Profissional 
 13. `GET /api/profissionais?tipo=ESPECIALISTA&tipo=ESPECIALISTA_PJ`. Esperado: só especialistas e PJ (ver `ESPECIALISTAS.md` para cadastrá-los).
 14. `GET /api/profissionais?statusCadastro=INATIVO`. Esperado: o profissional inativado no passo 11.
 15. `GET /api/profissionais?tipo=XYZ`. Esperado: `400` com `Valor inválido para 'tipo': XYZ`.
+
+**Permissões** (usuários nos perfis padrão; ver `00-GERAL.md`)
+
+16. Com um usuário "Recepção": `GET /api/profissionais`. Esperado: `200` (tem `VISUALIZAR_TERAPIAS`). `GET /api/profissionais/{id}`, `POST /api/profissionais` (corpo válido), `PATCH` e `DELETE`. Esperado: `403`.
+17. Com um usuário que tem `CADASTRAR_PROFISSIONAL` mas não `GERENCIAR_USUARIOS` (crie um perfil assim): `POST /api/profissionais` com o exemplo (CPF e e-mail novos). Esperado: `201`. `POST /api/profissionais/com-usuario`. Esperado: `403`.
+18. Com um usuário que tem `EDITAR_PROFISSIONAL` mas não `GERENCIAR_USUARIOS`: `PATCH /api/profissionais/{id}` com `{"celular": "15999990000"}`. Esperado: `200`. Com `{"idPerfil": 1}`: `403`.

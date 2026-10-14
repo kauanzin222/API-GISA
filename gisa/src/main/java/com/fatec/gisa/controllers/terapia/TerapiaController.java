@@ -11,6 +11,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -45,6 +46,7 @@ public class TerapiaController {
     private final TerapiaService terapiaService;
 
     // Filtros opcionais e combináveis; "data" não pode ser usado junto com "inicio"/"fim"
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_TERAPIAS')")
     @GetMapping
     public ResponseEntity<Page<TerapiaListaDTO>> listarPaginado(
             @RequestParam(required = false) List<StatusTerapia> status,
@@ -58,7 +60,8 @@ public class TerapiaController {
                 FiltroTerapiaDTO.de(status, data, inicio, fim, idPaciente, idEspecialista), pageable));
     }
 
-    // Terapias do especialista logado (identificado pelo CPF do token)
+    // Terapias do especialista logado (identificado pelo CPF do token). Sem permissão específica:
+    // basta estar logado, e o serviço recusa quem não é especialista
     @GetMapping("/minhas")
     public ResponseEntity<Page<TerapiaDoEspecialistaDTO>> listarDoEspecialistaLogado(
             Authentication authentication,
@@ -66,16 +69,21 @@ public class TerapiaController {
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate data,
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate inicio,
             @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate fim,
+            @RequestParam(required = false) Long idPaciente,
             @PageableDefault(page = 0, size = 3, sort = "dataHoraInicio", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(terapiaService.listarDoEspecialista(authentication.getName(),
-                FiltroTerapiaDTO.de(status, data, inicio, fim, null, null), pageable));
+                FiltroTerapiaDTO.de(status, data, inicio, fim, idPaciente, null), pageable));
     }
 
+    // O especialista não tem VISUALIZAR_TERAPIAS, mas abre as terapias de que participa (prontuário)
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_TERAPIAS')"
+            + " or @terapiaService.especialistaParticipa(#idTerapia, authentication.name)")
     @GetMapping("/{idTerapia}")
     public ResponseEntity<TerapiaListaDTO> buscarPorId(@PathVariable Long idTerapia) {
         return ResponseEntity.ok(terapiaService.buscarDetalhes(idTerapia));
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'REGISTRAR_PRESENCA')")
     @PatchMapping("/{idTerapia}/pacientes/{idPaciente}/presenca")
     public ResponseEntity<TerapiaListaDTO> registrarPresenca(
             @PathVariable Long idTerapia,
@@ -85,6 +93,7 @@ public class TerapiaController {
         return ResponseEntity.ok(terapiaService.buscarDetalhes(idTerapia));
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'ALTERAR_STATUS_TERAPIA')")
     @PatchMapping("/{idTerapia}/status")
     public ResponseEntity<TerapiaListaDTO> alterarStatus(
             @PathVariable Long idTerapia,
@@ -94,6 +103,7 @@ public class TerapiaController {
     }
 
     // Remarcar a terapia e trocar participantes (só terapias agendadas)
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'EDITAR_TERAPIA')")
     @PatchMapping("/{idTerapia}")
     public ResponseEntity<TerapiaListaDTO> atualizar(
             @PathVariable Long idTerapia,
@@ -103,12 +113,14 @@ public class TerapiaController {
     }
 
     // Não grava nada: responde se o horário conflita com outras terapias
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'AGENDAR_TERAPIA', 'EDITAR_TERAPIA')")
     @PostMapping("/verificar-conflitos")
     public ResponseEntity<VerificacaoConflitoDTO> verificarConflitos(
             @Valid @RequestBody VerificacaoConflitoRequestDTO request) {
         return ResponseEntity.ok(terapiaService.verificarConflitos(request));
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'AGENDAR_TERAPIA', 'EDITAR_TERAPIA')")
     @PostMapping
     public ResponseEntity<TerapiaListaDTO> cadastrar(@Valid @RequestBody TerapiaCadastroRequestDTO request) {
         Terapia terapia = terapiaService.cadastrar(request);

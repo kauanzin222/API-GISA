@@ -86,7 +86,7 @@ class TerapiaConcorrenciaTest {
                 try {
                     terapiaService.cadastrar(new TerapiaCadastroRequestDTO(
                             List.of(idPaciente), List.of(idEspecialista),
-                            LocalDate.of(2026, 10, 27), LocalTime.of(9, 0), LocalTime.of(10, 0)));
+                            LocalDate.of(2099, 10, 27), LocalTime.of(9, 0), LocalTime.of(10, 0)));
                     return true;
                 } catch (IllegalArgumentException conflito) {
                     assertThat(conflito).hasMessageStartingWith("Conflito de horário:");
@@ -145,7 +145,7 @@ class TerapiaConcorrenciaTest {
         for (int i = 0; i < CADASTROS_SIMULTANEOS; i++) {
             terapias.add(terapiaService.cadastrar(new TerapiaCadastroRequestDTO(
                     List.of(ids.get(i + 1)), List.of(idEspecialista),
-                    LocalDate.of(2026, 11, 3), LocalTime.of(8 + i, 0), LocalTime.of(8 + i, 30))).getIdTerapia());
+                    LocalDate.of(2099, 11, 3), LocalTime.of(8 + i, 0), LocalTime.of(8 + i, 30))).getIdTerapia());
         }
 
         ExecutorService executor = Executors.newFixedThreadPool(CADASTROS_SIMULTANEOS);

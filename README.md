@@ -34,13 +34,13 @@ Como trabalho de graduação em ADS, o projeto também tem finalidade acadêmica
 
 | Módulo | Principais recursos |
 |---|---|
-| **Autenticação e usuários** | login por CPF e senha com token JWT; dados do usuário logado (nome, tipo, perfil e permissões); troca da própria senha e redefinição pelo administrador, com encerramento das sessões abertas |
+| **Autenticação e usuários** | login por CPF e senha com token JWT; dados do usuário logado (nome, tipo, perfil e permissões); troca da própria senha e redefinição pelo administrador, com encerramento das sessões abertas; administração de acessos (listar usuários, trocar perfil, retirar acesso), com trava para não ficar sem administrador |
 | **Pacientes e responsáveis** | cadastro completo em uma requisição (prontuário, endereços, responsáveis, CIDs); busca por CPF ou nome; inclusão de responsável em paciente existente; inativação; histórico de atividades do paciente (linha do tempo sem dados de saúde) |
-| **Escolas e CIDs** | busca de escolas para autocomplete; consulta de CID por código; cadastro de CIDs novos junto com o paciente |
-| **Equipe** | profissionais, especialistas e especialistas PJ, com especialidades e jornadas de trabalho; listagem com filtro por tipo e status; concessão de acesso ao sistema |
+| **Escolas e CIDs** | gestão de escolas (listagem, edição, exclusão sem pacientes) e autocomplete; consulta de CID por código; cadastro de CIDs novos junto com o paciente |
+| **Equipe** | profissionais, especialistas e especialistas PJ, com especialidades e jornadas de trabalho; listagem com filtro por tipo e status; concessão de acesso ao sistema; gestão de especialidades |
 | **Cargos e CBOs** | cadastro e manutenção de cargos ligados ao CBO; detalhes com os profissionais de cada cargo |
-| **Perfis e permissões** | perfis de acesso com suas permissões e usuários |
-| **Terapias** | agendamento individual ou coletivo, com verificação de conflito de horário (inclusive para cadastros e edições simultâneos); edição de terapia agendada; mudança de status e cancelamento com motivo; listagem geral e do especialista logado, com filtros por dia, intervalo, paciente e especialista; registro de presença e falta, com liberação do horário em falta justificada |
+| **Perfis e permissões** | toda rota exige permissão; perfis padrão (Administrador, Recepção, Especialista, Assistente Social); perfis de acesso com suas permissões e usuários |
+| **Terapias** | agendamento individual ou coletivo, só para horários futuros (fuso de São Paulo), com verificação de conflito de horário (inclusive para cadastros e edições simultâneos); edição de terapia agendada; mudança de status e cancelamento com motivo; listagem geral e do especialista logado, com filtros por dia, intervalo, paciente e especialista; registro de presença e falta, com liberação do horário em falta justificada |
 | **Auditoria** | registro de logins, alterações e consultas a dados sensíveis, com consulta filtrada para o administrador |
 
 Comum a todos os módulos:
@@ -124,7 +124,8 @@ A migration `V6` cria um administrador para o primeiro acesso. As credenciais es
 Não é preciso configurar nenhum banco:
 
 - **Testes de regra de negócio** usam o H2 em memória.
-- **`ApiPostgresTest`** sobe um **PostgreSQL real embarcado**, sem Docker, aplica todas as migrations e valida o esquema contra as entidades. Depois chama a API por HTTP com o administrador inicial: listagens e filtros, detalhes, erros, conflitos de horário, edição e status de terapias, presença, histórico do paciente, usuário logado, CORS e auditoria.
+- **`ApiPostgresTest`** sobe um **PostgreSQL real embarcado**, sem Docker, aplica todas as migrations e valida o esquema contra as entidades. Depois chama a API por HTTP com o administrador inicial: listagens e filtros, detalhes, erros, conflitos de horário, edição e status de terapias, presença, histórico do paciente, usuário logado, CORS e auditoria. Também confere as permissões e os perfis padrão criados pela migration `V15`, entrando com usuários de cada perfil.
+- **`PermissoesPorRotaTest`** percorre todas as rotas da API e falha se alguma ficar sem `@PreAuthorize` (fora as que só pedem login), além de confirmar o `403` para um usuário sem permissões.
 - **`TerapiaConcorrenciaTest`** dispara cadastros e edições simultâneos de terapias para o mesmo horário e confirma que só um é gravado.
 
 ---
@@ -165,14 +166,14 @@ Os documentos ficam em [`gisa/docs/`](./gisa/docs/). Comece pelo **`00-GERAL.md`
 |---|---|
 | [00-GERAL.md](./gisa/docs/00-GERAL.md) | autenticação, convenções, status HTTP, formato de erro, concessão de acesso |
 | [PACIENTES.md](./gisa/docs/PACIENTES.md) | pacientes, responsáveis e histórico do paciente |
-| [ESCOLAS.md](./gisa/docs/ESCOLAS.md) | busca e cadastro de escolas |
+| [ESCOLAS.md](./gisa/docs/ESCOLAS.md) | escolas: gestão e autocomplete |
 | [CIDS.md](./gisa/docs/CIDS.md) | consulta de CID e fluxo de cadastro |
 | [PROFISSIONAIS.md](./gisa/docs/PROFISSIONAIS.md) | profissionais |
 | [ESPECIALISTAS.md](./gisa/docs/ESPECIALISTAS.md) | especialistas, especialistas PJ e especialidades |
 | [CARGOS.md](./gisa/docs/CARGOS.md) | cargos e CBOs |
-| [PERFIS.md](./gisa/docs/PERFIS.md) | perfis de acesso e permissões |
+| [PERFIS.md](./gisa/docs/PERFIS.md) | perfis de acesso, lista de permissões e perfis padrão |
 | [TERAPIAS.md](./gisa/docs/TERAPIAS.md) | agendamento, edição, status e filtros de terapias, conflitos de horário e presença |
-| [USUARIOS.md](./gisa/docs/USUARIOS.md) | usuário logado, troca e redefinição de senha |
+| [USUARIOS.md](./gisa/docs/USUARIOS.md) | usuário logado, senha e administração de acessos |
 | [AUDITORIA.md](./gisa/docs/AUDITORIA.md) | trilha de auditoria |
 
 Cada documento termina com um **roteiro rápido de testes** para Postman ou similar.
@@ -181,7 +182,7 @@ Cada documento termina com um **roteiro rápido de testes** para Postman ou simi
 
 ## Estado do projeto e limitações conhecidas
 
-- **Permissões por rota:** os perfis e permissões já existem, mas só a redefinição de senha e a auditoria exigem permissão. Nas demais rotas, qualquer usuário autenticado acessa tudo (inclusive mudar status, editar e cancelar terapias). A verificação por permissão entra com a migration que definirá a lista definitiva de permissões.
+- **Permissões por rota:** toda rota exige permissão (tabela em `00-GERAL.md`). O corpo da requisição é validado antes da permissão: sem permissão e com corpo inválido, a resposta é `400`, e não `403`. A assistente social ainda lê todos os pacientes (a restrição a pacientes específicos fica para depois). Documentos (atestado, receita, recusa) têm permissões, mas só o front as usa.
 - **CORS:** configurável pela variável `CORS_ORIGINS` (ver [Configuração](#configuração-e-execução-local)); sem ela, valem `http://localhost:4200` e `https://eduardofproenca.github.io` (front no GitHub Pages).
 - **Login sem limite de tentativas:** as tentativas que falham ficam na auditoria, mas não são bloqueadas.
 - **"Esqueci minha senha":** não há recuperação por e-mail. O usuário troca a própria senha (`/api/usuarios/minha-senha`) ou o administrador redefine.

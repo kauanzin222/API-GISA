@@ -1,5 +1,7 @@
 package com.fatec.gisa.entities.usuario;
 
+import java.time.Instant;
+
 import com.fatec.gisa.entities.Pessoa;
 
 import jakarta.persistence.Entity;
@@ -9,6 +11,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -41,7 +44,19 @@ public class Usuario {
     @Column(name = "VersaoToken", nullable = false)
     private int versaoToken;
 
+    // Tokens emitidos antes da criação são recusados: um acesso retirado e concedido de novo
+    // recomeça a versão em 0, e sem esta data os tokens antigos voltariam a valer
+    @Column(name = "DataCriacao", nullable = false, updatable = false)
+    private Instant dataCriacao;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "IDPerfil", nullable = false)
     private Perfil perfil;
+
+    @PrePersist
+    void aoCriar() {
+        if (dataCriacao == null) {
+            dataCriacao = Instant.now();
+        }
+    }
 }

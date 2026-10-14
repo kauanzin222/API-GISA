@@ -23,9 +23,10 @@ import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.repositories.PessoaRepository;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.repositories.profissional.ProfissionalRepository;
-import com.fatec.gisa.repositories.usuario.PerfilRepository;
 import com.fatec.gisa.services.PessoaService;
 import com.fatec.gisa.services.endereco.EnderecoService;
+import com.fatec.gisa.services.usuario.PermissaoUsuarioLogado;
+import com.fatec.gisa.services.usuario.UsuarioService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,7 +37,7 @@ public class ProfissionalService {
     private final ProfissionalRepository profissionalRepository;
     private final PessoaRepository pessoaRepository;
     private final CargoRepository cargoRepository;
-    private final PerfilRepository perfilRepository;
+    private final UsuarioService usuarioService;
     private final ProfissionalMapper profissionalMapper;
     private final EnderecoService enderecoService;
     private final PessoaService pessoaService;
@@ -109,6 +110,11 @@ public class ProfissionalService {
 
     @Transactional
     public Profissional atualizar(Long idCadastro, ProfissionalPatchRequestDTO dto) {
+        // Trocar o perfil é gerenciar usuários: EDITAR_PROFISSIONAL (exigido na rota) não basta
+        if (dto.hasField("idPerfil")) {
+            PermissaoUsuarioLogado.exigir("GERENCIAR_USUARIOS");
+        }
+
         Profissional profissional = profissionalRepository.findById(idCadastro)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Profissional não encontrado com ID: " + idCadastro));
@@ -143,9 +149,7 @@ public class ProfissionalService {
                 throw new ConflitoException(
                         "Não é possível alterar o perfil: o profissional não possui usuário.");
             }
-            profissional.getUsuario().setPerfil(perfilRepository.findById(dto.getIdPerfil())
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "Perfil não encontrado com ID: " + dto.getIdPerfil())));
+            usuarioService.alterarPerfil(profissional.getUsuario(), dto.getIdPerfil());
         }
 
         return profissionalRepository.save(profissional);

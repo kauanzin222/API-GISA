@@ -20,6 +20,8 @@ Autenticação, convenções, enums e formato de erro: ver `00-GERAL.md`. Todos 
 | `PATCH` | `/api/cbos/{codigoCBO}` | altera o título do CBO |
 | `DELETE` | `/api/cbos/{codigoCBO}` | exclui CBO sem cargos |
 
+**Permissão:** `GERENCIAR_CARGOS` em todas as rotas de cargos e CBOs, exceto `GET /api/cargos`, que aceita também `CADASTRAR_PROFISSIONAL`, `CADASTRAR_ESPECIALISTA`, `CADASTRAR_ESPECIALISTA_PJ` e `EDITAR_PROFISSIONAL` (o seletor de cargo dos formulários de profissional). `ACESSO_TOTAL` libera tudo. Sem a permissão: `403`.
+
 **Fluxo das telas**
 
 1. Tela de cargos: `GET /api/cargos` (com `?nome=` no campo de busca).

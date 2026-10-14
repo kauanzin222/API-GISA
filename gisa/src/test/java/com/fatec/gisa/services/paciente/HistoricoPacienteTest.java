@@ -14,12 +14,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.config.RelogioInicioDoDiaConfig;
 import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ProntuarioPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelVinculoPatchDTO;
@@ -47,6 +49,7 @@ import com.fatec.gisa.services.terapia.TerapiaService;
 
 import jakarta.persistence.EntityManager;
 
+@Import(RelogioInicioDoDiaConfig.class)
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:historico-paciente;MODE=PostgreSQL",
         "spring.datasource.username=sa",
@@ -58,7 +61,7 @@ import jakarta.persistence.EntityManager;
 @Transactional
 class HistoricoPacienteTest {
 
-    private static final LocalDate DATA = LocalDate.of(2026, 10, 27);
+    private static final LocalDate DATA = LocalDate.of(2099, 10, 27);
     private static final LocalDate HOJE = LocalDate.now(ZoneId.of("America/Sao_Paulo"));
 
     @Autowired
@@ -114,7 +117,7 @@ class HistoricoPacienteTest {
             EventoPacienteDTO evento = unico(paciente);
             assertThat(evento.tipo()).isEqualTo(TipoEventoPaciente.TERAPIA_AGENDADA);
             assertThat(evento.descricao()).isEqualTo(
-                    "Terapia coletiva agendada para 27/10/2026, das 09:00 às 10:00, com Ana Souza e Carlos Lima.");
+                    "Terapia coletiva agendada para 27/10/2099, das 09:00 às 10:00, com Ana Souza e Carlos Lima.");
             assertThat(evento.idTerapia()).isEqualTo(idTerapia);
             assertThat(evento.usuario().idCadastro()).isEqualTo(ana.getIdCadastro());
             assertThat(evento.usuario().nome()).isEqualTo("Ana Souza");
@@ -127,7 +130,7 @@ class HistoricoPacienteTest {
         cadastrar(DATA, List.of(lucas), List.of(ana), "09:00", "10:00");
 
         assertThat(unico(lucas).descricao())
-                .isEqualTo("Terapia agendada para 27/10/2026, das 09:00 às 10:00, com Ana Souza.");
+                .isEqualTo("Terapia agendada para 27/10/2099, das 09:00 às 10:00, com Ana Souza.");
         assertThat(eventos(maria)).isEmpty();
     }
 
@@ -165,7 +168,7 @@ class HistoricoPacienteTest {
             assertThat(eventos(paciente)).extracting(EventoPacienteDTO::tipo)
                     .containsExactly(TipoEventoPaciente.TERAPIA_CANCELADA, TipoEventoPaciente.TERAPIA_AGENDADA);
             assertThat(eventos(paciente).get(0).descricao())
-                    .isEqualTo("Terapia de 27/10/2026, das 09:00 às 10:00, com Ana Souza, cancelada.")
+                    .isEqualTo("Terapia de 27/10/2099, das 09:00 às 10:00, com Ana Souza, cancelada.")
                     .doesNotContain("febre");
         }
     }
@@ -184,8 +187,8 @@ class HistoricoPacienteTest {
 
         assertThat(eventos(lucas).get(0)).satisfies(evento -> {
             assertThat(evento.tipo()).isEqualTo(TipoEventoPaciente.TERAPIA_ALTERADA);
-            assertThat(evento.descricao()).isEqualTo("Terapia de 27/10/2026, das 09:00 às 10:00, alterada: "
-                    + "remarcada para 27/10/2026, das 11:00 às 12:00; especialistas: Carlos Lima; "
+            assertThat(evento.descricao()).isEqualTo("Terapia de 27/10/2099, das 09:00 às 10:00, alterada: "
+                    + "remarcada para 27/10/2099, das 11:00 às 12:00; especialistas: Carlos Lima; "
                     + "pacientes da terapia alterados.");
             // O nome do outro paciente não aparece no histórico de quem continua
             assertThat(evento.descricao()).doesNotContain("Beatriz").doesNotContain("Maria");
@@ -193,12 +196,12 @@ class HistoricoPacienteTest {
         assertThat(unico(bia)).satisfies(evento -> {
             assertThat(evento.tipo()).isEqualTo(TipoEventoPaciente.TERAPIA_AGENDADA);
             assertThat(evento.descricao())
-                    .isEqualTo("Paciente incluído na terapia de 27/10/2026, das 11:00 às 12:00, com Carlos Lima.");
+                    .isEqualTo("Paciente incluído na terapia de 27/10/2099, das 11:00 às 12:00, com Carlos Lima.");
         });
         assertThat(eventos(maria).get(0)).satisfies(evento -> {
             assertThat(evento.tipo()).isEqualTo(TipoEventoPaciente.TERAPIA_ALTERADA);
             assertThat(evento.descricao())
-                    .isEqualTo("Paciente retirado da terapia de 27/10/2026, das 09:00 às 10:00, com Ana Souza.");
+                    .isEqualTo("Paciente retirado da terapia de 27/10/2099, das 09:00 às 10:00, com Ana Souza.");
             assertThat(evento.idTerapia()).isEqualTo(idTerapia);
         });
     }
@@ -214,7 +217,7 @@ class HistoricoPacienteTest {
         dto.setPacientesIds(List.of(lucas.getIdCadastro(), maria.getIdCadastro()));
         terapiaService.atualizar(idTerapia, dto);
         assertThat(eventos(lucas).get(0).descricao())
-                .isEqualTo("Terapia de 27/10/2026, das 09:00 às 10:00, alterada: agora coletiva.");
+                .isEqualTo("Terapia de 27/10/2099, das 09:00 às 10:00, alterada: agora coletiva.");
     }
 
     // ---------- Paciente ----------

@@ -10,6 +10,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -46,20 +47,24 @@ public class PacienteController {
     private final PacienteService pacienteService;
     private final HistoricoPacienteService historicoPacienteService;
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PACIENTES')")
     @GetMapping
     public ResponseEntity<Page<PacienteResumoDTO>> listarPaginado(
             @RequestParam(required = false) String cpf,
             @RequestParam(required = false) String nome,
+            @RequestParam(required = false) Long idEscola,
             @PageableDefault(page = 0, size = 9, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
-        return ResponseEntity.ok(pacienteService.listarPaginado(FiltroPessoaDTO.de(cpf, nome), pageable));
+        return ResponseEntity.ok(pacienteService.listarPaginado(FiltroPessoaDTO.de(cpf, nome), idEscola, pageable));
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PACIENTES')")
     @GetMapping("/{idCadastro}")
     public ResponseEntity<PacienteDetalheDTO> buscarPorId(@PathVariable Long idCadastro) {
         return ResponseEntity.ok(pacienteService.buscarDetalhes(idCadastro));
     }
 
     // Linha do tempo do paciente (eventos de negócio, sem dado de saúde); não é a auditoria
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_HISTORICO_PACIENTE')")
     @GetMapping("/{idCadastro}/historico")
     public ResponseEntity<Page<EventoPacienteDTO>> listarHistorico(
             @PathVariable Long idCadastro,
@@ -70,6 +75,7 @@ public class PacienteController {
         return ResponseEntity.ok(historicoPacienteService.listar(idCadastro, tipo, inicio, fim, pageable));
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'EDITAR_PACIENTE')")
     @PatchMapping("/{idCadastro}")
     public ResponseEntity<PacienteDetalheDTO> atualizar(
             @PathVariable Long idCadastro,
@@ -78,6 +84,7 @@ public class PacienteController {
         return ResponseEntity.ok(pacienteService.buscarDetalhes(idCadastro));
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'EDITAR_PACIENTE')")
     @PostMapping("/{idCadastro}/responsaveis")
     public ResponseEntity<PacienteDetalheDTO> adicionarResponsavel(
             @PathVariable Long idCadastro,
@@ -86,12 +93,14 @@ public class PacienteController {
         return ResponseEntity.status(201).body(pacienteService.buscarDetalhes(idCadastro));
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'INATIVAR_PACIENTE')")
     @DeleteMapping("/{idCadastro}")
     public ResponseEntity<Void> inativar(@PathVariable Long idCadastro) {
         pacienteService.inativar(idCadastro);
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'CADASTRAR_PACIENTE')")
     @PostMapping
     public ResponseEntity<PacienteCadastroResponseDTO> cadastrar(
             @Valid @RequestBody PacienteCadastroRequestDTO request) {

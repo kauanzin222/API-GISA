@@ -47,6 +47,13 @@ public interface TerapiaRepository extends JpaRepository<Terapia, Long> {
 
     // Mudança de status e edição: trava a terapia até o fim da transação
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    // Terapia inexistente também responde false
+    @Query("""
+            select count(t) > 0 from Terapia t join t.especialistas e
+            where t.idTerapia = :idTerapia and e.cpf = :cpf
+            """)
+    boolean especialistaParticipa(@Param("idTerapia") Long idTerapia, @Param("cpf") String cpf);
+
     @Query("select t from Terapia t where t.idTerapia = :idTerapia")
     Optional<Terapia> buscarParaAlterar(@Param("idTerapia") Long idTerapia);
 

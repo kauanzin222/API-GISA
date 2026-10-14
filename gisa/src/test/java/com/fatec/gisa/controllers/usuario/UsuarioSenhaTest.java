@@ -193,7 +193,7 @@ class UsuarioSenhaTest {
     }
 
     private int rotaProtegida(String token) throws Exception {
-        return mockMvc.perform(get("/api/permissoes").header("Authorization", "Bearer " + token))
+        return mockMvc.perform(get("/api/usuarios/me").header("Authorization", "Bearer " + token))
                 .andReturn().getResponse().getStatus();
     }
 

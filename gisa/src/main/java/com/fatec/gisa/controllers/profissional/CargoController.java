@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -27,10 +28,14 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/cargos")
+// Todas as rotas exigem GERENCIAR_CARGOS, exceto a listagem (usada nos cadastros de profissional)
+@PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'GERENCIAR_CARGOS')")
 public class CargoController {
 
     private final CargoService cargoService;
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'GERENCIAR_CARGOS', 'CADASTRAR_PROFISSIONAL',"
+            + " 'CADASTRAR_ESPECIALISTA', 'CADASTRAR_ESPECIALISTA_PJ', 'EDITAR_PROFISSIONAL')")
     @GetMapping
     public ResponseEntity<List<CargoResponseDTO>> listarTodos(@RequestParam(required = false) String nome) {
         List<CargoResponseDTO> cargos = cargoService.listarTodos(nome)

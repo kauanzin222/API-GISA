@@ -27,7 +27,7 @@ public class AuditoriaController {
 
     private final AuditoriaService auditoriaService;
 
-    @PreAuthorize("hasAuthority('ACESSO_TOTAL')")
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_AUDITORIA')")
     @GetMapping
     public ResponseEntity<Page<LogAuditoriaDTO>> listar(
             @RequestParam(required = false) String cpf,

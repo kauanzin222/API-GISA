@@ -28,7 +28,9 @@ Se o registro da auditoria falhar, a requisição original **não** é afetada; 
 
 ## `GET /api/auditoria` — consultar a auditoria
 
-Exige a permissão **`ACESSO_TOTAL`** (perfil "Administrador"). Sem ela: `403`. Consultar a auditoria também gera um registro.
+Exige a permissão **`VISUALIZAR_AUDITORIA`** (ou `ACESSO_TOTAL`, do perfil "Administrador"). Sem ela: `403`. Consultar a auditoria também gera um registro.
+
+> Tentativas sem permissão (`403`) também são registradas, como qualquer outra requisição que altera dados ou consulta dado sensível: o `statusHttp` mostra a recusa.
 
 | Param | Padrão | Descrição |
 |---|---|---|
@@ -84,4 +86,5 @@ GET /api/auditoria?acao=LOGIN&inicio=2026-10-01&fim=2026-10-13
 2. `GET /api/auditoria?acao=LOGIN` com o token do administrador. Esperado: as duas tentativas, a mais recente primeiro; a errada com `statusHttp: 401` e `sucesso: false`.
 3. `PATCH` em qualquer paciente e `GET /api/pacientes/{id}`. Esperado: registros `ALTERACAO` e `CONSULTA` com o caminho e o CPF do administrador.
 4. `GET /api/pacientes` (listagem). Esperado: **nenhum** registro novo.
-5. `GET /api/auditoria` com o token de um usuário sem `ACESSO_TOTAL`. Esperado: `403`.
+5. `GET /api/auditoria` com o token de um usuário sem `VISUALIZAR_AUDITORIA` (ex.: perfil "Recepção"). Esperado: `403`.
+6. Com esse mesmo usuário, `DELETE /api/pacientes/{id}`. Esperado: `403`. Com o administrador, `GET /api/auditoria?acao=EXCLUSAO`. Esperado: o registro dessa tentativa, com `statusHttp: 403`.

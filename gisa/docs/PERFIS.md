@@ -3,9 +3,58 @@
 Autenticação, convenções, enums e formato de erro: ver `00-GERAL.md`. Todos os endpoints exigem `Authorization: Bearer <token>`.
 
 - **Permissão** = uma funcionalidade do sistema (ex.: `CADASTRAR_PROFISSIONAL`). As permissões são definidas pelo próprio sistema, por migration; a API **só as consulta**.
-- **Perfil** = um conjunto de permissões (ex.: "Administrador", "Recepção"). Cada usuário de acesso tem exatamente um perfil. O perfil do usuário é escolhido ao conceder acesso (ver `00-GERAL.md`) e pode ser trocado pelo `idPerfil` no PATCH de profissional/especialista.
+- **Perfil** = um conjunto de permissões (ex.: "Administrador", "Recepção"). Cada usuário de acesso tem exatamente um perfil. O perfil do usuário é escolhido ao conceder acesso (ver `00-GERAL.md`) e pode ser trocado por `PATCH /api/usuarios/{idCadastro}/perfil` (ver `USUARIOS.md`) ou pelo `idPerfil` no PATCH de profissional/especialista.
+- Toda rota da API exige uma permissão (tabela completa em `00-GERAL.md`, seção "Permissões por rota"). Mudanças no perfil valem na próxima requisição do usuário, sem novo login.
 
-> **Situação atual:** só duas rotas exigem permissão: a redefinição de senha pelo administrador (`PATCH /api/usuarios/{idCadastro}/senha`, `ACESSO_TOTAL` ou `CADASTRAR_USUARIO`; ver `USUARIOS.md`) e a consulta da auditoria (`GET /api/auditoria`, `ACESSO_TOTAL`; ver `AUDITORIA.md`). Nas demais rotas, qualquer usuário autenticado ainda acessa tudo; a verificação por permissão entra quando a lista definitiva de permissões for criada.
+**Permissão exigida neste módulo:** `GERENCIAR_PERFIS` em todas as rotas, exceto `GET /api/perfis`, que aceita também `GERENCIAR_USUARIOS` (a tela de conceder acesso precisa listar os perfis). Sem ela: `403`.
+
+---
+
+## Permissões do sistema
+
+Criadas pela migration `V15` (os IDs 1 a 5 vêm da `V6`; o 5 foi renomeado de `CADASTRAR_USUARIO`). Quem tem `ACESSO_TOTAL` pode tudo.
+
+| Grupo | Permissão | O que libera |
+|---|---|---|
+| Geral | `ACESSO_TOTAL` | todas as rotas |
+| Profissionais | `CADASTRAR_PROFISSIONAL` | cadastrar profissionais |
+| | `CADASTRAR_ESPECIALISTA` | cadastrar especialistas |
+| | `CADASTRAR_ESPECIALISTA_PJ` | cadastrar especialistas PJ |
+| | `VISUALIZAR_PROFISSIONAIS` | listar e ver profissionais e especialistas |
+| | `EDITAR_PROFISSIONAL` | editar profissionais e especialistas (trocar o perfil exige também `GERENCIAR_USUARIOS`) |
+| | `INATIVAR_PROFISSIONAL` | inativar profissionais e especialistas |
+| Usuários | `GERENCIAR_USUARIOS` | conceder acesso, trocar perfil, redefinir senha e retirar acesso |
+| Pacientes | `VISUALIZAR_PACIENTES` | listar e ver pacientes e responsáveis |
+| | `CADASTRAR_PACIENTE` | cadastrar pacientes |
+| | `EDITAR_PACIENTE` | editar pacientes e responsáveis, incluir responsáveis |
+| | `INATIVAR_PACIENTE` | inativar pacientes e responsáveis |
+| | `VISUALIZAR_HISTORICO_PACIENTE` | ver o histórico de atividades do paciente |
+| Terapias | `VISUALIZAR_TERAPIAS` | listar e ver todas as terapias |
+| | `AGENDAR_TERAPIA` | agendar terapias e verificar conflitos |
+| | `EDITAR_TERAPIA` | remarcar e trocar participantes |
+| | `ALTERAR_STATUS_TERAPIA` | mudar o status, inclusive cancelar |
+| | `REGISTRAR_PRESENCA` | registrar presença e falta |
+| Documentos | `EMITIR_ATESTADO`, `EMITIR_RECEITA`, `EMITIR_RECUSA` | **só o front usa**; a API não tem rotas de documentos |
+| Tabelas de apoio | `GERENCIAR_CARGOS` | cargos e CBOs |
+| | `GERENCIAR_PERFIS` | perfis e permissões (este módulo) |
+| | `GERENCIAR_ESCOLAS` | listagem, edição e exclusão de escolas |
+| | `GERENCIAR_ESPECIALIDADES` | detalhes, cadastro, edição e exclusão de especialidades |
+| Auditoria | `VISUALIZAR_AUDITORIA` | consultar a auditoria |
+
+## Perfis padrão
+
+A migration `V15` garante os perfis abaixo (cria os que não existem, comparando o nome sem diferenciar maiúsculas) e **substitui** as permissões de cada um por exatamente estas. Depois disso, os perfis podem ser alterados pelas rotas deste módulo; a migration não roda de novo.
+
+| Perfil | Permissões | Ideia |
+|---|---|---|
+| Administrador | `ACESSO_TOTAL` | tudo |
+| Recepção | `VISUALIZAR_PACIENTES`, `EDITAR_PACIENTE`, `VISUALIZAR_HISTORICO_PACIENTE`, `VISUALIZAR_TERAPIAS`, `AGENDAR_TERAPIA`, `EDITAR_TERAPIA`, `ALTERAR_STATUS_TERAPIA`, `REGISTRAR_PRESENCA`, `EMITIR_RECUSA` | edita pacientes (não cadastra nem inativa); agenda, edita e muda status de terapias; registra presença |
+| Especialista | `VISUALIZAR_PACIENTES`, `VISUALIZAR_HISTORICO_PACIENTE`, `EMITIR_ATESTADO`, `EMITIR_RECEITA` | lê pacientes; vê só as próprias terapias (`/api/terapias/minhas` e o detalhe das terapias de que participa), sem alterar nada |
+| Assistente Social | `VISUALIZAR_PACIENTES`, `VISUALIZAR_HISTORICO_PACIENTE` | por enquanto, só lê pacientes (no futuro será restrita a pacientes específicos) |
+
+> O especialista não tem `VISUALIZAR_TERAPIAS`. Ele vê as terapias de que participa por `GET /api/terapias/minhas` e `GET /api/terapias/{id}` (ver `TERAPIAS.md`).
+
+> **Atenção ao deploy:** a `V15` reduz o perfil "Administrador" a `ACESSO_TOTAL` (antes ele tinha as 5 permissões iniciais). Usuários de outros perfis criados antes desta versão passam a ver só o que as permissões do perfil deles liberam.
 
 ## Rotas
 
@@ -43,7 +92,7 @@ Sem paginação, ordenado por nome.
   {
     "idPerfil": 1,
     "nome": "Administrador",
-    "quantidadePermissoes": 5,
+    "quantidadePermissoes": 1,
     "quantidadeUsuarios": 3
   }
 ]
@@ -121,7 +170,7 @@ Para adicionar ou remover uma permissão de cada vez, prefira as rotas `/permiss
 
 Perfis não têm status: o `DELETE` **exclui** o perfil (e os vínculos dele com permissões) e retorna `204 No Content`.
 
-Só é possível excluir um perfil **sem usuários**. Antes, troque o perfil desses usuários pelo PATCH de profissional/especialista (`idPerfil`).
+Só é possível excluir um perfil **sem usuários**. Antes, troque o perfil desses usuários (`PATCH /api/usuarios/{idCadastro}/perfil`) ou retire o acesso deles (`DELETE /api/usuarios/{idCadastro}`); ver `USUARIOS.md`.
 
 ---
 
@@ -158,14 +207,12 @@ Lista todas as permissões do sistema, ordenadas pelo nome, sem paginação.
 ```json
 [
   { "idPermissao": 1, "nome": "ACESSO_TOTAL", "descricao": "Acesso total aos recursos da API" },
-  { "idPermissao": 2, "nome": "CADASTRAR_PROFISSIONAL", "descricao": "Cadastrar profissionais" },
-  { "idPermissao": 3, "nome": "CADASTRAR_ESPECIALISTA", "descricao": "Cadastrar especialistas" },
-  { "idPermissao": 4, "nome": "CADASTRAR_ESPECIALISTA_PJ", "descricao": "Cadastrar especialistas pessoa juridica" },
-  { "idPermissao": 5, "nome": "CADASTRAR_USUARIO", "descricao": "Cadastrar usuarios" }
+  { "idPermissao": 15, "nome": "AGENDAR_TERAPIA", "descricao": "Agendar terapias" },
+  { "idPermissao": 17, "nome": "ALTERAR_STATUS_TERAPIA", "descricao": "Alterar o status de terapias, inclusive cancelar" }
 ]
 ```
 
-As permissões acima são as iniciais. A lista definitiva será criada por migration; não há rotas para cadastrar, alterar ou excluir permissões.
+São as 26 permissões da tabela [Permissões do sistema](#permissões-do-sistema) (trecho acima). Não há rotas para cadastrar, alterar ou excluir permissões; mudanças na lista vêm por migration. Os IDs a partir do 6 dependem da ordem de criação: o front deve usar o **nome** da permissão, e não o ID.
 
 ## `GET /api/permissoes/{idPermissao}` — detalhes da permissão
 
@@ -199,12 +246,24 @@ As permissões acima são as iniciais. A lista definitiva será criada por migra
 
 ## Roteiro rápido de testes
 
-1. `GET /api/perfis`. Esperado: "Administrador" com `quantidadeUsuarios` ≥ 1.
-2. `GET /api/perfis/1`. Esperado: as permissões e o CPF `99999999999` em `usuarios`.
-3. `POST /api/perfis` com `{"nome": "Recepção", "permissoesIds": [2]}`. Esperado: `201` com uma permissão.
-4. Repetir o passo 3 com `"nome": "recepção"`. Esperado: `400` (nome já existe).
-5. `POST /api/perfis/{id}/permissoes` com `{"permissoesIds": [2, 3]}`. Esperado: `200` com duas permissões (a `2` não duplica).
-6. `POST /api/perfis/{id}/permissoes` com `{"permissoesIds": [999]}`. Esperado: `400` com `Permissão(ões) não encontrada(s): 999`.
-7. `DELETE /api/perfis/{id}/permissoes/2`. Esperado: `200` com só a permissão `3`. Repetir: `404`.
-8. Conceder acesso a um profissional com o novo `idPerfil` (ver `00-GERAL.md`) e `GET /api/perfis/{id}`. Esperado: o CPF dele em `usuarios`.
-9. `DELETE /api/perfis/{id}`. Esperado: `400` (há usuário). Trocar o `idPerfil` do profissional para `1` e repetir. Esperado: `204`.
+**Lista de permissões e perfis padrão (migration `V15`)**
+
+1. `GET /api/permissoes`. Esperado: 26 permissões, com `GERENCIAR_USUARIOS` no ID 5 e sem `CADASTRAR_USUARIO`.
+2. `GET /api/perfis`. Esperado: "Administrador" (1 permissão), "Recepção" (9), "Especialista" (4) e "Assistente Social" (2).
+3. `GET /api/perfis/{id}` da "Recepção". Esperado: as 9 permissões da tabela de perfis padrão, sem `CADASTRAR_PACIENTE` nem `INATIVAR_PACIENTE`.
+
+**Gestão de perfis** (com o token do administrador)
+
+4. `POST /api/perfis` com `{"nome": "Triagem", "permissoesIds": [2]}`. Esperado: `201` com uma permissão.
+5. Repetir o passo 4 com `"nome": "triagem"`. Esperado: `400` (nome já existe).
+6. `POST /api/perfis/{id}/permissoes` com `{"permissoesIds": [2, 3]}`. Esperado: `200` com duas permissões (a `2` não duplica).
+7. `POST /api/perfis/{id}/permissoes` com `{"permissoesIds": [999]}`. Esperado: `400` com `Permissão(ões) não encontrada(s): 999`.
+8. `DELETE /api/perfis/{id}/permissoes/2`. Esperado: `200` com só a permissão `3`. Repetir: `404`.
+9. Conceder acesso a um profissional com o novo `idPerfil` (ver `00-GERAL.md`) e `GET /api/perfis/{id}`. Esperado: o CPF dele em `usuarios`.
+10. `DELETE /api/perfis/{id}`. Esperado: `400` (há usuário). Trocar o perfil do profissional (`PATCH /api/usuarios/{idCadastro}/perfil` com `{"idPerfil": 1}`) e repetir. Esperado: `204`.
+
+**Sem permissão**
+
+11. Com o token de um usuário "Recepção": `GET /api/perfis`, `GET /api/permissoes` e `POST /api/perfis`. Esperado: `403`.
+12. Com o token de um usuário que tem `GERENCIAR_USUARIOS` mas não `GERENCIAR_PERFIS`: `GET /api/perfis`. Esperado: `200`. `GET /api/perfis/1`. Esperado: `403`.
+13. Com o administrador, tirar uma permissão de um perfil (ex.: `DELETE /api/perfis/{idRecepcao}/permissoes/{idVisualizarPacientes}`) e, **sem novo login**, chamar `GET /api/pacientes` com um usuário desse perfil. Esperado: `403` (vale na próxima requisição). Devolva a permissão depois (`POST /api/perfis/{idRecepcao}/permissoes`).

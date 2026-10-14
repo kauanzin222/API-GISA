@@ -6,22 +6,27 @@ Um **especialista** é um profissional (ver `PROFISSIONAIS.md`) com registro em 
 
 ## Rotas
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/api/especialistas/{idCadastro}` | detalhes de um especialista |
-| `POST` | `/api/especialistas` | cadastra especialista sem acesso ao sistema |
-| `POST` | `/api/especialistas/com-usuario` | cadastra especialista e cria o usuário de acesso |
-| `POST` | `/api/especialistas/{idCadastro}/usuario` | concede acesso a um especialista já cadastrado (ver `00-GERAL.md`) |
-| `PATCH` | `/api/especialistas/{idCadastro}` | atualiza especialista |
-| `DELETE` | `/api/especialistas/{idCadastro}` | inativa especialista |
-| `GET` | `/api/especialistas/pj/{idCadastro}` | detalhes de um especialista PJ |
-| `POST` | `/api/especialistas/pj` | cadastra especialista PJ sem acesso ao sistema |
-| `POST` | `/api/especialistas/pj/com-usuario` | cadastra especialista PJ e cria o usuário de acesso |
-| `POST` | `/api/especialistas/pj/{idCadastro}/usuario` | concede acesso a um especialista PJ já cadastrado |
-| `PATCH` | `/api/especialistas/pj/{idCadastro}` | atualiza especialista PJ |
-| `DELETE` | `/api/especialistas/pj/{idCadastro}` | inativa especialista PJ |
-| `GET` | `/api/especialidades` | lista especialidades |
-| `POST` | `/api/especialidades` | cadastra especialidade |
+| Método | Rota | Permissão | Descrição |
+|---|---|---|---|
+| `GET` | `/api/especialistas/{idCadastro}` | `VISUALIZAR_PROFISSIONAIS` | detalhes de um especialista |
+| `POST` | `/api/especialistas` | `CADASTRAR_ESPECIALISTA` | cadastra especialista sem acesso ao sistema |
+| `POST` | `/api/especialistas/com-usuario` | `CADASTRAR_ESPECIALISTA` **e** `GERENCIAR_USUARIOS` | cadastra especialista e cria o usuário de acesso |
+| `POST` | `/api/especialistas/{idCadastro}/usuario` | `GERENCIAR_USUARIOS` | concede acesso a um especialista já cadastrado (ver `00-GERAL.md`) |
+| `PATCH` | `/api/especialistas/{idCadastro}` | `EDITAR_PROFISSIONAL` (+ `GERENCIAR_USUARIOS` com `idPerfil`) | atualiza especialista |
+| `DELETE` | `/api/especialistas/{idCadastro}` | `INATIVAR_PROFISSIONAL` | inativa especialista |
+| `GET` | `/api/especialistas/pj/{idCadastro}` | `VISUALIZAR_PROFISSIONAIS` | detalhes de um especialista PJ |
+| `POST` | `/api/especialistas/pj` | `CADASTRAR_ESPECIALISTA_PJ` | cadastra especialista PJ sem acesso ao sistema |
+| `POST` | `/api/especialistas/pj/com-usuario` | `CADASTRAR_ESPECIALISTA_PJ` **e** `GERENCIAR_USUARIOS` | cadastra especialista PJ e cria o usuário de acesso |
+| `POST` | `/api/especialistas/pj/{idCadastro}/usuario` | `GERENCIAR_USUARIOS` | concede acesso a um especialista PJ já cadastrado |
+| `PATCH` | `/api/especialistas/pj/{idCadastro}` | `EDITAR_PROFISSIONAL` (+ `GERENCIAR_USUARIOS` com `idPerfil`) | atualiza especialista PJ |
+| `DELETE` | `/api/especialistas/pj/{idCadastro}` | `INATIVAR_PROFISSIONAL` | inativa especialista PJ |
+| `GET` | `/api/especialidades` | autenticado | lista especialidades |
+| `GET` | `/api/especialidades/{idEspecialidade}` | `GERENCIAR_ESPECIALIDADES` | detalhes, com os especialistas vinculados |
+| `POST` | `/api/especialidades` | `GERENCIAR_ESPECIALIDADES` | cadastra especialidade |
+| `PATCH` | `/api/especialidades/{idEspecialidade}` | `GERENCIAR_ESPECIALIDADES` | edita especialidade |
+| `DELETE` | `/api/especialidades/{idEspecialidade}` | `GERENCIAR_ESPECIALIDADES` | **exclui**, só sem especialistas vinculados |
+
+`ACESSO_TOTAL` também libera todas as rotas. Sem a permissão: `403`. Os motivos de `/com-usuario` e do `idPerfil` exigirem `GERENCIAR_USUARIOS` estão em `00-GERAL.md` ("Permissões por rota").
 
 > **Não há listagem própria de especialistas.** Eles aparecem em `GET /api/profissionais` (ver `PROFISSIONAIS.md`), com `registroConselho` preenchido.
 
@@ -151,7 +156,7 @@ Todos os campos do `POST /api/profissionais` (`nome`, `cpf`, `dataNascimento`, `
 
 ## `POST /api/especialistas/com-usuario` — cadastrar especialista com acesso
 
-Corpo com dois blocos: `especialista` (mesmos campos do `POST /api/especialistas`) e `usuario` (`senha` de 8 a 30 caracteres e `idPerfil`; ver `PROFISSIONAIS.md`).
+Corpo com dois blocos: `especialista` (mesmos campos do `POST /api/especialistas`) e `usuario` (`senha` de 8 a 30 caracteres e `idPerfil`; ver `PROFISSIONAIS.md`). Exige `CADASTRAR_ESPECIALISTA` **e** `GERENCIAR_USUARIOS` (ou `ACESSO_TOTAL`); a rota `/pj/com-usuario` exige `CADASTRAR_ESPECIALISTA_PJ` e `GERENCIAR_USUARIOS`.
 
 ```json
 {
@@ -391,27 +396,50 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`.
 
 ## Especialidades
 
+Especialidades não têm status. A listagem é aberta a qualquer usuário logado (preenche seletores em vários formulários); o restante da gestão exige `GERENCIAR_ESPECIALIDADES`.
+
+> O cadastro de especialista também pode criar especialidades (`novasEspecialidades`) com a permissão de cadastro do especialista, sem `GERENCIAR_ESPECIALIDADES`.
+
 ### `GET /api/especialidades` — listar especialidades
 
-Retorna todas as especialidades (sem paginação). Use para preencher o seletor de `especialidadesIds`.
+Retorna todas as especialidades, ordenadas por nome (sem paginação). Use para preencher o seletor de `especialidadesIds`.
 
 ```json
 [
-  { "idEspecialidade": 1, "nome": "Psicologia", "descricao": "Atendimento psicológico e acompanhamento terapêutico" },
-  { "idEspecialidade": 2, "nome": "Fonoaudiologia", "descricao": "Avaliação e terapia da comunicação, fala e linguagem" },
-  { "idEspecialidade": 3, "nome": "Terapia Ocupacional", "descricao": "Desenvolvimento de habilidades motoras e de autonomia" },
-  { "idEspecialidade": 4, "nome": "Fisioterapia", "descricao": "Reabilitação motora e funcional" },
-  { "idEspecialidade": 5, "nome": "Psicopedagogia", "descricao": "Acompanhamento de dificuldades de aprendizagem" }
+  { "idEspecialidade": 2, "nome": "Fonoaudiologia", "descricao": "Avaliação e terapia da comunicação, fala e linguagem", "quantidadeEspecialistas": 3 },
+  { "idEspecialidade": 1, "nome": "Psicologia", "descricao": "Atendimento psicológico e acompanhamento terapêutico", "quantidadeEspecialistas": 5 }
 ]
 ```
 
-As cinco especialidades acima vêm cadastradas por padrão. Não conte com os IDs fixos: use sempre os retornados por esta rota.
+- `quantidadeEspecialistas` conta especialistas e especialistas PJ, **ativos e inativos** (os mesmos que impedem a exclusão).
+- Cinco especialidades vêm cadastradas por padrão: Psicologia, Fonoaudiologia, Terapia Ocupacional, Fisioterapia e Psicopedagogia. Não conte com os IDs fixos: use sempre os retornados por esta rota.
+
+### `GET /api/especialidades/{idEspecialidade}` — detalhes
+
+**Resposta `200`**
+
+```json
+{
+  "idEspecialidade": 1,
+  "nome": "Psicologia",
+  "descricao": "Atendimento psicológico e acompanhamento terapêutico",
+  "quantidadeEspecialistas": 2,
+  "especialistas": [
+    { "idCadastro": 9, "nome": "Mariana Costa", "tipo": "ESPECIALISTA", "statusCadastro": "ATIVO" },
+    { "idCadastro": 14, "nome": "Rafael Souza", "tipo": "ESPECIALISTA_PJ", "statusCadastro": "INATIVO" }
+  ]
+}
+```
+
+- `especialistas` traz especialistas e PJ, ativos e inativos, ordenados por nome. O `idCadastro` abre o cadastro em `/api/especialistas/{id}` ou `/api/especialistas/pj/{id}`, conforme o `tipo`.
+
+**Resposta `404`:** `Especialidade não encontrada com ID: {id}`.
 
 ### `POST /api/especialidades` — cadastrar especialidade
 
 | Campo | Tipo | Obrigatório | Observação |
 |---|---|---|---|
-| `nome` | string | sim | único |
+| `nome` | string | sim | único, sem diferenciar maiúsculas de minúsculas |
 | `descricao` | string | não | |
 
 ```json
@@ -421,7 +449,28 @@ As cinco especialidades acima vêm cadastradas por padrão. Não conte com os ID
 }
 ```
 
-**Resposta `201 Created`:** a especialidade criada, no mesmo formato da listagem. Espaços nas pontas do nome são removidos. Nome já existente (sem diferenciar maiúsculas de minúsculas, ex.: `psicologia`): `400` com `Já existe uma especialidade com esse nome.`
+**Resposta `201 Created`:** `idEspecialidade`, `nome` e `descricao` da especialidade criada. Espaços nas pontas do nome são removidos. Nome já existente (sem diferenciar maiúsculas de minúsculas, ex.: `psicologia`): `400` com `Já existe uma especialidade com esse nome.`
+
+### `PATCH /api/especialidades/{idEspecialidade}` — editar especialidade
+
+Segue as regras comuns de PATCH (`00-GERAL.md`).
+
+| Campo | Observação |
+|---|---|
+| `nome` | não pode ser vazio nem `null`; único sem diferenciar maiúsculas (a própria especialidade não conta, então dá para só trocar maiúsculas e minúsculas) |
+| `descricao` | opcional; `null` limpa |
+
+```json
+{
+  "descricao": "Terapia com uso de música e ritmo"
+}
+```
+
+**Resposta `200`:** os detalhes atualizados (mesmo formato do `GET /api/especialidades/{idEspecialidade}`). A mudança de nome aparece em todos os especialistas vinculados.
+
+### `DELETE /api/especialidades/{idEspecialidade}` — excluir especialidade
+
+O `DELETE` **exclui** a especialidade e retorna `204 No Content`. Só é possível excluir uma especialidade **sem especialistas vinculados**, contando também os inativos. Antes, retire-a desses especialistas (`PATCH` com `especialidadesIds`); a lista está no `GET` de detalhes.
 
 ---
 
@@ -453,7 +502,11 @@ Hora em formato diferente de `HH:mm` (ex.: `"8h"`) não chega à validação de 
 | ID de PJ nas rotas de especialista | `400` | Este cadastro é de um especialista PJ. Use /api/especialistas/pj/{idCadastro}. |
 | Nenhuma especialidade informada | `400` | O especialista deve possuir ao menos uma especialidade. |
 | ID de especialidade inexistente | `400` | Especialidade(s) não encontrada(s): {ids} |
-| Especialidade com nome já existente (`POST /api/especialidades`) | `400` | Já existe uma especialidade com esse nome. |
+| Especialidade com nome já existente (POST e PATCH de especialidade) | `400` | Já existe uma especialidade com esse nome. |
+| `nome` vazio ou `null` no PATCH de especialidade | `400` | O nome da especialidade não pode ser vazio. |
+| Excluir especialidade com especialistas | `400` | Não é possível excluir a especialidade: há especialistas vinculados a ela. |
+| Especialidade inexistente na URL | `404` | Especialidade não encontrada com ID: {id} |
+| Sem permissão (inclusive `idPerfil` no PATCH sem `GERENCIAR_USUARIOS`) | `403` | Você não tem permissão para realizar esta ação. |
 | `jornadas` vazia ou `null` no PATCH | `400` | O especialista deve possuir ao menos uma jornada de trabalho. |
 | `razaoSocial` vazia no PATCH | `400` | A razão social não pode ser vazia. |
 | `idCargo` inexistente (POST) | `400` | Cargo não encontrado com ID: {id} |
@@ -481,3 +534,16 @@ As demais mensagens de PATCH (nome, e-mail, cargo, perfil, status) são as mesma
 10. `POST /api/especialistas/pj/{idPJ}/usuario` com `{"senha": "SenhaTeste123", "idPerfil": 1}`. Esperado: `201`; repetir. Esperado: `400` (já possui usuário).
 11. `DELETE /api/especialistas/pj/{idPJ}`. Esperado: `204`; o GET mostra `statusCadastro: "INATIVO"`.
 12. `PATCH /api/especialistas/{id}` do passo 2 com `{"especialidadesIds": [1, 1]}`. Esperado: `200` com "Psicologia" uma única vez.
+
+**Especialidades**
+
+13. `GET /api/especialidades`. Esperado: cada item com `quantidadeEspecialistas`; "Psicologia" com ao menos 1 (o especialista do passo 12).
+14. `GET /api/especialidades/{idPsicologia}`. Esperado: o especialista do passo 2 em `especialistas`, com `tipo: "ESPECIALISTA"`.
+15. `PATCH /api/especialidades/{idMusicoterapia}` com `{"nome": "psicologia"}`. Esperado: `400` `Já existe uma especialidade com esse nome.` Com `{"descricao": null}`: `200` sem `descricao`.
+16. `DELETE /api/especialidades/{idPsicologia}`. Esperado: `400` `Não é possível excluir a especialidade: há especialistas vinculados a ela.`
+17. `POST /api/especialidades` com `{"nome": "Equoterapia"}` e `DELETE` dela. Esperado: `204`; o `GET` responde `404`.
+
+**Permissões** (usuários nos perfis padrão; ver `00-GERAL.md`)
+
+18. Com um usuário "Recepção": `GET /api/especialidades`. Esperado: `200`. `GET /api/especialidades/1`, `POST`, `PATCH` e `DELETE` de especialidade, `GET /api/especialistas/{id}` e `PATCH /api/especialistas/{id}`. Esperado: `403`.
+19. Com um usuário que tem `EDITAR_PROFISSIONAL` mas não `GERENCIAR_USUARIOS` (crie um perfil assim): `PATCH /api/especialistas/{id}` com `{"nome": "Outro"}`. Esperado: `200`. Com `{"idPerfil": 2}`: `403`.

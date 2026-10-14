@@ -12,9 +12,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.config.RelogioInicioDoDiaConfig;
 import com.fatec.gisa.dtos.terapia.FiltroTerapiaDTO;
 import com.fatec.gisa.dtos.terapia.request.PresencaRequestDTO;
 import com.fatec.gisa.dtos.terapia.request.StatusTerapiaRequestDTO;
@@ -39,6 +41,7 @@ import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import jakarta.persistence.EntityManager;
 
 // Banco H2 em memória, sem as migrations (que usam sintaxe do PostgreSQL)
+@Import(RelogioInicioDoDiaConfig.class)
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:terapia;MODE=PostgreSQL",
         "spring.datasource.username=sa",
@@ -50,7 +53,7 @@ import jakarta.persistence.EntityManager;
 @Transactional
 class TerapiaServiceTest {
 
-    private static final LocalDate DATA = LocalDate.of(2026, 10, 27);
+    private static final LocalDate DATA = LocalDate.of(2099, 10, 27);
     private static final LocalDate HOJE = LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo"));
 
     @Autowired
@@ -400,6 +403,47 @@ class TerapiaServiceTest {
                 new StatusTerapiaRequestDTO(StatusTerapia.EM_ATENDIMENTO, null)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Terapia não encontrada com ID: 9999");
+    }
+
+    // ---------- Horário no passado ----------
+
+    // O relógio dos testes está parado na meia-noite de hoje
+    @Test
+    void naoAgendaTerapiaEmHorarioQueJaPassou() {
+        assertThatThrownBy(() -> terapiaEm(HOJE.minusDays(1), lucas, ana, "09:00", "10:00"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Não é possível agendar uma terapia para um horário que já passou.");
+        assertThatThrownBy(() -> terapiaHoje(lucas, ana, "00:00", "00:50"))
+                .hasMessage("Não é possível agendar uma terapia para um horário que já passou.");
+
+        assertThat(terapiaHoje(lucas, ana, "00:01", "00:50")).isNotNull();
+    }
+
+    @Test
+    void naoRemarcaTerapiaParaHorarioQueJaPassou() {
+        Long idTerapia = terapiaEm(DATA, lucas, ana, "09:00", "10:00");
+
+        TerapiaPatchRequestDTO dto = new TerapiaPatchRequestDTO();
+        dto.setData(HOJE.minusDays(1));
+        assertThatThrownBy(() -> terapiaService.atualizar(idTerapia, dto))
+                .hasMessage("Não é possível agendar uma terapia para um horário que já passou.");
+    }
+
+    // Terapia agendada cujo horário já chegou: trocar participantes não é remarcar
+    @Test
+    void trocaParticipantesDeTerapiaJaIniciadaSemRemarcar() {
+        Long idTerapia = terapiaHoje(lucas, ana, "09:00", "10:00");
+        Terapia terapia = entityManager.find(Terapia.class, idTerapia);
+        terapia.setDataHoraInicio(HOJE.minusDays(1).atTime(9, 0));
+        terapia.setDataHoraFim(HOJE.minusDays(1).atTime(10, 0));
+        entityManager.flush();
+
+        TerapiaPatchRequestDTO dto = new TerapiaPatchRequestDTO();
+        dto.setEspecialistasIds(List.of(carlos.getIdCadastro()));
+        terapiaService.atualizar(idTerapia, dto);
+
+        assertThat(terapiaService.buscarDetalhes(idTerapia).especialistas())
+                .extracting("nome").containsExactly("Carlos Lima");
     }
 
     // ---------- Edição ----------

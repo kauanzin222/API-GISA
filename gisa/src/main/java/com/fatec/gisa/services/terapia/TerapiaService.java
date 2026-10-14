@@ -1,9 +1,9 @@
 package com.fatec.gisa.services.terapia;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -70,18 +70,19 @@ public class TerapiaService {
             StatusTerapia.EM_ATENDIMENTO, "em atendimento",
             StatusTerapia.CONCLUIDA, "concluída",
             StatusTerapia.CANCELADA, "cancelada");
-    // O servidor (Render) roda em UTC; "hoje" para a presença é o dia em Sorocaba
-    private static final ZoneId FUSO = ZoneId.of("America/Sao_Paulo");
 
     private final TerapiaRepository terapiaRepository;
     private final PacienteRepository pacienteRepository;
     private final EspecialistaRepository especialistaRepository;
     private final HistoricoPacienteService historicoPacienteService;
+    // No fuso de Sorocaba (ver RelogioConfig): define o "agora" e o "hoje" das terapias
+    private final Clock relogio;
 
     @Transactional
     public Terapia cadastrar(TerapiaCadastroRequestDTO dto) {
         Participantes participantes = validarParticipantes(dto.pacientesIds(), dto.especialistasIds(),
                 dto.data(), dto.horaInicio(), dto.horaTermino());
+        validarHorarioFuturo(participantes.inicio());
         bloquearEVerificarHorario(participantes, NENHUMA_TERAPIA);
 
         Terapia terapia = new Terapia();
@@ -131,6 +132,10 @@ public class TerapiaService {
 
         Participantes participantes = validarParticipantes(
                 pacientesIds, especialistasIds, data, horaInicio, horaTermino);
+        // Só a remarcação precisa ser para o futuro: trocar participantes mantém o horário
+        if (!participantes.inicio().equals(terapia.getDataHoraInicio())) {
+            validarHorarioFuturo(participantes.inicio());
+        }
         bloquearEVerificarHorario(participantes, terapia.getIdTerapia());
 
         // Para o histórico
@@ -331,7 +336,7 @@ public class TerapiaService {
         StatusPresenca nova = dto.presenca();
         // Falta justificada pode ser avisada com antecedência; presença e falta, só a partir do dia
         boolean exigeDiaDaTerapia = nova == StatusPresenca.PRESENTE || nova == StatusPresenca.FALTA_INJUSTIFICADA;
-        if (exigeDiaDaTerapia && terapia.getDataHoraInicio().toLocalDate().isAfter(LocalDate.now(FUSO))) {
+        if (exigeDiaDaTerapia && terapia.getDataHoraInicio().toLocalDate().isAfter(LocalDate.now(relogio))) {
             throw new IllegalArgumentException(
                     "Presença e falta só podem ser registradas a partir do dia da terapia.");
         }
@@ -434,6 +439,12 @@ public class TerapiaService {
                         "Terapia não encontrada com ID: " + idTerapia));
     }
 
+    // Usada no @PreAuthorize de GET /api/terapias/{id}: o especialista vê as terapias de que participa
+    @Transactional(readOnly = true)
+    public boolean especialistaParticipa(Long idTerapia, String cpf) {
+        return terapiaRepository.especialistaParticipa(idTerapia, cpf);
+    }
+
     // cpf vem do token JWT do usuário logado
     @Transactional(readOnly = true)
     public Page<TerapiaDoEspecialistaDTO> listarDoEspecialista(
@@ -495,6 +506,13 @@ public class TerapiaService {
                 especialistas,
                 data.atTime(horaInicio),
                 data.atTime(horaTermino));
+    }
+
+    // Não se agenda (nem remarca) terapia para um horário que já passou
+    private void validarHorarioFuturo(LocalDateTime inicio) {
+        if (!inicio.isAfter(LocalDateTime.now(relogio))) {
+            throw new IllegalArgumentException("Não é possível agendar uma terapia para um horário que já passou.");
+        }
     }
 
     // Terapia nova: NENHUMA_TERAPIA, já que ainda não existe e não há o que ignorar

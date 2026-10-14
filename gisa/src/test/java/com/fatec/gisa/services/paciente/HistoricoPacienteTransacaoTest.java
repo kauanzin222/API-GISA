@@ -83,7 +83,7 @@ class HistoricoPacienteTransacaoTest {
         // A operação grava a terapia e o evento, e depois a transação é desfeita (como num erro)
         transactionTemplate.executeWithoutResult(status -> {
             terapiaService.cadastrar(new TerapiaCadastroRequestDTO(List.of(ids.get(0)), List.of(ids.get(1)),
-                    LocalDate.of(2026, 10, 27), LocalTime.of(9, 0), LocalTime.of(10, 0)));
+                    LocalDate.of(2099, 10, 27), LocalTime.of(9, 0), LocalTime.of(10, 0)));
             assertThat(eventoPacienteRepository.count()).isEqualTo(eventosAntes + 1);
             status.setRollbackOnly();
         });
@@ -92,7 +92,7 @@ class HistoricoPacienteTransacaoTest {
         // Confirmada, o evento fica
         transactionTemplate.executeWithoutResult(status -> terapiaService.cadastrar(new TerapiaCadastroRequestDTO(
                 List.of(ids.get(0)), List.of(ids.get(1)),
-                LocalDate.of(2026, 10, 27), LocalTime.of(9, 0), LocalTime.of(10, 0))));
+                LocalDate.of(2099, 10, 27), LocalTime.of(9, 0), LocalTime.of(10, 0))));
         assertThat(eventoPacienteRepository.count()).isEqualTo(eventosAntes + 1);
     }
 

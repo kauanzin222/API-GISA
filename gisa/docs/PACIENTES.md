@@ -4,19 +4,21 @@ Autenticação, convenções, enums, formato de erro e regras comuns de PATCH/DE
 
 ## Rotas
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/api/pacientes` | lista pacientes (paginado), com busca por CPF ou nome |
-| `GET` | `/api/pacientes/{idCadastro}` | detalhes de um paciente |
-| `GET` | `/api/pacientes/{idCadastro}/historico` | linha do tempo do paciente (paginado) |
-| `POST` | `/api/pacientes` | cadastra paciente com prontuário, endereços, responsáveis e CIDs |
-| `PATCH` | `/api/pacientes/{idCadastro}` | atualiza paciente |
-| `POST` | `/api/pacientes/{idCadastro}/responsaveis` | cadastra um responsável e o vincula ao paciente |
-| `DELETE` | `/api/pacientes/{idCadastro}` | inativa paciente |
-| `GET` | `/api/responsaveis` | busca responsáveis por CPF ou nome (paginado) |
-| `GET` | `/api/responsaveis/{idResponsavel}` | detalhes de um responsável |
-| `PATCH` | `/api/responsaveis/{idResponsavel}` | atualiza dados pessoais do responsável |
-| `DELETE` | `/api/responsaveis/{idResponsavel}` | inativa responsável |
+| Método | Rota | Permissão | Descrição |
+|---|---|---|---|
+| `GET` | `/api/pacientes` | `VISUALIZAR_PACIENTES` | lista pacientes (paginado), com busca por CPF, nome e escola |
+| `GET` | `/api/pacientes/{idCadastro}` | `VISUALIZAR_PACIENTES` | detalhes de um paciente |
+| `GET` | `/api/pacientes/{idCadastro}/historico` | `VISUALIZAR_HISTORICO_PACIENTE` | linha do tempo do paciente (paginado) |
+| `POST` | `/api/pacientes` | `CADASTRAR_PACIENTE` | cadastra paciente com prontuário, endereços, responsáveis e CIDs |
+| `PATCH` | `/api/pacientes/{idCadastro}` | `EDITAR_PACIENTE` | atualiza paciente |
+| `POST` | `/api/pacientes/{idCadastro}/responsaveis` | `EDITAR_PACIENTE` | cadastra um responsável e o vincula ao paciente |
+| `DELETE` | `/api/pacientes/{idCadastro}` | `INATIVAR_PACIENTE` | inativa paciente |
+| `GET` | `/api/responsaveis` | `VISUALIZAR_PACIENTES` | busca responsáveis por CPF ou nome (paginado) |
+| `GET` | `/api/responsaveis/{idResponsavel}` | `VISUALIZAR_PACIENTES` | detalhes de um responsável |
+| `PATCH` | `/api/responsaveis/{idResponsavel}` | `EDITAR_PACIENTE` | atualiza dados pessoais do responsável |
+| `DELETE` | `/api/responsaveis/{idResponsavel}` | `INATIVAR_PACIENTE` | inativa responsável |
+
+`ACESSO_TOTAL` também libera todas as rotas. Sem a permissão: `403`. No formulário do paciente, o autocomplete de escolas (`GET /api/escolas/sugestoes`), o cadastro rápido de escola (`POST /api/escolas`) e a busca de CID (`GET /api/cids/{codigo}`) aceitam `CADASTRAR_PACIENTE` ou `EDITAR_PACIENTE`.
 
 > Escolas e CIDs usados no paciente têm documentos próprios: `ESCOLAS.md` e `CIDS.md`.
 
@@ -32,6 +34,7 @@ Aceita busca por CPF e/ou nome, além de paginação e ordenação. Pacientes in
 |---|---|---|
 | `cpf` | — | trecho do CPF; a máscara é ignorada (`123.456` vira `123456`) |
 | `nome` | — | trecho do nome, sem diferenciar maiúsculas de minúsculas |
+| `idEscola` | — | só pacientes desta escola (ativos e inativos); é assim que a tela da escola lista os pacientes dela. Escola inexistente não é erro: a lista vem vazia |
 | `page` | `0` | número da página (começa em 0) |
 | `size` | `9` | itens por página |
 | `sort` | `nome,asc` | ordenação, ex.: `sort=nome,desc`. Campos úteis: `nome`, `dataCadastro`, `statusPaciente` |
@@ -42,9 +45,10 @@ Aceita busca por CPF e/ou nome, além de paginação e ordenação. Pacientes in
 GET /api/pacientes?page=0&size=9&sort=nome,asc
 GET /api/pacientes?nome=lucas
 GET /api/pacientes?cpf=456789
+GET /api/pacientes?idEscola=3&nome=lucas
 ```
 
-Com `cpf` e `nome` juntos, o paciente precisa atender aos dois.
+Os filtros se combinam: com `cpf`, `nome` e `idEscola` juntos, o paciente precisa atender a todos. `idEscola` zero ou negativo responde `400` (`Valor inválido para 'idEscola': {valor}`).
 
 **Resposta `200`**
 
@@ -379,7 +383,7 @@ Um responsável é uma pessoa: exige os mesmos dados básicos do paciente (`nome
 }
 ```
 
-> O `idEscola: 3` é ilustrativo: use um ID retornado por `GET /api/escolas?nome=` ou `POST /api/escolas`, ou remova o campo.
+> O `idEscola: 3` é ilustrativo: use um ID retornado por `GET /api/escolas/sugestoes?nome=` ou `POST /api/escolas`, ou remova o campo.
 
 ### Resposta `201 Created`
 
@@ -671,3 +675,12 @@ Erros do histórico: ver a seção `GET /api/pacientes/{idCadastro}/historico`.
 16. `PATCH /api/pacientes/{id}` com `{"prontuario": {"alergias": "Dipirona"}}` e depois o histórico. Esperado: `DADOS_ALTERADOS` com "informações clínicas", sem citar "Dipirona".
 17. Agendar uma terapia para o paciente (ver `TERAPIAS.md`) e `GET /api/pacientes/{id}/historico?tipo=TERAPIA_AGENDADA`. Esperado: um evento, com `idTerapia` preenchido.
 18. `GET /api/pacientes/{id}/historico?inicio=2026-10-10&fim=2026-10-01`. Esperado: `400`. `GET /api/pacientes/999999/historico`: `404`.
+
+**Filtro por escola**
+
+19. `GET /api/pacientes?idEscola={idEscola}` com a escola do passo 1. Esperado: o paciente. Com outra escola (sem pacientes): `content` vazio. Com `idEscola=0`: `400`.
+
+**Permissões** (crie usuários nos perfis padrão; ver `00-GERAL.md`)
+
+20. Com um usuário "Recepção": `GET /api/pacientes`, `GET /api/pacientes/{id}/historico` e `PATCH /api/pacientes/{id}`. Esperado: `200`. `POST /api/pacientes` com o corpo do passo 1 (CPF novo) e `DELETE /api/pacientes/{id}`. Esperado: `403`.
+21. Com um usuário "Assistente Social" ou "Especialista": `GET /api/pacientes` e `GET /api/responsaveis`. Esperado: `200`. `PATCH /api/pacientes/{id}` e `PATCH /api/responsaveis/{idMae}`. Esperado: `403`.

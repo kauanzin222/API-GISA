@@ -48,7 +48,7 @@ public class UsuarioController {
     }
 
     // Rota sensível: sem esta restrição, qualquer usuário logado poderia tomar a conta de outro
-    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'CADASTRAR_USUARIO')")
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'GERENCIAR_USUARIOS')")
     @PatchMapping("/{idCadastro}/senha")
     public ResponseEntity<Void> redefinirSenha(
             @PathVariable Long idCadastro,

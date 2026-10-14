@@ -1,6 +1,7 @@
 package com.fatec.gisa.controllers.paciente;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +21,7 @@ public class CidController {
 
     private final CidService cidService;
 
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'CADASTRAR_PACIENTE', 'EDITAR_PACIENTE')")
     @GetMapping("/{codigoCID}")
     public ResponseEntity<CidResponseDTO> buscarPorCodigo(@PathVariable String codigoCID) {
         return ResponseEntity.ok(cidService.buscarPorCodigo(codigoCID)

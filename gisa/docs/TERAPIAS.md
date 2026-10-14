@@ -11,16 +11,20 @@ Uma **terapia** (consulta) reúne um ou mais pacientes e um ou mais especialista
 
 ## Rotas
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/api/terapias` | lista todas as terapias (paginado, 6 por página), com filtros por status, dia ou intervalo, paciente e especialista |
-| `GET` | `/api/terapias/minhas` | lista as terapias do especialista logado (paginado, 3 por página), com filtros por status e dia ou intervalo |
-| `GET` | `/api/terapias/{idTerapia}` | detalhes de uma terapia |
-| `POST` | `/api/terapias/verificar-conflitos` | verifica conflitos de horário **sem gravar** |
-| `POST` | `/api/terapias` | cadastra terapia |
-| `PATCH` | `/api/terapias/{idTerapia}` | edita terapia agendada: remarca e troca participantes |
-| `PATCH` | `/api/terapias/{idTerapia}/status` | muda o status (iniciar atendimento, concluir, cancelar) |
-| `PATCH` | `/api/terapias/{idTerapia}/pacientes/{idPaciente}/presenca` | registra presença ou falta de um paciente |
+| Método | Rota | Permissão | Descrição |
+|---|---|---|---|
+| `GET` | `/api/terapias` | `VISUALIZAR_TERAPIAS` | lista todas as terapias (paginado, 6 por página), com filtros por status, dia ou intervalo, paciente e especialista |
+| `GET` | `/api/terapias/minhas` | autenticado (especialista) | lista as terapias do especialista logado (paginado, 3 por página), com filtros por status, dia ou intervalo e paciente |
+| `GET` | `/api/terapias/{idTerapia}` | `VISUALIZAR_TERAPIAS` ou especialista participante | detalhes de uma terapia |
+| `POST` | `/api/terapias/verificar-conflitos` | `AGENDAR_TERAPIA` ou `EDITAR_TERAPIA` | verifica conflitos de horário **sem gravar** |
+| `POST` | `/api/terapias` | `AGENDAR_TERAPIA` ou `EDITAR_TERAPIA` | cadastra terapia |
+| `PATCH` | `/api/terapias/{idTerapia}` | `EDITAR_TERAPIA` | edita terapia agendada: remarca e troca participantes |
+| `PATCH` | `/api/terapias/{idTerapia}/status` | `ALTERAR_STATUS_TERAPIA` | muda o status (iniciar atendimento, concluir, cancelar) |
+| `PATCH` | `/api/terapias/{idTerapia}/pacientes/{idPaciente}/presenca` | `REGISTRAR_PRESENCA` | registra presença ou falta de um paciente |
+
+`ACESSO_TOTAL` também libera todas as rotas. Sem a permissão: `403`. Nos perfis padrão, só a recepção e o administrador agendam, editam, mudam status e registram presença. O especialista **não** tem `VISUALIZAR_TERAPIAS`: ele vê só as terapias de que participa (`/minhas` e o detalhe; ver abaixo).
+
+> **Horário no passado:** não é possível agendar uma terapia (nem remarcar uma para) um horário que já passou, no fuso de São Paulo. Ex.: hoje às 14h, agendar para hoje às 13h responde `400`. Trocar só os participantes de uma terapia agendada cujo horário já chegou continua permitido.
 
 ---
 
@@ -241,10 +245,15 @@ GET /api/terapias?idPaciente=7&inicio=2026-10-01&fim=2026-10-31
 
 Lista apenas as terapias das quais o **usuário logado** participa como especialista. Ele é identificado pelo CPF do token, então o front não envia nenhum ID.
 
-Aceita `status`, `data`, `inicio`, `fim`, `page`, `size` e `sort`, com as mesmas regras e erros da listagem geral (inclusive o máximo de 100 por página), e `size` padrão **3**. A tela "Minhas terapias do dia" usa:
+Aceita `status`, `data`, `inicio`, `fim`, `idPaciente`, `page`, `size` e `sort`, com as mesmas regras e erros da listagem geral (inclusive o máximo de 100 por página), e `size` padrão **3**. Não exige permissão específica: basta estar logado e ser especialista.
+
+- `idPaciente`: só as terapias **dele** com esse paciente. É o que o prontuário usa para mostrar as terapias do paciente ao especialista, que não tem `VISUALIZAR_TERAPIAS`. Combinável com os demais filtros.
+
+A tela "Minhas terapias do dia" usa:
 
 ```
 GET /api/terapias/minhas?data=2026-10-27&size=100&sort=dataHoraInicio,asc
+GET /api/terapias/minhas?idPaciente=12&sort=dataHoraInicio,desc
 ```
 
 **Resposta `200`**
@@ -285,7 +294,16 @@ GET /api/terapias/minhas?data=2026-10-27&size=100&sort=dataHoraInicio,asc
 
 ## `GET /api/terapias/{idTerapia}` — detalhes da terapia
 
-Mesmo formato de um item da listagem geral. **`404`:** `Terapia não encontrada com ID: {id}`.
+Mesmo formato de um item da listagem geral.
+
+**Quem pode abrir:** quem tem `VISUALIZAR_TERAPIAS` (ou `ACESSO_TOTAL`), **ou** o especialista que **participa** da terapia, mesmo sem a permissão. É o que permite ao especialista abrir a sessão de origem a partir do prontuário.
+
+| Situação | Status |
+|---|---|
+| Com `VISUALIZAR_TERAPIAS`, terapia existente | `200` |
+| Com `VISUALIZAR_TERAPIAS`, terapia inexistente | `404` `Terapia não encontrada com ID: {id}` |
+| Sem a permissão, especialista participante | `200` |
+| Sem a permissão e sem participar (inclusive terapia inexistente) | `403` `Você não tem permissão para realizar esta ação.` |
 
 ---
 
@@ -402,6 +420,8 @@ Data ou hora em formato errado (ex.: `"9h"`): `400` com `Corpo da requisição i
 | Situação | Status | Mensagem |
 |---|---|---|
 | Término igual ou antes do início | `400` | A hora de término deve ser posterior à hora de início. |
+| Agendar ou remarcar para um horário que já passou | `400` | Não é possível agendar uma terapia para um horário que já passou. |
+| Sem a permissão da rota (ou especialista que não participa, no detalhe) | `403` | Você não tem permissão para realizar esta ação. |
 | Paciente inexistente | `400` | Paciente(s) não encontrado(s): {ids} |
 | Especialista inexistente (ou ID de quem não é especialista) | `400` | Especialista(s) não encontrado(s): {ids} |
 | Paciente inativo | `400` | Paciente(s) inativo(s): {nomes} |
@@ -454,7 +474,7 @@ Pré-requisito: dois pacientes ativos (`{p1}`, `{p2}`) e dois especialistas (`{e
 - `GET /api/terapias?data={dia}&inicio={dia}`. Esperado: `400`. `?inicio=2026-10-10&fim=2026-10-01`: `400`. `?size=101`: `400`.
 - Login com `{e1}` e `GET /api/terapias/minhas?data={dia}`. Esperado: só a do passo 1.
 
-**Presença** (use uma terapia de **hoje**, com um só paciente `{p1}` e o especialista `{e1}`; chame-a de `{t}`):
+**Presença** (use uma terapia de **hoje**, num horário ainda por vir, com um só paciente `{p1}` e o especialista `{e1}`; chame-a de `{t}`):
 
 10. `PATCH /api/terapias/{t}/pacientes/{p1}/presenca` com `{"presenca": "PRESENTE"}`. Esperado: `200` e o paciente com `presenca: "PRESENTE"`.
 11. O mesmo em uma terapia de **amanhã**. Esperado: `400` (antes do dia da terapia).
@@ -478,3 +498,14 @@ Pré-requisito: dois pacientes ativos (`{p1}`, `{p2}`) e dois especialistas (`{e
 23. `PATCH /api/terapias/{t3}` com `{"horaInicio": "14:00", "horaTermino": "14:50"}`. Esperado: `400` com conflito, porque `{p1}` está na terapia do passo 2 nesse horário (concluída também ocupa; só cancelada libera).
 24. `PATCH /api/terapias/{t3}` com `{"pacientesIds": []}`. Esperado: `400`.
 25. Cancelar `{t3}` e repetir o passo 21. Esperado: `400` (só terapias agendadas).
+
+**Horário no passado**
+
+26. `POST /api/terapias` para hoje, num horário que já passou (ex.: 00:00–00:30). Esperado: `400` `Não é possível agendar uma terapia para um horário que já passou.`
+
+**Permissões** (crie usuários nos perfis padrão; ver `00-GERAL.md`)
+
+27. Com um usuário "Recepção": `POST /api/terapias`, `PATCH .../status` e `PATCH .../presenca`. Esperado: `201`/`200`.
+28. Login com `{e1}` no perfil "Especialista". `GET /api/terapias`. Esperado: `403`. `GET /api/terapias/{t1}` (do passo 1, de que ele participa). Esperado: `200`. `GET /api/terapias/{t2}` (passo 2, só `{e2}`). Esperado: `403`. `GET /api/terapias/999999`. Esperado: `403`.
+29. Com `{e1}`: `GET /api/terapias/minhas?idPaciente={p2}`. Esperado: só a do passo 1. `PATCH /api/terapias/{t1}/status` com `{"status": "EM_ATENDIMENTO"}` e `POST /api/terapias` com um corpo válido. Esperado: `403`.
+30. Com um usuário "Assistente Social": `GET /api/terapias` e `GET /api/terapias/{t1}`. Esperado: `403`.

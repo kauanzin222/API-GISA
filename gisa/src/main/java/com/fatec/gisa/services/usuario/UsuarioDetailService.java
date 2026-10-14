@@ -43,6 +43,7 @@ public class UsuarioDetailService implements UserDetailsService {
                         .map(authority -> (GrantedAuthority) authority)
                         .toList();
 
-        return new UsuarioAutenticado(cpf, usuario.getSenha(), authorities, usuario.getVersaoToken());
+        return new UsuarioAutenticado(cpf, usuario.getSenha(), authorities, usuario.getVersaoToken(),
+                usuario.getDataCriacao());
     }
 }

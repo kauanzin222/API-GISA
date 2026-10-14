@@ -73,9 +73,14 @@ public class PacienteService {
     private final ResponsavelService responsavelService;
     private final HistoricoPacienteService historicoPacienteService;
 
+    // idEscola nulo não restringe; os pacientes de uma escola aparecem por este filtro
     @Transactional(readOnly = true)
-    public Page<PacienteResumoDTO> listarPaginado(FiltroPessoaDTO filtro, Pageable pageable) {
-        Page<Paciente> pagina = pacienteRepository.buscarPorCpfENome(filtro.cpf(), filtro.nome(), pageable);
+    public Page<PacienteResumoDTO> listarPaginado(FiltroPessoaDTO filtro, Long idEscola, Pageable pageable) {
+        if (idEscola != null && idEscola <= 0) {
+            throw new IllegalArgumentException("Valor inválido para 'idEscola': " + idEscola);
+        }
+        Page<Paciente> pagina = pacienteRepository.buscar(
+                filtro.cpf(), filtro.nome(), idEscola == null ? 0L : idEscola, pageable);
         List<Long> pacienteIds = pagina.getContent().stream()
                 .map(Paciente::getIdCadastro)
                 .toList();
