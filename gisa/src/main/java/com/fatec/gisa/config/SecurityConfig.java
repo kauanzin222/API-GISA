@@ -45,7 +45,7 @@ public class SecurityConfig {
 
 
     // AUTORIZAÇÃO DE CORS PARA O ANGULAR :)
-    // Origens vêm de CORS_ORIGINS (separadas por vírgula); sem a variável, só o front local
+    // Origens vêm de CORS_ORIGINS (separadas por vírgula); sem a variável, front local e GitHub Pages
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
             @Value("${cors.allowed-origins}") String origensPermitidas) {

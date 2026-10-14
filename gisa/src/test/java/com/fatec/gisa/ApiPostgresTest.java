@@ -466,14 +466,19 @@ class ApiPostgresTest {
         assertThat(auditados).isZero();
     }
 
-    // Sem CORS_ORIGINS, só o front local é liberado
+    // Sem CORS_ORIGINS, só o front local e o publicado no GitHub Pages são liberados
     @Test
-    void corsPadraoLiberaSoOFrontLocal() throws Exception {
+    void corsPadraoLiberaSoOsFrontsConhecidos() throws Exception {
         mockMvc.perform(options("/api/terapias")
                         .header("Origin", "http://localhost:4200")
                         .header("Access-Control-Request-Method", "PATCH"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"));
+        mockMvc.perform(options("/api/auth/login")
+                        .header("Origin", "https://eduardofproenca.github.io")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://eduardofproenca.github.io"));
         mockMvc.perform(options("/api/terapias")
                         .header("Origin", "https://outro.exemplo.com")
                         .header("Access-Control-Request-Method", "GET"))

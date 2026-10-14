@@ -88,7 +88,7 @@ Hospedagem atual: **Render** (`https://api-gisa.onrender.com`).
    | `DB_USER` | usuário do banco |
    | `DB_PASSWORD` | senha do banco |
    | `JWT_SECRET` | chave de assinatura dos tokens: texto aleatório com **pelo menos 32 caracteres** |
-   | `CORS_ORIGINS` | *(opcional)* origens do front liberadas no CORS, **separadas por vírgula** e sem barra no final (ex.: `https://gisa.exemplo.com,http://localhost:4200`). Sem a variável, vale só `http://localhost:4200`. Quando definida, **substitui** o padrão: inclua o `localhost` se ainda precisar dele. Não use `*` (a API envia credenciais) |
+   | `CORS_ORIGINS` | *(opcional)* origens do front liberadas no CORS, **separadas por vírgula** e sem barra no final (ex.: `https://gisa.exemplo.com,http://localhost:4200`). Sem a variável, valem `http://localhost:4200` e `https://eduardofproenca.github.io` (front publicado no GitHub Pages). Quando definida, **substitui** o padrão: inclua o `localhost` se ainda precisar dele. Não use `*` (a API envia credenciais) |
 
    ```bash
    export DB_HOST="localhost:5432"
@@ -182,7 +182,7 @@ Cada documento termina com um **roteiro rápido de testes** para Postman ou simi
 ## Estado do projeto e limitações conhecidas
 
 - **Permissões por rota:** os perfis e permissões já existem, mas só a redefinição de senha e a auditoria exigem permissão. Nas demais rotas, qualquer usuário autenticado acessa tudo (inclusive mudar status, editar e cancelar terapias). A verificação por permissão entra com a migration que definirá a lista definitiva de permissões.
-- **CORS:** configurável pela variável `CORS_ORIGINS` (ver [Configuração](#configuração-e-execução-local)); sem ela, só `http://localhost:4200`. A origem do front publicado precisa ser definida no ambiente do Render antes do deploy dele.
+- **CORS:** configurável pela variável `CORS_ORIGINS` (ver [Configuração](#configuração-e-execução-local)); sem ela, valem `http://localhost:4200` e `https://eduardofproenca.github.io` (front no GitHub Pages).
 - **Login sem limite de tentativas:** as tentativas que falham ficam na auditoria, mas não são bloqueadas.
 - **"Esqueci minha senha":** não há recuperação por e-mail. O usuário troca a própria senha (`/api/usuarios/minha-senha`) ou o administrador redefine.
 - **Terapias:** já há mudança de status (iniciar, concluir, cancelar com motivo), edição de terapia agendada (remarcar e trocar participantes) e filtros por dia, intervalo, paciente e especialista. Ainda não há contadores prontos da visão por dia ("Consultas Diárias"): o front calcula a partir de `GET /api/terapias/minhas?data=`. A API não confere a data ao iniciar ou concluir um atendimento, nem a jornada de trabalho do especialista ao agendar.
