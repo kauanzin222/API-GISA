@@ -2,6 +2,7 @@ package com.fatec.gisa.controllers.especialista;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -40,6 +41,14 @@ public class EspecialistaController {
     private final CadastroFacadeService cadastroFacadeService;
     private final EspecialistaService especialistaService;
     private final EspecialistaPJService especialistaPJService;
+
+    // Cadastro do especialista logado (assinatura de atestado e receita, "Minha Agenda"). Basta estar
+    // logado: o perfil Especialista não tem VISUALIZAR_PROFISSIONAIS. O caminho literal "/me" tem
+    // prioridade sobre "/{idCadastro}" no Spring MVC, então não é lido como um ID.
+    @GetMapping("/me")
+    public ResponseEntity<Record> buscarUsuarioLogado(Authentication authentication) {
+        return ResponseEntity.ok(especialistaService.buscarDetalhesDoUsuarioLogado(authentication.getName()));
+    }
 
     @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PROFISSIONAIS')")
     @GetMapping("/{idCadastro}")

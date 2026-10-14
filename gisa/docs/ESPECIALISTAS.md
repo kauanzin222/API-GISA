@@ -8,6 +8,7 @@ Um **especialista** é um profissional (ver `PROFISSIONAIS.md`) com registro em 
 
 | Método | Rota | Permissão | Descrição |
 |---|---|---|---|
+| `GET` | `/api/especialistas/me` | autenticado (especialista) | cadastro do especialista logado (comum ou PJ) |
 | `GET` | `/api/especialistas/{idCadastro}` | `VISUALIZAR_PROFISSIONAIS` | detalhes de um especialista |
 | `POST` | `/api/especialistas` | `CADASTRAR_ESPECIALISTA` | cadastra especialista sem acesso ao sistema |
 | `POST` | `/api/especialistas/com-usuario` | `CADASTRAR_ESPECIALISTA` **e** `GERENCIAR_USUARIOS` | cadastra especialista e cria o usuário de acesso |
@@ -33,6 +34,75 @@ Um **especialista** é um profissional (ver `PROFISSIONAIS.md`) com registro em 
 > **Separação das rotas:** as rotas `/api/especialistas/{idCadastro}` (GET, PATCH, DELETE e `/usuario`) **recusam** IDs de especialistas PJ com `400`:
 > `Este cadastro é de um especialista PJ. Use /api/especialistas/pj/{idCadastro}.`
 > Já as rotas `/pj/...` com o ID de um especialista que não é PJ respondem `404`.
+
+---
+
+## `GET /api/especialistas/me` — cadastro do especialista logado
+
+O especialista lê o **próprio** cadastro: especialidades, registro no conselho e CBO do cargo, usados na assinatura do atestado e da receita e na tela "Minha Agenda". O perfil "Especialista" não tem `VISUALIZAR_PROFISSIONAIS` (exigida pelos GET por ID), então esta é a rota dele.
+
+- **Permissão:** basta estar logado, como em `GET /api/terapias/minhas`. Nenhuma permissão específica é exigida, e `ACESSO_TOTAL` não muda nada: o que vale é o usuário ser especialista.
+- O usuário é identificado pelo CPF do token; nenhum ID vai na URL.
+- **Especialista comum:** a resposta é **exatamente** a de `GET /api/especialistas/{idCadastro}` (abaixo).
+- **Especialista PJ:** a resposta é **exatamente** a de `GET /api/especialistas/pj/{idCadastro}` (ver "Especialista PJ"). O front diferencia pelo campo `especialista` aninhado, que só existe no corpo do PJ (no comum, o primeiro nível tem `profissional`).
+
+**Resposta `200` (especialista comum)**
+
+```json
+{
+  "profissional": {
+    "pessoa": {
+      "idCadastro": 9,
+      "nome": "Mariana Costa",
+      "cpf": "12345678902",
+      "dataNascimento": "1985-08-20",
+      "sexo": "F",
+      "celular": null,
+      "numCNS": null,
+      "estadoCivil": "CASADO",
+      "statusCadastro": "ATIVO",
+      "enderecos": []
+    },
+    "email": "mariana.costa@email.com",
+    "cargo": { "idCargo": 2, "nome": "Psicóloga", "codigoCBO": "251510", "tituloCBO": "Psicólogo clínico" },
+    "usuario": {
+      "idCadastro": 9,
+      "perfil": { "idPerfil": 3, "nome": "Especialista" },
+      "permissoes": [
+        { "idPermissao": 19, "nome": "EMITIR_ATESTADO", "descricao": "Emitir atestados" }
+      ]
+    }
+  },
+  "registroConselho": "CRP-06/12345",
+  "especialidades": [
+    { "idEspecialidade": 1, "nome": "Psicologia", "descricao": "Atendimento psicológico e acompanhamento terapêutico" }
+  ],
+  "jornadas": [
+    { "idJornada": 1, "diaSemana": 1, "horaInicio": "08:00", "horaTermino": "17:00" }
+  ]
+}
+```
+
+**Resposta `200` (especialista PJ)**, resumida (o objeto `especialista` tem o mesmo formato do corpo acima):
+
+```json
+{
+  "especialista": { "profissional": { "...": "..." }, "registroConselho": "CRM-99999", "especialidades": [], "jornadas": [] },
+  "cnpj": "12345678000199",
+  "razaoSocial": "Clínica Souza Ltda",
+  "nomeFantasia": null,
+  "inscricaoEstadual": null
+}
+```
+
+**Erros**
+
+| Situação | Status | Mensagem |
+|---|---|---|
+| Usuário logado que não é especialista nem especialista PJ (inclusive o administrador inicial) | `400` | O usuário logado não é um especialista. |
+| Token ausente, inválido ou expirado | `401`/`403` | — |
+
+> `/me` não é lido como ID: no `GET`, o caminho literal tem prioridade sobre `/{idCadastro}`. Em `PATCH` e `DELETE` não há rota `/me`, e `/api/especialistas/me` continua respondendo `400` (`Valor inválido para 'idCadastro': me`), como antes.
 
 ---
 
@@ -547,3 +617,9 @@ As demais mensagens de PATCH (nome, e-mail, cargo, perfil, status) são as mesma
 
 18. Com um usuário "Recepção": `GET /api/especialidades`. Esperado: `200`. `GET /api/especialidades/1`, `POST`, `PATCH` e `DELETE` de especialidade, `GET /api/especialistas/{id}` e `PATCH /api/especialistas/{id}`. Esperado: `403`.
 19. Com um usuário que tem `EDITAR_PROFISSIONAL` mas não `GERENCIAR_USUARIOS` (crie um perfil assim): `PATCH /api/especialistas/{id}` com `{"nome": "Outro"}`. Esperado: `200`. Com `{"idPerfil": 2}`: `403`.
+
+**Cadastro do especialista logado** (`/me`)
+
+20. Conceder acesso ao especialista do passo 2 com o perfil "Especialista" e fazer login com ele. `GET /api/especialistas/me`. Esperado: `200`, com o mesmo corpo de `GET /api/especialistas/{id}` (feito com o administrador). `GET /api/especialistas/{id}` com o token dele: `403`.
+21. O mesmo com o PJ do passo 10 (perfil "Especialista"). Esperado: `200`, com o mesmo corpo de `GET /api/especialistas/pj/{idPJ}` (campo `especialista` aninhado).
+22. `GET /api/especialistas/me` com o token do administrador. Esperado: `400` `O usuário logado não é um especialista.`

@@ -58,6 +58,7 @@ class PermissoesPorRotaTest {
             "GET /api/usuarios/me",
             "PATCH /api/usuarios/minha-senha",
             "GET /api/terapias/minhas",
+            "GET /api/especialistas/me",
             "GET /api/especialidades");
 
     @Autowired

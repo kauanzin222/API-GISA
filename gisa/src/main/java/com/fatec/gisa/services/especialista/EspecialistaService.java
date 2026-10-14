@@ -8,6 +8,7 @@ import com.fatec.gisa.dtos.especialista.request.EspecialistaCadastroRequestDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaPatchRequestDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaResponseDTO;
 import com.fatec.gisa.entities.especialista.Especialista;
+import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.entities.especialista.Especialidade;
 import com.fatec.gisa.entities.especialista.JornadaTrabalho;
 import com.fatec.gisa.entities.profissional.Cargo;
@@ -42,6 +43,18 @@ public class EspecialistaService {
         Especialista especialistaSalvo = especialistaRepository.save(especialista);
         enderecoService.associarEnderecos(especialistaSalvo, dto.getEnderecos());
         return especialistaSalvo;
+    }
+
+    // cpf vem do token. Devolve o mesmo corpo do GET por ID do tipo do cadastro: EspecialistaPJResponseDTO
+    // para PJ (a busca em Especialista também traz PJ, a subclasse) e EspecialistaResponseDTO para os demais
+    @Transactional(readOnly = true)
+    public Record buscarDetalhesDoUsuarioLogado(String cpf) {
+        Especialista especialista = especialistaRepository.findByCpf(cpf)
+                .orElseThrow(() -> new IllegalArgumentException("O usuário logado não é um especialista."));
+        if (especialista instanceof EspecialistaPJ especialistaPJ) {
+            return profissionalMapper.toEspecialistaPJResponseDTO(especialistaPJ);
+        }
+        return profissionalMapper.toEspecialistaResponseDTO(especialista);
     }
 
     @Transactional(readOnly = true)

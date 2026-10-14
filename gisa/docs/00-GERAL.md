@@ -99,7 +99,7 @@ Cada perfil de acesso tem um conjunto de permissões (lista completa e perfis pa
 | `GET /api/usuarios`, `GET /api/usuarios/{id}`, `PATCH /api/usuarios/{id}/perfil`, `PATCH /api/usuarios/{id}/senha`, `DELETE /api/usuarios/{id}` | `GERENCIAR_USUARIOS` |
 | `GET /api/terapias` | `VISUALIZAR_TERAPIAS` |
 | `GET /api/terapias/{id}` | `VISUALIZAR_TERAPIAS`, **ou** ser especialista participante da terapia (ver `TERAPIAS.md`) |
-| `GET /api/terapias/minhas` | autenticado (e o usuário precisa ser especialista) |
+| `GET /api/terapias/minhas`, `GET /api/especialistas/me` | autenticado (e o usuário precisa ser especialista) |
 | `POST /api/terapias`, `POST /api/terapias/verificar-conflitos` | `AGENDAR_TERAPIA` ou `EDITAR_TERAPIA` |
 | `PATCH /api/terapias/{id}` | `EDITAR_TERAPIA` |
 | `PATCH /api/terapias/{id}/status` | `ALTERAR_STATUS_TERAPIA` |
