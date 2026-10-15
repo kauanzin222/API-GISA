@@ -90,11 +90,13 @@ Hospedagem atual: **Render** (`https://api-gisa.onrender.com`).
    | `JWT_SECRET` | chave de assinatura dos tokens: texto aleatório com **pelo menos 32 caracteres** |
    | `CORS_ORIGINS` | *(opcional)* origens do front liberadas no CORS, **separadas por vírgula** e sem barra no final (ex.: `https://gisa.exemplo.com,http://localhost:4200`). Sem a variável, valem `http://localhost:4200` e `https://eduardofproenca.github.io` (front publicado no GitHub Pages). Quando definida, **substitui** o padrão: inclua o `localhost` se ainda precisar dele. Não use `*` (a API envia credenciais) |
    | `FRONT_URL` | *(opcional)* endereço do front usado nos links enviados por e-mail (ex.: `https://gisa.exemplo.com`, sem barra no final). Padrão: `http://localhost:4200` |
-   | `SMTP_HOST` | *(opcional)* servidor SMTP para os e-mails de senha temporária e de redefinição de senha. **Sem ele, nenhum e-mail é enviado**: o conteúdo (com a senha ou o link) vai para o log do servidor, o que serve para desenvolvimento local |
+   | `BREVO_API_KEY` | *(opcional, recomendada no Render)* chave da API do Brevo para os e-mails de senha temporária e de redefinição de senha. Usa HTTPS, então funciona onde as portas de SMTP são bloqueadas (plano gratuito do Render). Tem prioridade sobre o SMTP. **Sem ela e sem `SMTP_HOST`, nenhum e-mail é enviado**: o conteúdo (com a senha ou o link) vai para o log do servidor, o que serve para desenvolvimento local |
+   | `EMAIL_REMETENTE_NOME` | *(opcional)* nome do remetente no Brevo. Padrão: `GISA` |
+   | `SMTP_HOST` | *(opcional)* servidor SMTP, alternativa ao Brevo |
    | `SMTP_PORT` | *(opcional)* porta do SMTP. Padrão: `587` |
    | `SMTP_USERNAME` / `SMTP_PASSWORD` | *(opcionais)* usuário e senha do SMTP |
    | `SMTP_AUTH` / `SMTP_STARTTLS` | *(opcionais)* autenticação e STARTTLS do SMTP. Padrão: `true` nos dois |
-   | `EMAIL_REMETENTE` | *(opcional)* remetente dos e-mails. Padrão: `nao-responda@gisa.local` |
+   | `EMAIL_REMETENTE` | *(opcional)* remetente dos e-mails. Padrão: `nao-responda@gisa.local`. Com o Brevo, precisa ser um remetente verificado na conta |
 
    ```bash
    export DB_HOST="localhost:5432"
@@ -192,7 +194,7 @@ Cada documento termina com um **roteiro rápido de testes** para Postman ou simi
 - **Permissões por rota:** toda rota exige permissão (tabela em `00-GERAL.md`). O corpo da requisição é validado antes da permissão: sem permissão e com corpo inválido, a resposta é `400`, e não `403`. O assistente social vê só os pacientes vinculados a ele (`VISUALIZAR_PACIENTES_VINCULADOS`). Documentos (atestado, receita, recusa) têm permissões, mas só o front as usa.
 - **CORS:** configurável pela variável `CORS_ORIGINS` (ver [Configuração](#configuração-e-execução-local)); sem ela, valem `http://localhost:4200` e `https://eduardofproenca.github.io` (front no GitHub Pages).
 - **Login sem limite de tentativas:** as tentativas que falham ficam na auditoria, mas não são bloqueadas.
-- **E-mails:** sem `SMTP_HOST`, os e-mails de senha temporária e de "esqueci minha senha" não são enviados, só registrados no log do servidor.
+- **E-mails:** sem `BREVO_API_KEY` nem `SMTP_HOST`, os e-mails de senha temporária e de "esqueci minha senha" não são enviados, só registrados no log do servidor.
 - **Terapias:** já há mudança de status (iniciar, concluir, cancelar com motivo), edição de terapia agendada (remarcar e trocar participantes) e filtros por dia, intervalo, paciente e especialista. Ainda não há contadores prontos da visão por dia ("Consultas Diárias"): o front calcula a partir de `GET /api/terapias/minhas?data=`. A API não confere a data ao iniciar ou concluir um atendimento, nem a jornada de trabalho do especialista ao agendar.
 - **Histórico do paciente:** começa nesta versão, sem carga retroativa: pacientes e terapias anteriores não têm eventos. Não registra início e conclusão de atendimento, nem alterações feitas direto no banco.
 - **Receita e atestado:** gerados e impressos só no front; a API não guarda esses documentos.

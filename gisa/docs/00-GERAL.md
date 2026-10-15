@@ -145,7 +145,7 @@ Mesma rota para o primeiro acesso (token da resposta do login) e para "esqueci m
 
 ### E-mails
 
-A API envia dois e-mails, em texto simples: **boas-vindas** (e-mail de login, senha temporária e validade) e **link de redefinição** (com validade). A configuração SMTP vem de variáveis de ambiente (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_REMETENTE`) e os links usam `FRONT_URL`. **Sem `SMTP_HOST`** (desenvolvimento local), nada é enviado: o conteúdo do e-mail, com a senha ou o link, vai para o **log do servidor**.
+A API envia dois e-mails, em texto simples: **boas-vindas** (e-mail de login, senha temporária e validade) e **link de redefinição** (com validade). O envio usa a API do Brevo (`BREVO_API_KEY`, recomendada) ou SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`); o remetente vem de `EMAIL_REMETENTE` e os links usam `FRONT_URL`. **Sem `BREVO_API_KEY` nem `SMTP_HOST`** (desenvolvimento local), nada é enviado: o conteúdo do e-mail, com a senha ou o link, vai para o **log do servidor**.
 
 ---
 
