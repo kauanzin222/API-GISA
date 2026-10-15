@@ -34,18 +34,17 @@ Corresponde à tela "Criar Consulta".
 
 | Campo | Tipo | Obrigatório | Observação |
 |---|---|---|---|
-| `pacientesIds` | lista de número | **sim, ao menos 1** | `idCadastro` dos pacientes (ver `GET /api/pacientes?termo=`); IDs repetidos são unificados |
-| `especialistasIds` | lista de número | **sim, ao menos 1** | `idCadastro` dos especialistas ou PJ (ver `GET /api/profissionais?tipo=ESPECIALISTA&tipo=ESPECIALISTA_PJ&statusCadastro=ATIVO&nome=`) |
+| `pacientesIds` | lista de número | **sim, ao menos 1** | `idCadastro` dos pacientes (ver `GET /api/pacientes?termo=`); o mesmo ID repetido é recusado (`400`) |
+| `especialistasIds` | lista de número | **sim, ao menos 1** | `idCadastro` dos especialistas ou PJ (ver `GET /api/profissionais?tipo=ESPECIALISTA&tipo=ESPECIALISTA_PJ&statusCadastro=ATIVO&nome=`); o mesmo ID repetido é recusado (`400`) |
 | `data` | data | sim | `yyyy-MM-dd` |
 | `horaInicio` | string | sim | `HH:mm` |
 | `horaTermino` | string | sim | `HH:mm`; precisa ser **depois** de `horaInicio` (a terapia começa e termina no mesmo dia) |
 
 **Regras**
 
-- Pacientes e especialistas precisam existir e estar **ativos**.
-- **Conflito de horário:** um especialista ou paciente não pode estar em duas terapias ao mesmo tempo. Terapias `CANCELADA` não contam. **Falta justificada libera horário:** o paciente que justificou a falta fica livre naquele horário, e quando todos os pacientes de uma terapia justificam, o horário do especialista também fica livre (ver "Registrar presença"). Encostar não é conflito: uma terapia que começa às 10:00 pode vir logo depois de outra que termina às 10:00. A mensagem de erro lista **todos** os conflitos encontrados.
-- **Cadastros simultâneos:** se dois usuários salvarem ao mesmo tempo terapias conflitantes, só a primeira é gravada; a segunda recebe o erro de conflito. Antes de verificar, o cadastro trava no banco os pacientes e especialistas envolvidos, e um segundo cadastro com alguém em comum espera o primeiro terminar.
-- A API **não** verifica a jornada de trabalho do especialista nem impede datas passadas.
+- Pacientes e especialistas precisam existir e estar **ativos**, e nenhum pode aparecer duas vezes na lista.
+- O horário precisa ser futuro (ver "Horário no passado" acima).
+- As regras de agenda abaixo (ver "Regras de agenda") valem para **cada** participante, em terapias individuais e coletivas. Se alguma for quebrada, a resposta é **`409`** com a lista de **todos** os conflitos.
 
 **Exemplo (coletiva)**
 
@@ -60,6 +59,79 @@ Corresponde à tela "Criar Consulta".
 ```
 
 **Resposta `201 Created`:** os detalhes da terapia criada (mesmo formato do `GET /api/terapias/{idTerapia}`).
+
+---
+
+## Regras de agenda (conflito de horário e jornada)
+
+Valem para o cadastro (`POST /api/terapias`), a edição (`PATCH /api/terapias/{idTerapia}`) e a verificação (`POST /api/terapias/verificar-conflitos`), que usam a **mesma** rotina no back.
+
+**Intervalo da terapia:** `[data + horaInicio, data + horaTermino)`, fechado no início e aberto no fim. Encostar não é conflito: 09:00–10:00 e 10:00–11:00 **não** conflitam; 09:00–10:00 e 09:30–10:30 conflitam. `horaTermino` precisa ser depois de `horaInicio`, no mesmo dia (senão `400`).
+
+| Regra | `motivo` no conflito |
+|---|---|
+| Um **paciente** não pode estar em duas terapias cujos intervalos se sobreponham | `HORARIO_OCUPADO` |
+| Um **especialista** (inclusive PJ) não pode estar em duas terapias cujos intervalos se sobreponham | `HORARIO_OCUPADO` |
+| A terapia precisa caber **inteira em uma única jornada** de cada especialista, no dia da semana da `data` (`jornada.horaInicio <= horaInicio` e `horaTermino <= jornada.horaTermino`). Sem jornada nesse dia, ou sem nenhuma jornada cadastrada, ele não pode ser agendado | `FORA_DA_JORNADA` |
+
+**Quais terapias ocupam o horário:**
+- Terapias `CANCELADA` não ocupam o horário de ninguém.
+- **Falta justificada libera horário:** o paciente que justificou a falta fica livre naquele horário; quando todos os pacientes de uma terapia justificam (`horarioLiberado: true`), o horário dos especialistas também fica livre (ver "Registrar presença").
+- Na edição, a própria terapia não conta.
+
+**Exemplos de jornada:** com jornadas 08:00–12:00 e 14:00–18:00, uma terapia 11:00–15:00 é recusada (não cabe em **uma** jornada). Com jornada só na quarta 09:00–16:00, são recusadas: quinta 09:00–10:00, quarta 17:00–18:00 e quarta 15:30–16:30.
+
+**Agendamentos simultâneos:** se dois usuários salvarem ao mesmo tempo terapias conflitantes, só a primeira é gravada; a segunda recebe o `409`. Antes de verificar, o cadastro e a edição travam no banco os pacientes e especialistas envolvidos (em ordem de ID), e um segundo agendamento com alguém em comum espera o primeiro terminar. A mesma trava impede que a jornada de um especialista mude no meio de um agendamento (ver `ESPECIALISTAS.md`).
+
+**Terapias já gravadas** que hoje quebram essas regras (por exemplo, agendadas antes da verificação de jornada) **não** são alteradas nem canceladas. Elas só precisam se ajustar quando forem editadas: o `PATCH` revalida o estado final, então a edição é recusada até o horário ou os participantes ficarem dentro das regras.
+
+### Resposta `409` (cadastro e edição)
+
+`message` começa sempre com **`Conflito de horário`** e descreve todos os conflitos; `conflitos` traz a mesma lista da verificação (formato abaixo).
+
+```json
+{
+  "timestamp": "2026-10-15T14:00:00Z",
+  "status": 409,
+  "error": "Conflict",
+  "message": "Conflito de horário: Ana Souza (especialista) não atende na quinta-feira; Lucas Martins (paciente) já tem terapia das 09:00 às 10:00.",
+  "path": "/api/terapias",
+  "fields": {},
+  "conflitos": [
+    {
+      "tipo": "ESPECIALISTA",
+      "motivo": "FORA_DA_JORNADA",
+      "idCadastro": 10,
+      "nome": "Ana Souza",
+      "idTerapia": null,
+      "data": "2026-10-22",
+      "horaInicio": "09:00",
+      "horaTermino": "10:00",
+      "jornadasDoDia": []
+    },
+    {
+      "tipo": "PACIENTE",
+      "motivo": "HORARIO_OCUPADO",
+      "idCadastro": 1,
+      "nome": "Lucas Martins",
+      "idTerapia": 42,
+      "data": "2026-10-22",
+      "horaInicio": "09:00",
+      "horaTermino": "10:00"
+    }
+  ]
+}
+```
+
+**Textos da `message`, por conflito** (separados por `; `):
+
+| Caso | Texto |
+|---|---|
+| Horário ocupado | `{nome} ({paciente\|especialista}) já tem terapia das {HH:mm} às {HH:mm}` |
+| Especialista sem jornada no dia (ou sem nenhuma jornada) | `{nome} (especialista) não atende {na quinta-feira\|no sábado...}` |
+| Fora das jornadas do dia | `{nome} (especialista) não atende das {HH:mm} às {HH:mm} na quarta-feira (jornada: das 09:00 às 16:00)` |
+
+> Antes desta versão, o conflito respondia `400`. Agora é `409`, com a lista em `conflitos`.
 
 ---
 
@@ -82,7 +154,7 @@ Recebe **o mesmo corpo** do `POST /api/terapias` e aplica as mesmas validações
 
 - `idTerapiaIgnorada` de uma terapia que não existe: `400` com `Terapia não encontrada com ID: {id}`. Zero ou negativo: `400` em `fields.idTerapiaIgnorada` ("O ID da terapia ignorada deve ser positivo").
 
-**Resposta `200`** (com conflito)
+**Resposta `200`** (com conflito): **todos** os conflitos encontrados, dos dois motivos (ver "Regras de agenda").
 
 ```json
 {
@@ -90,12 +162,24 @@ Recebe **o mesmo corpo** do `POST /api/terapias` e aplica as mesmas validações
   "conflitos": [
     {
       "tipo": "ESPECIALISTA",
+      "motivo": "FORA_DA_JORNADA",
       "idCadastro": 10,
       "nome": "Ana Souza",
-      "idTerapia": 3,
-      "data": "2026-10-27",
-      "horaInicio": "09:00",
-      "horaTermino": "10:00"
+      "idTerapia": null,
+      "data": "2026-10-28",
+      "horaInicio": "10:00",
+      "horaTermino": "11:00",
+      "jornadasDoDia": [{ "horaInicio": "13:00", "horaTermino": "18:00" }]
+    },
+    {
+      "tipo": "PACIENTE",
+      "motivo": "HORARIO_OCUPADO",
+      "idCadastro": 4,
+      "nome": "Beatriz Lima",
+      "idTerapia": 7,
+      "data": "2026-10-28",
+      "horaInicio": "10:30",
+      "horaTermino": "11:30"
     }
   ]
 }
@@ -103,11 +187,17 @@ Recebe **o mesmo corpo** do `POST /api/terapias` e aplica as mesmas validações
 
 Sem conflito: `{ "possuiConflito": false, "conflitos": [] }`.
 
-- `tipo`: `PACIENTE` ou `ESPECIALISTA`. Use `idCadastro` para destacar o campo correspondente na tela.
-- `idTerapia`, `horaInicio` e `horaTermino` são da terapia **já existente** que ocupa o horário.
-- Erros de validação (IDs inexistentes, término antes do início etc.) retornam `400`, como no cadastro.
+| Campo | Significado |
+|---|---|
+| `tipo` | `PACIENTE` ou `ESPECIALISTA`. Use `idCadastro` para destacar a pessoa na tela |
+| `motivo` | `HORARIO_OCUPADO` (já tem outra terapia no horário) ou `FORA_DA_JORNADA` (o especialista não atende nesse dia ou horário). Campo novo: conflitos sem `motivo` não existem mais |
+| `idTerapia`, `data`, `horaInicio`, `horaTermino` | `HORARIO_OCUPADO`: da terapia **já existente** que ocupa o horário. `FORA_DA_JORNADA`: `idTerapia` é `null`, e data e horários são os da terapia pedida |
+| `jornadasDoDia` | só em `FORA_DA_JORNADA`: as jornadas do especialista naquele dia da semana, por hora de início; `[]` se ele não atende no dia. Não aparece em `HORARIO_OCUPADO` |
 
-> A verificação é um aviso antecipado e **não reserva o horário**. Entre a verificação e o "Salvar", outro usuário pode ocupar o horário; nesse caso o `POST /api/terapias` (ou o `PATCH`) responde `400` com o conflito. O front deve sempre tratar esse erro.
+- A ordem da lista é: especialistas fora da jornada (por nome), especialistas ocupados e pacientes ocupados.
+- Erros de validação (IDs inexistentes ou repetidos, cadastros inativos, término antes do início etc.) retornam `400`, como no cadastro. A verificação **não** recusa horário no passado (o cadastro recusa).
+
+> A verificação é um aviso antecipado e **não reserva o horário**. Entre a verificação e o "Salvar", outro usuário pode ocupar o horário; nesse caso o `POST /api/terapias` (ou o `PATCH`) responde `409` com a lista de conflitos. O front deve sempre tratar esse erro.
 
 ---
 
@@ -120,8 +210,8 @@ Segue as regras comuns de PATCH (`00-GERAL.md`): **só o que foi enviado muda**,
 | `data` | `yyyy-MM-dd`; não pode ser `null` |
 | `horaInicio` | `HH:mm`; não pode ser `null` |
 | `horaTermino` | `HH:mm`; não pode ser `null`; precisa ser depois do início (o enviado ou o atual) |
-| `pacientesIds` | substitui a lista; ao menos 1; IDs repetidos são unificados |
-| `especialistasIds` | substitui a lista; ao menos 1 |
+| `pacientesIds` | substitui a lista; ao menos 1; o mesmo ID repetido é recusado (`400`) |
+| `especialistasIds` | substitui a lista; ao menos 1; o mesmo ID repetido é recusado (`400`) |
 
 ```json
 {
@@ -137,8 +227,8 @@ Segue as regras comuns de PATCH (`00-GERAL.md`): **só o que foi enviado muda**,
 **Regras**
 
 - Só terapias **`AGENDADA`** podem ser editadas. Em atendimento, concluída ou cancelada: `400`.
-- **Revalida tudo, como no cadastro**, com os valores finais (enviados + atuais): horário, IDs existentes, cadastros **ativos** e conflitos. Por isso, se um participante que continua na terapia foi inativado depois do agendamento, a edição é recusada até ele ser retirado ou reativado.
-- **Conflitos:** a própria terapia é ignorada (mover 09:00–10:00 para 09:30–10:30 não conflita consigo mesma). As demais regras de conflito são as do cadastro, inclusive a trava contra edições e cadastros simultâneos.
+- **Revalida tudo, como no cadastro**, com os valores finais (enviados + atuais): horário, IDs existentes e não repetidos, cadastros **ativos**, horários ocupados e jornada dos especialistas. Por isso, se um participante que continua na terapia foi inativado depois do agendamento, ou se a terapia já estava fora da jornada de um especialista, a edição é recusada até isso ser resolvido.
+- **Conflitos:** a própria terapia é ignorada (mover 09:00–10:00 para 09:30–10:30 não conflita consigo mesma). As demais regras são as do cadastro (ver "Regras de agenda"), inclusive a trava contra edições e cadastros simultâneos. Com conflito: `409` com a lista em `conflitos`.
 - **Presença:** paciente que continua na terapia **mantém** a presença e a justificativa; paciente novo entra como `PENDENTE`; paciente retirado sai da terapia com a sua marcação.
 - A `modalidade` e o `titulo` são recalculados pelo número de pacientes.
 - Corpo vazio (`{}`) não muda nada, mas ainda passa pela revalidação.
@@ -442,14 +532,16 @@ Data ou hora em formato errado (ex.: `"9h"`): `400` com `Corpo da requisição i
 | Especialista inexistente (ou ID de quem não é especialista) | `400` | Especialista(s) não encontrado(s): {ids} |
 | Paciente inativo | `400` | Paciente(s) inativo(s): {nomes} |
 | Especialista inativo | `400` | Especialista(s) inativo(s): {nomes} |
-| Paciente ou especialista ocupado no horário (cadastro e edição) | `400` | Conflito de horário: {nome} ({paciente\|especialista}) já tem terapia das {HH:mm} às {HH:mm}; ... |
+| Paciente ou especialista ocupado no horário, ou especialista fora da jornada (cadastro e edição) | `409` | Conflito de horário: {conflito}; {conflito}... (lista completa em `conflitos`; ver "Regras de agenda") |
+| Mesmo paciente repetido na lista | `400` | O mesmo paciente foi informado mais de uma vez. |
+| Mesmo especialista repetido na lista | `400` | O mesmo especialista foi informado mais de uma vez. |
 | `/minhas` com usuário que não é especialista | `400` | O usuário logado não é um especialista. |
 | Terapia inexistente | `404` | Terapia não encontrada com ID: {id} |
 | Presença: paciente não é desta terapia | `404` | O paciente com ID {id} não faz parte desta terapia. |
 | Presença: terapia cancelada | `400` | Não é possível registrar presença em uma terapia cancelada. |
 | Presença ou falta antes do dia da terapia | `400` | Presença e falta só podem ser registradas a partir do dia da terapia. |
 | Falta justificada sem justificativa | `400` | Informe a justificativa da falta. |
-| Desfazer falta justificada com horário já reocupado | `400` | Não é possível desfazer a falta justificada: o horário já foi ocupado por outra terapia. Conflito de horário: ... |
+| Desfazer falta justificada com horário já reocupado | `400` | Não é possível desfazer a falta justificada: o horário já foi ocupado por outra terapia. Conflito de horário: ... (aqui só conta horário ocupado, não a jornada) |
 | Status: terapia já concluída ou cancelada | `400` | A terapia está concluída e não pode mais mudar de status. / A terapia está cancelada e não pode mais mudar de status. |
 | Status: igual ao atual | `400` | A terapia já está com o status {STATUS}. |
 | Status: transição não permitida | `400` | Não é possível alterar o status de AGENDADA para CONCLUIDA. A partir de AGENDADA, os status permitidos são: EM_ATENDIMENTO, CANCELADA. |
@@ -459,7 +551,7 @@ Data ou hora em formato errado (ex.: `"9h"`): `400` com `Corpo da requisição i
 | Edição: `pacientesIds` ou `especialistasIds` vazios ou `null` | `400` | A terapia deve ter ao menos um paciente. / A terapia deve ter ao menos um especialista. |
 | Verificação: `idTerapiaIgnorada` inexistente | `400` | Terapia não encontrada com ID: {id} |
 
-Exemplo de conflito: `Conflito de horário: Ana Souza (especialista) já tem terapia das 09:00 às 10:00; Lucas Martins (paciente) já tem terapia das 09:00 às 10:00.`
+Exemplo de conflito: `Conflito de horário: Ana Souza (especialista) não atende das 17:00 às 18:00 na quarta-feira (jornada: das 09:00 às 16:00); Lucas Martins (paciente) já tem terapia das 09:00 às 10:00.`
 
 Na presença, `presenca` ausente gera `fields.presenca` = "Informe a presença"; justificativa com mais de 255 caracteres gera `fields.justificativa`.
 
@@ -469,12 +561,12 @@ Na mudança de status, `status` ausente gera `fields.status` = "Informe o status
 
 ## Roteiro rápido de testes
 
-Pré-requisito: dois pacientes ativos (`{p1}`, `{p2}`) e dois especialistas (`{e1}`, `{e2}`), sendo `{e1}` com acesso ao sistema (`POST /api/especialistas/{e1}/usuario`).
+Pré-requisito: dois pacientes ativos (`{p1}`, `{p2}`) e dois especialistas (`{e1}`, `{e2}`), sendo `{e1}` com acesso ao sistema (`POST /api/especialistas/{e1}/usuario`). Os dois especialistas precisam ter jornada que cubra os horários usados abaixo no dia escolhido (ex.: 08:00–18:00 em todos os dias úteis), senão o agendamento é recusado por `FORA_DA_JORNADA`.
 
 1. `POST /api/terapias` com `pacientesIds: [{p1}, {p2}]`, `especialistasIds: [{e1}, {e2}]`, 09:00–10:00. Esperado: `201`, `COLETIVA`, `titulo: "Terapia coletiva"`, presenças `PENDENTE`.
 2. `POST /api/terapias` com `pacientesIds: [{p1}]` e `especialistasIds: [{e2}]`, 14:00–14:50. Esperado: `201`, `INDIVIDUAL`, `titulo` = nome do paciente.
-3. `POST /api/terapias/verificar-conflitos` com o corpo do passo 2 trocando para 14:30–15:00. Esperado: `200` com `possuiConflito: true` e dois itens em `conflitos` (o paciente `{p1}` e o especialista `{e2}`); nenhuma terapia nova gravada.
-4. `POST /api/terapias` com esse mesmo corpo. Esperado: `400` com `Conflito de horário: ...`.
+3. `POST /api/terapias/verificar-conflitos` com o corpo do passo 2 trocando para 14:30–15:00. Esperado: `200` com `possuiConflito: true` e dois itens em `conflitos`, ambos com `motivo: "HORARIO_OCUPADO"` (o especialista `{e2}` e o paciente `{p1}`); nenhuma terapia nova gravada.
+4. `POST /api/terapias` com esse mesmo corpo. Esperado: `409` com `Conflito de horário: ...` e os mesmos dois itens em `conflitos`.
 5. `POST /api/terapias` com `horaInicio: "10:00"` e `horaTermino: "09:00"`. Esperado: `400`.
 6. `GET /api/terapias`. Esperado: as duas terapias, `page.size: 6`.
 7. `GET /api/terapias?status=CANCELADA`. Esperado: `content: []`.
@@ -511,7 +603,7 @@ Pré-requisito: dois pacientes ativos (`{p1}`, `{p2}`) e dois especialistas (`{e
 20. `POST /api/terapias/verificar-conflitos` com o corpo de `{t3}` trocando para 09:30–10:30. Esperado: `possuiConflito: true` (conflita com ela mesma). Com `"idTerapiaIgnorada": {t3}`: `possuiConflito: false`.
 21. `PATCH /api/terapias/{t3}` com `{"horaInicio": "09:30", "horaTermino": "10:30"}`. Esperado: `200`, horário novo e as presenças mantidas.
 22. `PATCH /api/terapias/{t3}` com `{"pacientesIds": [{p1}]}`. Esperado: `200`, `INDIVIDUAL`, `titulo` = nome de `{p1}`.
-23. `PATCH /api/terapias/{t3}` com `{"horaInicio": "14:00", "horaTermino": "14:50"}`. Esperado: `400` com conflito, porque `{p1}` está na terapia do passo 2 nesse horário (concluída também ocupa; só cancelada libera).
+23. `PATCH /api/terapias/{t3}` com `{"horaInicio": "14:00", "horaTermino": "14:50"}`. Esperado: `409` com conflito, porque `{p1}` está na terapia do passo 2 nesse horário (concluída também ocupa; só cancelada libera).
 24. `PATCH /api/terapias/{t3}` com `{"pacientesIds": []}`. Esperado: `400`.
 25. Cancelar `{t3}` e repetir o passo 21. Esperado: `400` (só terapias agendadas).
 
@@ -519,9 +611,17 @@ Pré-requisito: dois pacientes ativos (`{p1}`, `{p2}`) e dois especialistas (`{e
 
 26. `POST /api/terapias` para hoje, num horário que já passou (ex.: 00:00–00:30). Esperado: `400` `Não é possível agendar uma terapia para um horário que já passou.`
 
+**Jornada e duplicidade** (dê a `{e2}` só a jornada `{"diaSemana": 3, "horaInicio": "09:00", "horaTermino": "16:00"}`, quarta-feira, por `PATCH /api/especialistas/{e2}`, sem terapias futuras dele em outros horários)
+
+27. `POST /api/terapias/verificar-conflitos` com `{e2}` numa quinta 09:00–10:00. Esperado: `possuiConflito: true`, um item `FORA_DA_JORNADA` com `jornadasDoDia: []` e `idTerapia: null`.
+28. O mesmo numa quarta 17:00–18:00 e numa quarta 15:30–16:30. Esperado: `FORA_DA_JORNADA` com `jornadasDoDia: [{"horaInicio": "09:00", "horaTermino": "16:00"}]`. `POST /api/terapias` com esse corpo: `409` com `Conflito de horário: ... não atende das 15:30 às 16:30 na quarta-feira (jornada: das 09:00 às 16:00).`
+29. Numa quarta 15:00–16:00. Esperado: `possuiConflito: false` (termina exatamente no fim da jornada).
+30. `POST /api/terapias` com `pacientesIds: [{p1}, {p1}]`. Esperado: `400` `O mesmo paciente foi informado mais de uma vez.`
+31. Agende `{e2}` numa quarta futura 10:00–11:00 e faça `PATCH /api/especialistas/{e2}` com a jornada `{"diaSemana": 3, "horaInicio": "13:00", "horaTermino": "18:00"}`. Esperado: `409` com a terapia em `terapias` (ver `ESPECIALISTAS.md`); a jornada não muda.
+
 **Permissões** (crie usuários nos perfis padrão; ver `00-GERAL.md`)
 
-27. Com um usuário "Recepção": `POST /api/terapias`, `PATCH .../status` e `PATCH .../presenca`. Esperado: `201`/`200`.
-28. Login com `{e1}` no perfil "Especialista". `GET /api/terapias`. Esperado: `403`. `GET /api/terapias/{t1}` (do passo 1, de que ele participa). Esperado: `200`. `GET /api/terapias/{t2}` (passo 2, só `{e2}`). Esperado: `403`. `GET /api/terapias/999999`. Esperado: `403`.
-29. Com `{e1}`: `GET /api/terapias/minhas?idPaciente={p2}`. Esperado: só a do passo 1. `PATCH /api/terapias/{t1}/status` com `{"status": "EM_ATENDIMENTO"}` e `POST /api/terapias` com um corpo válido. Esperado: `403`.
-30. Com um usuário "Assistente Social": `GET /api/terapias` e `GET /api/terapias/{t1}`. Esperado: `403`.
+32. Com um usuário "Recepção": `POST /api/terapias`, `PATCH .../status` e `PATCH .../presenca`. Esperado: `201`/`200`.
+33. Login com `{e1}` no perfil "Especialista". `GET /api/terapias`. Esperado: `403`. `GET /api/terapias/{t1}` (do passo 1, de que ele participa). Esperado: `200`. `GET /api/terapias/{t2}` (passo 2, só `{e2}`). Esperado: `403`. `GET /api/terapias/999999`. Esperado: `403`.
+34. Com `{e1}`: `GET /api/terapias/minhas?idPaciente={p2}`. Esperado: só a do passo 1. `PATCH /api/terapias/{t1}/status` com `{"status": "EM_ATENDIMENTO"}` e `POST /api/terapias` com um corpo válido. Esperado: `403`.
+35. Com um usuário "Assistente Social": `GET /api/terapias` e `GET /api/terapias/{t1}`. Esperado: `403`.

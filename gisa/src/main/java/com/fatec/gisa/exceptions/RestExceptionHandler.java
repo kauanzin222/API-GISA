@@ -2,6 +2,7 @@ package com.fatec.gisa.exceptions;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -18,6 +19,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import com.fatec.gisa.dtos.terapia.response.ConflitoHorarioDTO;
+import com.fatec.gisa.dtos.terapia.response.TerapiaForaDaJornadaDTO;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -123,6 +127,36 @@ public class RestExceptionHandler {
             IllegalArgumentException exception,
             HttpServletRequest request) {
         return response(HttpStatus.BAD_REQUEST, exception.getMessage(), request, Map.of());
+    }
+
+    // Agendamento de terapia com conflito de horário ou fora da jornada: a lista vai junto
+    @ExceptionHandler(ConflitoHorarioException.class)
+    public ResponseEntity<ApiConflitoResponse> handleConflitoHorario(
+            ConflitoHorarioException exception,
+            HttpServletRequest request) {
+        return conflito(exception, request, exception.getConflitos(), null);
+    }
+
+    // Nova jornada do especialista que deixaria terapias futuras fora do horário
+    @ExceptionHandler(TerapiasForaDaJornadaException.class)
+    public ResponseEntity<ApiConflitoResponse> handleTerapiasForaDaJornada(
+            TerapiasForaDaJornadaException exception,
+            HttpServletRequest request) {
+        return conflito(exception, request, null, exception.getTerapias());
+    }
+
+    private ResponseEntity<ApiConflitoResponse> conflito(ConflitoException exception, HttpServletRequest request,
+            List<ConflitoHorarioDTO> conflitos, List<TerapiaForaDaJornadaDTO> terapias) {
+        HttpStatus status = HttpStatus.CONFLICT;
+        return ResponseEntity.status(status).body(new ApiConflitoResponse(
+                Instant.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                exception.getMessage(),
+                request.getRequestURI(),
+                Map.of(),
+                conflitos,
+                terapias));
     }
 
     // Só conflitos lançados de propósito pela API; uma IllegalStateException qualquer

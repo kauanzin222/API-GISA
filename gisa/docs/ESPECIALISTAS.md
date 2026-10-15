@@ -178,7 +178,9 @@ Todos os campos do `POST /api/profissionais` (`nome`, `cpf`, `dataNascimento`, `
 | `horaInicio` | string | sim | `HH:mm` |
 | `horaTermino` | string | sim | `HH:mm` |
 
-> A API **não valida** se `horaInicio` é anterior a `horaTermino` nem se há jornadas sobrepostas no mesmo dia. Faça essa validação no front.
+> A API **não valida** se `horaInicio` é anterior a `horaTermino` nem se há jornadas sobrepostas no mesmo dia. Faça essa validação no front. Uma jornada com término antes do início nunca comporta terapias.
+
+> **A jornada define quando o especialista pode ser agendado.** Uma terapia só é aceita se couber inteira em uma única jornada dele no dia da semana da data (ver "Regras de agenda" em `TERAPIAS.md`). Para atender em dois turnos com intervalo (ex.: 08:00–12:00 e 14:00–18:00), cadastre duas jornadas no mesmo dia.
 
 ### Exemplo
 
@@ -276,6 +278,26 @@ Aceita todos os campos do `PATCH /api/profissionais/{idCadastro}` (`nome`, `celu
 | `especialidadesIds: []` sem novas | `400` (o especialista precisa de ao menos uma especialidade) |
 
 **Jornadas:** as jornadas antigas são apagadas e recriadas a partir da lista enviada. O `idJornada`, se enviado, é ignorado, e as jornadas recebem IDs novos.
+
+**Jornadas e terapias futuras:** se alguma terapia **futura** (início depois de agora) `AGENDADA` do especialista ficar fora das novas jornadas (mesma regra do agendamento: caber inteira em uma única jornada do dia), o PATCH é recusado com **`409`** e nada é gravado. Remarque ou cancele essas terapias antes. Terapias passadas, em atendimento, concluídas ou canceladas não entram nessa verificação. Vale também para o PATCH de especialista PJ.
+
+```json
+{
+  "timestamp": "2026-10-15T14:00:00Z",
+  "status": 409,
+  "error": "Conflict",
+  "message": "Não é possível alterar a jornada: 2 terapia(s) agendada(s) de João Santos ficariam fora do novo horário de trabalho. Remarque ou cancele essas terapias antes.",
+  "path": "/api/especialistas/10",
+  "fields": {},
+  "terapias": [
+    { "idTerapia": 42, "data": "2026-10-21", "horaInicio": "09:00", "horaTermino": "10:00" },
+    { "idTerapia": 57, "data": "2026-10-23", "horaInicio": "17:00", "horaTermino": "18:00" }
+  ]
+}
+```
+
+- `terapias` vem ordenada por data e hora.
+- A alteração de jornada e os agendamentos do mesmo especialista não rodam ao mesmo tempo (a mesma trava no banco do agendamento): um espera o outro terminar e já enxerga o resultado dele.
 
 **Ignorados (somente leitura):** `cpf`, `dataNascimento`, `sexo`, `registroConselho`.
 
@@ -576,6 +598,7 @@ Hora em formato diferente de `HH:mm` (ex.: `"8h"`) não chega à validação de 
 | Especialidade inexistente na URL | `404` | Especialidade não encontrada com ID: {id} |
 | Sem permissão (inclusive `idPerfil` no PATCH sem `GERENCIAR_USUARIOS`) | `403` | Você não tem permissão para realizar esta ação. |
 | `jornadas` vazia ou `null` no PATCH | `400` | O especialista deve possuir ao menos uma jornada de trabalho. |
+| Novas `jornadas` deixariam terapias futuras agendadas fora do horário | `409` | Não é possível alterar a jornada: {n} terapia(s) agendada(s) de {nome} ficariam fora do novo horário de trabalho. Remarque ou cancele essas terapias antes. (lista em `terapias`) |
 | `razaoSocial` vazia no PATCH | `400` | A razão social não pode ser vazia. |
 | `idCargo` inexistente (POST) | `400` | Cargo não encontrado com ID: {id} |
 | CPF já cadastrado | `400` | CPF já cadastrado. |

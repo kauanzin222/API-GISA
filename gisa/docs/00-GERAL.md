@@ -252,7 +252,7 @@ Cada perfil de acesso tem um conjunto de permissões (lista completa e perfis pa
 | `403 Forbidden` (com corpo) | usuário logado sem a permissão exigida pela rota: `Você não tem permissão para realizar esta ação.` |
 | `404 Not Found` | o recurso da **URL** não existe (ex.: `GET /api/pacientes/999`). Um ID inexistente enviado no **corpo** (ex.: `idCargo` em um PATCH) torna o pedido inválido e responde `400` |
 | `405 Method Not Allowed` | método HTTP que a rota não aceita (ex.: `DELETE /api/cbos`): `O método DELETE não é suportado nesta rota.` |
-| `409 Conflict` | operação incompatível com o estado do cadastro (ex.: alterar perfil de quem não tem usuário; vínculo de paciente que já existe), operação que deixaria o sistema sem quem gerencie perfis (ver abaixo) ou, raramente, violação de restrição do banco (`Os dados informados violam uma regra de integridade do banco.`) |
+| `409 Conflict` | operação incompatível com o estado do cadastro (ex.: alterar perfil de quem não tem usuário; vínculo de paciente que já existe), conflito de agenda nas terapias (horário ocupado ou fora da jornada; ver `TERAPIAS.md`), jornada que deixaria terapias futuras fora do horário (ver `ESPECIALISTAS.md`), operação que deixaria o sistema sem quem gerencie perfis (ver abaixo) ou, raramente, violação de restrição do banco (`Os dados informados violam uma regra de integridade do banco.`) |
 | `500 Internal Server Error` | erro inesperado no servidor: `Erro interno do servidor. Tente novamente mais tarde.` (o detalhe fica só no log do servidor) |
 | `503 Service Unavailable` | o e-mail da nova senha temporária não pôde ser enviado e nada foi alterado (`POST /api/usuarios/{id}/senha-temporaria`; ver `USUARIOS.md`) |
 

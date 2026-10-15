@@ -57,6 +57,20 @@ public interface TerapiaRepository extends JpaRepository<Terapia, Long> {
     @Query("select t from Terapia t where t.idTerapia = :idTerapia")
     Optional<Terapia> buscarParaAlterar(@Param("idTerapia") Long idTerapia);
 
+    // Alteração de jornada: terapias do especialista com o status pedido (AGENDADA) que começam
+    // depois de "agora", na ordem da data
+    @Query("""
+            select t from Terapia t join t.especialistas e
+            where e.idCadastro = :idEspecialista
+              and t.status = :status
+              and t.dataHoraInicio > :agora
+            order by t.dataHoraInicio, t.idTerapia
+            """)
+    List<Terapia> buscarFuturasDoEspecialista(
+            @Param("idEspecialista") Long idEspecialista,
+            @Param("status") StatusTerapia status,
+            @Param("agora") LocalDateTime agora);
+
     // Inativação do paciente: terapias com o status pedido (AGENDADA) que começam depois de "agora"
     // e de que o paciente participa. Trava as terapias até o fim da transação, na ordem do ID
     @Lock(LockModeType.PESSIMISTIC_WRITE)

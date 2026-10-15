@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -27,12 +28,14 @@ import com.fatec.gisa.dtos.terapia.request.TerapiaCadastroRequestDTO;
 import com.fatec.gisa.dtos.terapia.response.ConflitoHorarioDTO;
 import com.fatec.gisa.dtos.terapia.response.TerapiaDoEspecialistaDTO;
 import com.fatec.gisa.dtos.terapia.response.TerapiaEspecialistaDTO;
+import com.fatec.gisa.dtos.terapia.response.TerapiaForaDaJornadaDTO;
 import com.fatec.gisa.dtos.terapia.response.TerapiaListaDTO;
 import com.fatec.gisa.dtos.terapia.response.TerapiaPacienteDTO;
 import com.fatec.gisa.dtos.terapia.response.VerificacaoConflitoDTO;
 import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.especialista.Especialidade;
 import com.fatec.gisa.entities.especialista.Especialista;
+import com.fatec.gisa.entities.especialista.JornadaTrabalho;
 import com.fatec.gisa.entities.paciente.Paciente;
 import com.fatec.gisa.entities.terapia.PresencaPaciente;
 import com.fatec.gisa.entities.terapia.Terapia;
@@ -41,7 +44,9 @@ import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.enums.StatusPresenca;
 import com.fatec.gisa.enums.StatusTerapia;
 import com.fatec.gisa.enums.TipoEventoPaciente;
+import com.fatec.gisa.exceptions.ConflitoHorarioException;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
+import com.fatec.gisa.exceptions.TerapiasForaDaJornadaException;
 import com.fatec.gisa.repositories.especialista.EspecialistaRepository;
 import com.fatec.gisa.repositories.paciente.PacienteRepository;
 import com.fatec.gisa.repositories.terapia.OcupacaoHorario;
@@ -245,7 +250,9 @@ public class TerapiaService {
     }
 
     // A trava precisa vir antes da verificação: um cadastro ou edição concorrente com alguém em
-    // comum espera esta transação terminar e, ao verificar, já enxerga esta terapia.
+    // comum espera esta transação terminar e, ao verificar, já enxerga esta terapia. A mesma trava
+    // (na linha do especialista) protege contra uma troca de jornada simultânea (ver
+    // validarJornadaComTerapiasFuturas). Com conflito: 409 com a lista (ConflitoHorarioException)
     private void bloquearEVerificarHorario(Participantes participantes, Long idTerapiaIgnorada) {
         List<Long> idsEnvolvidos = new ArrayList<>(participantes.idsPacientes());
         idsEnvolvidos.addAll(participantes.idsEspecialistas());
@@ -253,7 +260,33 @@ public class TerapiaService {
 
         List<ConflitoHorarioDTO> conflitos = buscarConflitos(participantes, idTerapiaIgnorada);
         if (!conflitos.isEmpty()) {
-            throw new IllegalArgumentException(mensagemDeConflito(conflitos));
+            throw new ConflitoHorarioException(mensagemDeConflito(conflitos), conflitos);
+        }
+    }
+
+    // PATCH de especialista/PJ com jornadas: recusa (409) se alguma terapia futura AGENDADA dele ficar
+    // fora das novas jornadas. Usa a mesma regra de "caber na jornada" do agendamento. Trava antes a
+    // linha do especialista, como o agendamento: um agendamento simultâneo espera esta transação (e
+    // passa a ver as jornadas novas), ou esta espera o agendamento (e passa a ver a terapia nova)
+    @Transactional
+    public void validarJornadaComTerapiasFuturas(Especialista especialista, List<JornadaTrabalho> novasJornadas) {
+        terapiaRepository.bloquearPessoas(List.of(especialista.getIdCadastro()));
+        List<TerapiaForaDaJornadaDTO> foraDaJornada = terapiaRepository
+                .buscarFuturasDoEspecialista(especialista.getIdCadastro(), StatusTerapia.AGENDADA,
+                        LocalDateTime.now(relogio))
+                .stream()
+                .filter(terapia -> !cabeEmUmaJornada(novasJornadas, terapia.getDataHoraInicio(), terapia.getDataHoraFim()))
+                .map(terapia -> new TerapiaForaDaJornadaDTO(
+                        terapia.getIdTerapia(),
+                        terapia.getDataHoraInicio().toLocalDate(),
+                        terapia.getDataHoraInicio().toLocalTime(),
+                        terapia.getDataHoraFim().toLocalTime()))
+                .toList();
+        if (!foraDaJornada.isEmpty()) {
+            throw new TerapiasForaDaJornadaException("Não é possível alterar a jornada: "
+                    + foraDaJornada.size() + " terapia(s) agendada(s) de " + especialista.getNome()
+                    + " ficariam fora do novo horário de trabalho. Remarque ou cancele essas terapias antes.",
+                    foraDaJornada);
         }
     }
 
@@ -426,7 +459,7 @@ public class TerapiaService {
         idsEnvolvidos.add(idPaciente);
         terapiaRepository.bloquearPessoas(idsEnvolvidos);
 
-        List<ConflitoHorarioDTO> conflitos = buscarConflitos(List.of(idPaciente), idsEspecialistas,
+        List<ConflitoHorarioDTO> conflitos = buscarOcupacoes(List.of(idPaciente), idsEspecialistas,
                 terapia.getDataHoraInicio(), terapia.getDataHoraFim(), terapia.getIdTerapia());
         if (!conflitos.isEmpty()) {
             throw new IllegalArgumentException("Não é possível desfazer a falta justificada: o horário já foi "
@@ -538,6 +571,8 @@ public class TerapiaService {
         if (!horaTermino.isAfter(horaInicio)) {
             throw new IllegalArgumentException("A hora de término deve ser posterior à hora de início.");
         }
+        recusarRepetidos(pacientesIds, "O mesmo paciente foi informado mais de uma vez.");
+        recusarRepetidos(especialistasIds, "O mesmo especialista foi informado mais de uma vez.");
 
         List<Paciente> pacientes = buscarAtivos(
                 pacientesIds, pacienteRepository::findAllById, "Paciente(s)");
@@ -558,49 +593,140 @@ public class TerapiaService {
         }
     }
 
-    // Terapia nova: NENHUMA_TERAPIA, já que ainda não existe e não há o que ignorar
-    private List<ConflitoHorarioDTO> buscarConflitos(Participantes participantes, Long idTerapiaIgnorada) {
-        return buscarConflitos(participantes.idsPacientes(), participantes.idsEspecialistas(),
-                participantes.inicio(), participantes.fim(), idTerapiaIgnorada);
+    // O mesmo paciente ou especialista não pode aparecer duas vezes no pedido
+    private void recusarRepetidos(List<Long> ids, String mensagem) {
+        if (ids.stream().distinct().count() != ids.size()) {
+            throw new IllegalArgumentException(mensagem);
+        }
     }
 
+    // Rotina única de verificação, usada pelo cadastro, pela edição e por verificar-conflitos.
+    // Devolve todos os conflitos: especialistas fora da jornada e pessoas com o horário ocupado.
     // idTerapiaIgnorada: a terapia que está sendo revalidada não conflita consigo mesma
-    private List<ConflitoHorarioDTO> buscarConflitos(List<Long> idsPacientes, List<Long> idsEspecialistas,
+    // (terapia nova: NENHUMA_TERAPIA, já que ainda não existe e não há o que ignorar)
+    private List<ConflitoHorarioDTO> buscarConflitos(Participantes participantes, Long idTerapiaIgnorada) {
+        List<ConflitoHorarioDTO> conflitos = new ArrayList<>();
+        participantes.especialistas().stream()
+                .sorted(Comparator.comparing(Especialista::getNome))
+                .forEach(especialista -> foraDaJornada(especialista, participantes.inicio(), participantes.fim())
+                        .ifPresent(conflitos::add));
+        conflitos.addAll(buscarOcupacoes(participantes.idsPacientes(), participantes.idsEspecialistas(),
+                participantes.inicio(), participantes.fim(), idTerapiaIgnorada));
+        return conflitos;
+    }
+
+    // Terapias que ocupam o horário (intervalo semiaberto [início, fim): encostar não conflita).
+    // Canceladas não ocupam; a falta justificada libera o horário do paciente e, quando todos os
+    // pacientes justificaram, o dos especialistas (ver TerapiaRepository)
+    private List<ConflitoHorarioDTO> buscarOcupacoes(List<Long> idsPacientes, List<Long> idsEspecialistas,
             LocalDateTime inicio, LocalDateTime fim, Long idTerapiaIgnorada) {
         List<ConflitoHorarioDTO> conflitos = new ArrayList<>();
         if (!idsEspecialistas.isEmpty()) {
             terapiaRepository.buscarOcupacoesDeEspecialistas(idsEspecialistas, inicio, fim,
                     StatusTerapia.CANCELADA, StatusPresenca.FALTA_JUSTIFICADA, idTerapiaIgnorada)
-                    .forEach(ocupacao -> conflitos.add(toConflitoDTO("ESPECIALISTA", ocupacao)));
+                    .forEach(ocupacao -> conflitos.add(toConflitoDTO(ConflitoHorarioDTO.ESPECIALISTA, ocupacao)));
         }
         if (!idsPacientes.isEmpty()) {
             terapiaRepository.buscarOcupacoesDePacientes(idsPacientes, inicio, fim,
                     StatusTerapia.CANCELADA, StatusPresenca.FALTA_JUSTIFICADA, idTerapiaIgnorada)
-                    .forEach(ocupacao -> conflitos.add(toConflitoDTO("PACIENTE", ocupacao)));
+                    .forEach(ocupacao -> conflitos.add(toConflitoDTO(ConflitoHorarioDTO.PACIENTE, ocupacao)));
         }
         return conflitos;
+    }
+
+    // A terapia precisa caber inteira em uma única jornada do especialista no dia da semana da data.
+    // Sem jornada nesse dia (ou sem nenhuma jornada), não pode ser agendada
+    private Optional<ConflitoHorarioDTO> foraDaJornada(Especialista especialista, LocalDateTime inicio,
+            LocalDateTime fim) {
+        List<JornadaTrabalho> jornadas = especialista.getJornadaTrabalho() == null
+                ? List.of()
+                : especialista.getJornadaTrabalho();
+        if (cabeEmUmaJornada(jornadas, inicio, fim)) {
+            return Optional.empty();
+        }
+        int diaSemana = inicio.getDayOfWeek().getValue();
+        List<ConflitoHorarioDTO.JornadaDoDiaDTO> jornadasDoDia = jornadas.stream()
+                .filter(jornada -> jornada.getDiaSemana() != null && jornada.getDiaSemana() == diaSemana)
+                .sorted(Comparator.comparing(JornadaTrabalho::getHoraInicio))
+                .map(jornada -> new ConflitoHorarioDTO.JornadaDoDiaDTO(jornada.getHoraInicio(), jornada.getHoraTermino()))
+                .toList();
+        return Optional.of(new ConflitoHorarioDTO(
+                ConflitoHorarioDTO.ESPECIALISTA,
+                ConflitoHorarioDTO.FORA_DA_JORNADA,
+                especialista.getIdCadastro(),
+                especialista.getNome(),
+                null,
+                inicio.toLocalDate(),
+                inicio.toLocalTime(),
+                fim.toLocalTime(),
+                jornadasDoDia));
+    }
+
+    // diaSemana: 1 = segunda ... 7 = domingo, como DayOfWeek.getValue()
+    private static boolean cabeEmUmaJornada(List<JornadaTrabalho> jornadas, LocalDateTime inicio, LocalDateTime fim) {
+        int diaSemana = inicio.getDayOfWeek().getValue();
+        LocalTime horaInicio = inicio.toLocalTime();
+        LocalTime horaTermino = fim.toLocalTime();
+        return jornadas.stream().anyMatch(jornada -> jornada.getDiaSemana() != null
+                && jornada.getDiaSemana() == diaSemana
+                && jornada.getHoraInicio() != null && jornada.getHoraTermino() != null
+                && !jornada.getHoraInicio().isAfter(horaInicio)
+                && !horaTermino.isAfter(jornada.getHoraTermino()));
+    }
+
+    // Ex.: "na quinta-feira", "no sábado"
+    private static String diaDaSemana(LocalDate data) {
+        return switch (data.getDayOfWeek()) {
+            case MONDAY -> "na segunda-feira";
+            case TUESDAY -> "na terça-feira";
+            case WEDNESDAY -> "na quarta-feira";
+            case THURSDAY -> "na quinta-feira";
+            case FRIDAY -> "na sexta-feira";
+            case SATURDAY -> "no sábado";
+            case SUNDAY -> "no domingo";
+        };
     }
 
     private ConflitoHorarioDTO toConflitoDTO(String tipo, OcupacaoHorario ocupacao) {
         return new ConflitoHorarioDTO(
                 tipo,
+                ConflitoHorarioDTO.HORARIO_OCUPADO,
                 ocupacao.idCadastro(),
                 ocupacao.nome(),
                 ocupacao.idTerapia(),
                 ocupacao.inicio().toLocalDate(),
                 ocupacao.inicio().toLocalTime(),
-                ocupacao.fim().toLocalTime());
+                ocupacao.fim().toLocalTime(),
+                null);
     }
 
-    // Ex.: "Conflito de horário: Ana Souza (especialista) já tem terapia das 09:00 às 10:00."
+    // Ex.: "Conflito de horário: Ana Souza (especialista) não atende na quinta-feira; Lucas Martins
+    // (paciente) já tem terapia das 09:00 às 10:00."
     private String mensagemDeConflito(List<ConflitoHorarioDTO> conflitos) {
         return "Conflito de horário: " + conflitos.stream()
-                .map(conflito -> "%s (%s) já tem terapia das %s às %s".formatted(
-                        conflito.nome(),
-                        conflito.tipo().toLowerCase(),
-                        conflito.horaInicio().format(HORA),
-                        conflito.horaTermino().format(HORA)))
+                .map(this::descreverConflito)
                 .collect(Collectors.joining("; ")) + ".";
+    }
+
+    private String descreverConflito(ConflitoHorarioDTO conflito) {
+        String pessoa = "%s (%s)".formatted(conflito.nome(), conflito.tipo().toLowerCase());
+        if (ConflitoHorarioDTO.HORARIO_OCUPADO.equals(conflito.motivo())) {
+            return "%s já tem terapia das %s às %s".formatted(
+                    pessoa, conflito.horaInicio().format(HORA), conflito.horaTermino().format(HORA));
+        }
+        String dia = diaDaSemana(conflito.data());
+        if (conflito.jornadasDoDia().isEmpty()) {
+            return "%s não atende %s".formatted(pessoa, dia);
+        }
+        return "%s não atende das %s às %s %s (jornada: %s)".formatted(
+                pessoa,
+                conflito.horaInicio().format(HORA),
+                conflito.horaTermino().format(HORA),
+                dia,
+                TextoHistorico.lista(conflito.jornadasDoDia().stream()
+                        .map(jornada -> "das %s às %s".formatted(
+                                jornada.horaInicio().format(HORA), jornada.horaTermino().format(HORA)))
+                        .toList()));
     }
 
     private record Participantes(

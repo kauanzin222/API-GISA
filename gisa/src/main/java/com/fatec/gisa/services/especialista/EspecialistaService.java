@@ -19,6 +19,7 @@ import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.services.endereco.EnderecoService;
 import com.fatec.gisa.services.profissional.ProfissionalMapper;
 import com.fatec.gisa.services.profissional.ProfissionalService;
+import com.fatec.gisa.services.terapia.TerapiaService;
 
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class EspecialistaService {
     private final JornadaTrabalhoService jornadaTrabalhoService;
     private final EnderecoService enderecoService;
     private final ProfissionalService profissionalService;
+    private final TerapiaService terapiaService;
 
     @Transactional
     public Especialista cadastrar(EspecialistaCadastroRequestDTO dto) {
@@ -103,6 +105,8 @@ public class EspecialistaService {
             }
             List<JornadaTrabalho> jornadasAtualizadas =
                     jornadaTrabalhoService.mapear(dto.getJornadas(), especialista);
+            // 409 se alguma terapia futura agendada dele ficar fora das novas jornadas
+            terapiaService.validarJornadaComTerapiasFuturas(especialista, jornadasAtualizadas);
             if (especialista.getJornadaTrabalho() == null) {
                 especialista.setJornadaTrabalho(new java.util.ArrayList<>());
             } else {
