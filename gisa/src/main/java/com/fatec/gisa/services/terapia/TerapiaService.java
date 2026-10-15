@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -64,6 +65,7 @@ public class TerapiaService {
     private static final String TITULO_COLETIVA = "Terapia coletiva";
     private static final String MOTIVO_PACIENTE_INATIVADO = "Paciente inativado";
     private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final Long NENHUMA_TERAPIA = 0L;
     private static final int TAMANHO_MAXIMO_PAGINA = 100;
     private static final Map<StatusTerapia, List<StatusTerapia>> TRANSICOES = Map.of(
@@ -83,6 +85,10 @@ public class TerapiaService {
     private final HistoricoPacienteService historicoPacienteService;
     // No fuso de Sorocaba (ver RelogioConfig): define o "agora" e o "hoje" das terapias
     private final Clock relogio;
+
+    // Dias, depois do dia da terapia, em que presença, falta e "desfazer" ainda são aceitos
+    @Value("${gisa.terapia.prazo-presenca-dias:1}")
+    private int prazoPresencaDias;
 
     @Transactional
     public Terapia cadastrar(TerapiaCadastroRequestDTO dto) {
@@ -410,11 +416,14 @@ public class TerapiaService {
         }
 
         StatusPresenca nova = dto.presenca();
-        // Falta justificada pode ser avisada com antecedência; presença e falta, só a partir do dia
-        boolean exigeDiaDaTerapia = nova == StatusPresenca.PRESENTE || nova == StatusPresenca.FALTA_INJUSTIFICADA;
-        if (exigeDiaDaTerapia && terapia.getDataHoraInicio().toLocalDate().isAfter(LocalDate.now(relogio))) {
-            throw new IllegalArgumentException(
-                    "Presença e falta só podem ser registradas a partir do dia da terapia.");
+        if (!presencasPermitidas(terapia).contains(nova)) {
+            LocalDate dia = terapia.getDataHoraInicio().toLocalDate();
+            if (LocalDate.now(relogio).isBefore(dia)) {
+                throw new IllegalArgumentException(
+                        "Presença e falta só podem ser registradas a partir do dia da terapia.");
+            }
+            throw new IllegalArgumentException("O prazo para registrar presença ou falta nesta terapia terminou em "
+                    + dia.plusDays(prazoPresencaDias).format(DATA) + ". Agora só é possível registrar falta justificada.");
         }
 
         String justificativa = null;
@@ -776,14 +785,36 @@ public class TerapiaService {
     }
 
     private List<TerapiaPacienteDTO> pacientes(Terapia terapia) {
+        List<StatusPresenca> permitidas = presencasPermitidas(terapia);
         return terapia.getPresencaPacientes().stream()
                 .sorted(Comparator.comparing(presenca -> presenca.getPaciente().getNome()))
                 .map(presenca -> new TerapiaPacienteDTO(
                         presenca.getPaciente().getIdCadastro(),
                         presenca.getPaciente().getNome(),
                         presenca.getPresenca(),
-                        presenca.getJustificativa()))
+                        presenca.getJustificativa(),
+                        permitidas))
                 .toList();
+    }
+
+    // Marcações aceitas agora, no fuso da clínica:
+    // - antes do dia da terapia: só falta justificada (aviso antecipado) e desfazer (pendente);
+    // - do dia até o fim do prazo (prazoPresencaDias depois): todas;
+    // - depois do prazo: só falta justificada (atestado entregue depois);
+    // - terapia cancelada: nenhuma.
+    private List<StatusPresenca> presencasPermitidas(Terapia terapia) {
+        if (terapia.getStatus() == StatusTerapia.CANCELADA) {
+            return List.of();
+        }
+        LocalDate hoje = LocalDate.now(relogio);
+        LocalDate dia = terapia.getDataHoraInicio().toLocalDate();
+        if (hoje.isBefore(dia)) {
+            return List.of(StatusPresenca.PENDENTE, StatusPresenca.FALTA_JUSTIFICADA);
+        }
+        if (hoje.isAfter(dia.plusDays(prazoPresencaDias))) {
+            return List.of(StatusPresenca.FALTA_JUSTIFICADA);
+        }
+        return List.of(StatusPresenca.values());
     }
 
 }

@@ -618,6 +618,57 @@ class TerapiaServiceTest {
     }
 
     @Test
+    void antesDoDiaSoPermiteDesfazerEFaltaJustificada() {
+        Long idTerapia = terapiaEm(HOJE.plusDays(7), lucas, ana, "09:00", "10:00");
+
+        assertThat(terapiaService.buscarDetalhes(idTerapia).pacientes().get(0).presencasPermitidas())
+                .containsExactly(StatusPresenca.PENDENTE, StatusPresenca.FALTA_JUSTIFICADA);
+    }
+
+    @Test
+    void aceitaPresencaAteOFimDoDiaSeguinte() {
+        Long idTerapia = terapiaHoje(lucas, ana, "09:00", "10:00");
+        moverDias(idTerapia, -1);
+
+        assertThat(terapiaService.buscarDetalhes(idTerapia).pacientes().get(0).presencasPermitidas())
+                .containsExactly(StatusPresenca.values());
+        terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.PRESENTE, null));
+        assertThat(terapiaService.buscarDetalhes(idTerapia).pacientes().get(0).presenca())
+                .isEqualTo(StatusPresenca.PRESENTE);
+    }
+
+    @Test
+    void depoisDoPrazoSoAceitaFaltaJustificada() {
+        Long idTerapia = terapiaHoje(lucas, ana, "09:00", "10:00");
+        moverDias(idTerapia, -2);
+
+        assertThat(terapiaService.buscarDetalhes(idTerapia).pacientes().get(0).presencasPermitidas())
+                .containsExactly(StatusPresenca.FALTA_JUSTIFICADA);
+        for (StatusPresenca presenca : List.of(StatusPresenca.PRESENTE, StatusPresenca.FALTA_INJUSTIFICADA,
+                StatusPresenca.PENDENTE)) {
+            assertThatThrownBy(() -> terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                    new PresencaRequestDTO(presenca, null)))
+                    .hasMessage("O prazo para registrar presença ou falta nesta terapia terminou em "
+                            + HOJE.minusDays(1).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                            + ". Agora só é possível registrar falta justificada.");
+        }
+
+        terapiaService.registrarPresenca(idTerapia, lucas.getIdCadastro(),
+                new PresencaRequestDTO(StatusPresenca.FALTA_JUSTIFICADA, "Atestado entregue depois"));
+        assertThat(terapiaService.buscarDetalhes(idTerapia).pacientes().get(0).presenca())
+                .isEqualTo(StatusPresenca.FALTA_JUSTIFICADA);
+    }
+
+    @Test
+    void terapiaCanceladaNaoPermiteNenhumaPresenca() {
+        Long idTerapia = terapiaHoje(lucas, ana, "09:00", "10:00");
+        entityManager.find(Terapia.class, idTerapia).setStatus(StatusTerapia.CANCELADA);
+
+        assertThat(terapiaService.buscarDetalhes(idTerapia).pacientes().get(0).presencasPermitidas()).isEmpty();
+    }
+
+    @Test
     void faltaJustificadaPodeSerAvisadaAntesEExigeJustificativa() {
         Long idTerapia = terapiaEm(HOJE.plusDays(7), lucas, ana, "09:00", "10:00");
 
@@ -702,6 +753,13 @@ class TerapiaServiceTest {
         assertThat(detalhes.horarioLiberado()).isFalse();
         assertThat(detalhes.pacientes().get(0).presenca()).isEqualTo(StatusPresenca.PENDENTE);
         assertThat(detalhes.pacientes().get(0).justificativa()).isNull();
+    }
+
+    // Não dá para agendar no passado: a terapia é criada hoje e a data é movida direto na entidade
+    private void moverDias(Long idTerapia, int dias) {
+        Terapia terapia = entityManager.find(Terapia.class, idTerapia);
+        terapia.setDataHoraInicio(terapia.getDataHoraInicio().plusDays(dias));
+        terapia.setDataHoraFim(terapia.getDataHoraFim().plusDays(dias));
     }
 
     private Long terapiaHoje(Paciente paciente, Especialista especialista, String inicio, String termino) {

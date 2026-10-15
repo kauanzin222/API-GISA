@@ -6,7 +6,7 @@ Uma **terapia** (consulta) reúne um ou mais pacientes e um ou mais especialista
 
 - **Modalidade:** é calculada pelo back. Um paciente: `INDIVIDUAL`; mais de um: `COLETIVA`. O front não envia a modalidade; o seletor da tela pode ser só informativo.
 - **Status da terapia:** `AGENDADA` no cadastro. Valores: `AGENDADA`, `EM_ATENDIMENTO`, `CONCLUIDA`, `CANCELADA`.
-- **Presença de cada paciente:** `PENDENTE` no cadastro. Valores: `PENDENTE`, `PRESENTE`, `FALTA_JUSTIFICADA`, `FALTA_INJUSTIFICADA`.
+- **Presença de cada paciente:** `PENDENTE` no cadastro. Valores: `PENDENTE`, `PRESENTE`, `FALTA_JUSTIFICADA`, `FALTA_INJUSTIFICADA`. Cada paciente nas respostas traz também `presencasPermitidas`: as marcações que o `PATCH .../presenca` aceita naquele momento (ver "Registrar presença"). O front deve oferecer só essas opções.
 - **Histórico do paciente:** agendar, editar, cancelar e registrar presença geram eventos no histórico de cada paciente envolvido (ver `GET /api/pacientes/{idCadastro}/historico` em `PACIENTES.md`). Justificativas e motivos de cancelamento **não** vão para o histórico.
 
 ## Rotas
@@ -278,8 +278,10 @@ GET /api/terapias?idPaciente=7&inicio=2026-10-01&fim=2026-10-31
       "status": "AGENDADA",
       "horarioLiberado": false,
       "pacientes": [
-        { "idCadastro": 4, "nome": "Beatriz Lima", "presenca": "PENDENTE", "justificativa": null },
-        { "idCadastro": 1, "nome": "Roberto Almeida", "presenca": "PENDENTE", "justificativa": null }
+        { "idCadastro": 4, "nome": "Beatriz Lima", "presenca": "PENDENTE", "justificativa": null,
+          "presencasPermitidas": ["PENDENTE", "FALTA_JUSTIFICADA"] },
+        { "idCadastro": 1, "nome": "Roberto Almeida", "presenca": "PENDENTE", "justificativa": null,
+          "presencasPermitidas": ["PENDENTE", "FALTA_JUSTIFICADA"] }
       ],
       "especialistas": [
         { "idCadastro": 10, "nome": "Ana Souza", "especialidades": ["Psicologia"] }
@@ -467,12 +469,18 @@ Corresponde aos botões **Compareceu**, **Falta justificada** e **Falta** da tel
 
 **Regras**
 
-| Situação | Regra |
-|---|---|
-| `PRESENTE` ou `FALTA_INJUSTIFICADA` | só a partir do **dia da terapia** (horário de Brasília) |
-| `FALTA_JUSTIFICADA` | pode ser registrada **com antecedência** (ex.: a família avisa que o paciente vai faltar amanhã) |
-| Terapia `CANCELADA` | não aceita marcação |
-| Paciente que não é desta terapia | `404` |
+As datas são no horário de Brasília. O prazo é de **1 dia** depois do dia da terapia (até o fim do dia seguinte) e pode ser mudado pela propriedade `gisa.terapia.prazo-presenca-dias` (variável `PRAZO_PRESENCA_DIAS`).
+
+| Momento | `PRESENTE` | `FALTA_INJUSTIFICADA` | `FALTA_JUSTIFICADA` | `PENDENTE` (desfazer) |
+|---|---|---|---|---|
+| Antes do dia da terapia | ❌ | ❌ | ✅ aviso antecipado | ✅ |
+| Do dia da terapia até o fim do prazo | ✅ | ✅ | ✅ | ✅ |
+| Depois do prazo | ❌ | ❌ | ✅ ex.: atestado entregue depois | ❌ |
+| Terapia `CANCELADA` | ❌ | ❌ | ❌ | ❌ |
+
+Exemplo: terapia na segunda. No domingo, só falta justificada ou desfazer. Na segunda e na terça, qualquer marcação. Da quarta em diante, só falta justificada.
+
+O campo `presencasPermitidas` de cada paciente segue esta tabela. Na terapia da segunda, consultada na quarta, ele vem como `["FALTA_JUSTIFICADA"]`; numa terapia cancelada, vem vazio. Paciente que não é desta terapia: `404`.
 
 **Horário liberado**
 
@@ -540,6 +548,7 @@ Data ou hora em formato errado (ex.: `"9h"`): `400` com `Corpo da requisição i
 | Presença: paciente não é desta terapia | `404` | O paciente com ID {id} não faz parte desta terapia. |
 | Presença: terapia cancelada | `400` | Não é possível registrar presença em uma terapia cancelada. |
 | Presença ou falta antes do dia da terapia | `400` | Presença e falta só podem ser registradas a partir do dia da terapia. |
+| Presença, falta ou desfazer depois do prazo | `400` | O prazo para registrar presença ou falta nesta terapia terminou em {dd/MM/yyyy}. Agora só é possível registrar falta justificada. |
 | Falta justificada sem justificativa | `400` | Informe a justificativa da falta. |
 | Desfazer falta justificada com horário já reocupado | `400` | Não é possível desfazer a falta justificada: o horário já foi ocupado por outra terapia. Conflito de horário: ... (aqui só conta horário ocupado, não a jornada) |
 | Status: terapia já concluída ou cancelada | `400` | A terapia está concluída e não pode mais mudar de status. / A terapia está cancelada e não pode mais mudar de status. |
@@ -585,7 +594,7 @@ Pré-requisito: dois pacientes ativos (`{p1}`, `{p2}`) e dois especialistas (`{e
 **Presença** (use uma terapia de **hoje**, num horário ainda por vir, com um só paciente `{p1}` e o especialista `{e1}`; chame-a de `{t}`):
 
 10. `PATCH /api/terapias/{t}/pacientes/{p1}/presenca` com `{"presenca": "PRESENTE"}`. Esperado: `200` e o paciente com `presenca: "PRESENTE"`.
-11. O mesmo em uma terapia de **amanhã**. Esperado: `400` (antes do dia da terapia).
+11. O mesmo em uma terapia de **amanhã**. Esperado: `400` (antes do dia da terapia). Numa terapia de **anteontem** ou mais antiga: `400` (prazo encerrado); só `FALTA_JUSTIFICADA` é aceita, como indica `presencasPermitidas`.
 12. Na terapia de amanhã, `{"presenca": "FALTA_JUSTIFICADA"}` sem justificativa. Esperado: `400`. Com `"justificativa": "Consulta médica"`: `200` e `horarioLiberado: true`.
 13. `POST /api/terapias` com outro paciente e o mesmo `{e1}` no horário da terapia de amanhã. Esperado: `201` (horário liberado).
 14. Na terapia de amanhã, `{"presenca": "PENDENTE"}`. Esperado: `400` (o horário foi reocupado no passo 13).
