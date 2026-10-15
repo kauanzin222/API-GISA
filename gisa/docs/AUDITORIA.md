@@ -10,15 +10,17 @@ A API registra automaticamente **quem fez o quê, quando e com qual resultado**.
 
 | Ação (`acao`) | Quando |
 |---|---|
-| `LOGIN` | toda tentativa de login, **inclusive as que falham** (útil para detectar tentativas de adivinhar senha) |
-| `CRIACAO` | todo `POST` (exceto login) |
+| `LOGIN` | **só as tentativas de login que falharam** (útil para detectar tentativas de adivinhar senha). Logins bem-sucedidos **não** são registrados |
+| `CRIACAO` | todo `POST` (exceto login), inclusive `POST /api/auth/esqueci-senha` e `POST /api/auth/redefinir-senha` |
 | `ALTERACAO` | todo `PATCH` ou `PUT` |
 | `EXCLUSAO` | todo `DELETE` (inativações e exclusões) |
-| `CONSULTA` | consultas a dados sensíveis: detalhes de paciente (`GET /api/pacientes/{id}`), detalhes de responsável (`GET /api/responsaveis/{id}`) e a própria auditoria |
+| `CONSULTA` | **só** `GET /api/pacientes/{id}` (acesso aos dados de saúde de um paciente) |
 
-Listagens e consultas comuns (ex.: `GET /api/pacientes`, `GET /api/cargos`) **não** são registradas.
+**Nenhum outro `GET` é registrado** (ex.: busca de pacientes, detalhes de responsável, consulta à própria auditoria, `GET /api/cargos`).
 
-Cada registro guarda: data e hora, CPF do usuário, ação, método HTTP, caminho chamado (com o ID, ex.: `/api/pacientes/5`), status da resposta e IP de origem.
+Cada registro guarda: data e hora, CPF do usuário, ação, método HTTP, caminho chamado (com o ID, ex.: `/api/pacientes/5`), status da resposta, IP de origem e, nas tentativas de login, o **e-mail digitado** (`emailInformado`).
+
+> Registros gravados antes desta versão continuam como estavam (inclusive logins bem-sucedidos e consultas que hoje não são mais registradas); neles, `emailInformado` vem `null`.
 
 > **O corpo das requisições nunca é gravado**, porque pode conter senhas e dados de saúde. A auditoria mostra que a pessoa X alterou o paciente 5 às 14:32, mas não os valores enviados.
 
@@ -28,9 +30,9 @@ Se o registro da auditoria falhar, a requisição original **não** é afetada; 
 
 ## `GET /api/auditoria` — consultar a auditoria
 
-Exige a permissão **`VISUALIZAR_AUDITORIA`** (ou `ACESSO_TOTAL`, do perfil "Administrador"). Sem ela: `403`. Consultar a auditoria também gera um registro.
+Exige a permissão **`VISUALIZAR_AUDITORIA`** (ou `ACESSO_TOTAL`, do perfil "Administrador"). Sem ela: `403`. Consultar a auditoria **não** gera registro.
 
-> Tentativas sem permissão (`403`) também são registradas, como qualquer outra requisição que altera dados ou consulta dado sensível: o `statusHttp` mostra a recusa.
+> Tentativas sem permissão (`403`) de alterar dados ou de abrir os detalhes de um paciente também são registradas: o `statusHttp` mostra a recusa.
 
 | Param | Padrão | Descrição |
 |---|---|---|
@@ -61,7 +63,8 @@ GET /api/auditoria?acao=LOGIN&inicio=2026-10-01&fim=2026-10-13
       "caminho": "/api/auth/login",
       "statusHttp": 401,
       "sucesso": false,
-      "ip": "177.10.20.30"
+      "ip": "177.10.20.30",
+      "emailInformado": "admin@gisa.local"
     }
   ],
   "page": {
@@ -74,17 +77,18 @@ GET /api/auditoria?acao=LOGIN&inicio=2026-10-01&fim=2026-10-13
 ```
 
 - `dataHora` vem em UTC (o `Z` no final); converta para o horário local na tela.
-- `nomeUsuario`: o nome da pessoa dona do CPF, ou `null` se o CPF não pertence a ninguém cadastrado (ex.: tentativa de login com CPF inexistente).
-- `sucesso`: `true` quando `statusHttp` é menor que 400. Um `LOGIN` com `sucesso: false` é uma senha errada ou um cadastro inativo.
-- `cpfUsuario` pode ser `null` em tentativas de login sem CPF.
+- `nomeUsuario`: o nome da pessoa dona do CPF, ou `null` se o CPF não pertence a ninguém cadastrado.
+- `sucesso`: `true` quando `statusHttp` é menor que 400. Os novos registros de `LOGIN` são sempre `sucesso: false`: e-mail não cadastrado, senha errada, cadastro inativo ou senha temporária expirada.
+- `emailInformado`: o e-mail digitado na tentativa de login (como veio, mesmo que não exista); `null` nos demais registros e nos registros antigos.
+- `cpfUsuario`: nas tentativas de login, o CPF do dono do e-mail digitado; `null` se o e-mail não pertence a nenhum usuário. O filtro `cpf` não encontra essas tentativas sem CPF: use `acao=LOGIN` e procure pelo `emailInformado`.
 
 ---
 
 ## Roteiro rápido de testes
 
-1. `POST /api/auth/login` com a senha errada do administrador e depois com a certa.
-2. `GET /api/auditoria?acao=LOGIN` com o token do administrador. Esperado: as duas tentativas, a mais recente primeiro; a errada com `statusHttp: 401` e `sucesso: false`.
-3. `PATCH` em qualquer paciente e `GET /api/pacientes/{id}`. Esperado: registros `ALTERACAO` e `CONSULTA` com o caminho e o CPF do administrador.
-4. `GET /api/pacientes` (listagem). Esperado: **nenhum** registro novo.
+1. `POST /api/auth/login` com o e-mail do administrador e a senha errada; depois com um e-mail inexistente; depois com a senha certa.
+2. `GET /api/auditoria?acao=LOGIN` com o token do administrador. Esperado: só as duas tentativas que falharam, a mais recente primeiro, com `statusHttp: 401`, `sucesso: false` e o `emailInformado` de cada uma; a do e-mail inexistente com `cpfUsuario: null`. O login certo **não** aparece.
+3. `PATCH` em qualquer paciente e `GET /api/pacientes/{id}`. Esperado: registros `ALTERACAO` e `CONSULTA` com o caminho e o CPF do administrador, e `emailInformado: null`.
+4. `GET /api/pacientes?termo=lucas`, `GET /api/responsaveis/{id}` e `GET /api/auditoria`. Esperado: **nenhum** registro novo.
 5. `GET /api/auditoria` com o token de um usuário sem `VISUALIZAR_AUDITORIA` (ex.: perfil "Recepção"). Esperado: `403`.
 6. Com esse mesmo usuário, `DELETE /api/pacientes/{id}`. Esperado: `403`. Com o administrador, `GET /api/auditoria?acao=EXCLUSAO`. Esperado: o registro dessa tentativa, com `statusHttp: 403`.

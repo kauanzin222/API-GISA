@@ -1,9 +1,12 @@
 package com.fatec.gisa.services.usuario;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import org.hibernate.Hibernate;
 import org.springframework.data.domain.Page;
@@ -15,13 +18,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fatec.gisa.dtos.FiltroPessoaDTO;
 import com.fatec.gisa.dtos.profissional.response.CargoResumoDTO;
 import com.fatec.gisa.dtos.usuario.request.AlterarSenhaRequestDTO;
-import com.fatec.gisa.dtos.usuario.request.RedefinirSenhaRequestDTO;
 import com.fatec.gisa.dtos.usuario.request.UsuarioRequestDTO;
 import com.fatec.gisa.dtos.usuario.response.PermissaoResumoDTO;
 import com.fatec.gisa.dtos.usuario.response.UsuarioDetalheDTO;
 import com.fatec.gisa.dtos.usuario.response.UsuarioListaDTO;
 import com.fatec.gisa.dtos.usuario.response.UsuarioLogadoDTO;
 import com.fatec.gisa.dtos.usuario.response.UsuarioResumoDTO;
+import com.fatec.gisa.exceptions.ConflitoException;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.profissional.Profissional;
@@ -31,6 +34,7 @@ import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.enums.TipoCadastro;
 import com.fatec.gisa.repositories.PessoaRepository;
 import com.fatec.gisa.repositories.usuario.PerfilRepository;
+import com.fatec.gisa.repositories.usuario.TokenRedefinicaoSenhaRepository;
 import com.fatec.gisa.repositories.usuario.UsuarioRepository;
 import com.fatec.gisa.services.profissional.ProfissionalMapper;
 
@@ -39,23 +43,32 @@ import com.fatec.gisa.services.profissional.ProfissionalMapper;
 @Service
 public class UsuarioService {
 
+    public static final String GERENCIAR_PERFIS = "GERENCIAR_PERFIS";
+    private static final Duration VALIDADE_SENHA_TEMPORARIA = Duration.ofDays(7);
+
     private final UsuarioRepository usuarioRepository;
     private final PessoaRepository pessoaRepository;
     private final PerfilRepository perfilRepository;
+    private final TokenRedefinicaoSenhaRepository tokenRedefinicaoSenhaRepository;
     private final PasswordEncoder passwordEncoder;
     private final ProfissionalMapper profissionalMapper;
+    private final GeradorSenhaTemporaria geradorSenhaTemporaria;
 
     // Constructor Padrão
     public UsuarioService(UsuarioRepository usuarioRepository,
                           PessoaRepository pessoaRepository,
                           PerfilRepository perfilRepository,
+                          TokenRedefinicaoSenhaRepository tokenRedefinicaoSenhaRepository,
                           PasswordEncoder passwordEncoder,
-                          ProfissionalMapper profissionalMapper) {
+                          ProfissionalMapper profissionalMapper,
+                          GeradorSenhaTemporaria geradorSenhaTemporaria) {
         this.usuarioRepository = usuarioRepository;
         this.pessoaRepository = pessoaRepository;
         this.perfilRepository = perfilRepository;
+        this.tokenRedefinicaoSenhaRepository = tokenRedefinicaoSenhaRepository;
         this.passwordEncoder = passwordEncoder;
         this.profissionalMapper = profissionalMapper;
+        this.geradorSenhaTemporaria = geradorSenhaTemporaria;
     }
 
     // cpf vem do token do usuário logado
@@ -69,6 +82,7 @@ public class UsuarioService {
                 pessoa.getIdCadastro(),
                 pessoa.getNome(),
                 pessoa.getCpf(),
+                pessoa.getEmail(),
                 TipoCadastro.de(pessoa),
                 acesso.perfil(),
                 acesso.permissoes().stream()
@@ -76,14 +90,14 @@ public class UsuarioService {
                         .toList());
     }
 
-    // Método chamado dentro do fluxo de cadastro de Profissional
+    // Método chamado dentro do fluxo de cadastro "com acesso" (/com-usuario)
     @Transactional
-    public Usuario criarUsuarioParaPessoa(Pessoa pessoa, UsuarioRequestDTO dto) {
+    public AcessoCriado criarUsuarioParaPessoa(Pessoa pessoa, UsuarioRequestDTO dto) {
         return criarUsuario(pessoa, dto);
     }
 
     @Transactional
-    public Usuario criarAcessoParaPessoa(Pessoa pessoa, UsuarioRequestDTO dto) {
+    public AcessoCriado criarAcessoParaPessoa(Pessoa pessoa, UsuarioRequestDTO dto) {
         if (pessoa.getStatusCadastro() == StatusCadastro.INATIVO) {
             throw new IllegalArgumentException(
                     "Não é possível conceder acesso a um cadastro inativo.");
@@ -91,20 +105,52 @@ public class UsuarioService {
         return criarUsuario(pessoa, dto);
     }
 
-    private Usuario criarUsuario(Pessoa pessoa, UsuarioRequestDTO dto) {
+    // A senha não vem do front: o back gera uma senha temporária, que quem chamou envia por e-mail
+    private AcessoCriado criarUsuario(Pessoa pessoa, UsuarioRequestDTO dto) {
         if (usuarioRepository.existsById(pessoa.getIdCadastro())) {
             throw new IllegalArgumentException("Esta pessoa já possui um usuário cadastrado.");
         }
+        exigirEmail(pessoa);
 
         Perfil perfil = perfilRepository.findById(dto.idPerfil())
                 .orElseThrow(() -> new IllegalArgumentException("Perfil não encontrado com ID: " + dto.idPerfil()));
 
         Usuario usuario = new Usuario();
         usuario.setPessoa(pessoa); // O @MapsId vai atribuir o mesmo IDCadastro de Pessoa
-        usuario.setSenha(passwordEncoder.encode(dto.senha()));
         usuario.setPerfil(perfil);
+        SenhaTemporariaGerada senha = aplicarSenhaTemporaria(usuario);
 
-        return usuarioRepository.save(usuario);
+        return new AcessoCriado(usuarioRepository.save(usuario), senha);
+    }
+
+    // Nova senha temporária a pedido do administrador (também serve para reenviar o acesso).
+    // Invalida a senha anterior, as sessões abertas e os links de redefinição pendentes
+    @Transactional
+    public SenhaTemporariaGerada gerarNovaSenhaTemporaria(Long idCadastro) {
+        Usuario usuario = buscarUsuario(idCadastro);
+        exigirEmail(usuario.getPessoa());
+        SenhaTemporariaGerada senha = aplicarSenhaTemporaria(usuario);
+        usuario.setVersaoToken(usuario.getVersaoToken() + 1);
+        tokenRedefinicaoSenhaRepository.invalidarAbertos(usuario.getIdCadastro(), Instant.now());
+        usuarioRepository.save(usuario);
+        return senha;
+    }
+
+    private SenhaTemporariaGerada aplicarSenhaTemporaria(Usuario usuario) {
+        String senha = geradorSenhaTemporaria.gerar();
+        Instant expiraEm = Instant.now().plus(VALIDADE_SENHA_TEMPORARIA);
+        usuario.setSenha(passwordEncoder.encode(senha));
+        usuario.setSenhaTemporaria(true);
+        usuario.setSenhaTemporariaExpiraEm(expiraEm);
+        Pessoa pessoa = usuario.getPessoa();
+        return new SenhaTemporariaGerada(pessoa.getNome(), pessoa.getEmail(), senha, expiraEm);
+    }
+
+    // O e-mail é o login e o destino da senha temporária
+    private void exigirEmail(Pessoa pessoa) {
+        if (pessoa.getEmail() == null || pessoa.getEmail().isBlank()) {
+            throw new IllegalArgumentException("O cadastro precisa ter um e-mail para receber acesso ao sistema.");
+        }
     }
 
     // cpf vem do token do usuário logado
@@ -127,17 +173,13 @@ public class UsuarioService {
         trocarSenha(usuario, dto.novaSenha());
     }
 
+    // Grava a nova senha (definitiva) e invalida os tokens emitidos antes da troca.
+    // Usado também pela redefinição de senha (primeiro acesso e "esqueci minha senha")
     @Transactional
-    public void redefinirSenha(Long idCadastro, RedefinirSenhaRequestDTO dto) {
-        Usuario usuario = usuarioRepository.findById(idCadastro)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Este cadastro não possui usuário de acesso. ID: " + idCadastro));
-        trocarSenha(usuario, dto.novaSenha());
-    }
-
-    // Grava a nova senha e invalida os tokens emitidos antes da troca
-    private void trocarSenha(Usuario usuario, String novaSenha) {
+    public void trocarSenha(Usuario usuario, String novaSenha) {
         usuario.setSenha(passwordEncoder.encode(novaSenha));
+        usuario.setSenhaTemporaria(false);
+        usuario.setSenhaTemporariaExpiraEm(null);
         usuario.setVersaoToken(usuario.getVersaoToken() + 1);
         usuarioRepository.save(usuario);
     }
@@ -161,6 +203,7 @@ public class UsuarioService {
                         tiposFiltrados.contains(TipoCadastro.PROFISSIONAL),
                         tiposFiltrados.contains(TipoCadastro.ESPECIALISTA),
                         tiposFiltrados.contains(TipoCadastro.ESPECIALISTA_PJ),
+                        tiposFiltrados.contains(TipoCadastro.ASSISTENTE_SOCIAL),
                         tiposFiltrados.contains(TipoCadastro.PESSOA),
                         pageable)
                 .map(pessoa -> new UsuarioListaDTO(
@@ -190,6 +233,9 @@ public class UsuarioService {
         // ID enviado no corpo: inexistente torna o pedido inválido (400), não a rota (404)
         Perfil perfil = perfilRepository.findById(idPerfil)
                 .orElseThrow(() -> new IllegalArgumentException("Perfil não encontrado com ID: " + idPerfil));
+        if (!permiteGerenciarPerfis(perfil)) {
+            garantirGestorDePerfis(gestor -> gestor.getIdCadastro().equals(usuario.getIdCadastro()));
+        }
         boolean novoPerfilTemAcessoTotal = perfil.getPermissoes().stream()
                 .anyMatch(permissao -> PermissaoUsuarioLogado.ACESSO_TOTAL.equals(permissao.getNome()));
         if (!novoPerfilTemAcessoTotal) {
@@ -208,6 +254,7 @@ public class UsuarioService {
         if (pessoa.getCpf().equals(cpfLogado)) {
             throw new IllegalArgumentException("Você não pode retirar o seu próprio acesso.");
         }
+        garantirGestorDePerfis(gestor -> gestor.getIdCadastro().equals(usuario.getIdCadastro()));
         garantirOutroAdministrador(usuario);
 
         // Pessoa tem cascade para o usuário: sem desfazer o vínculo, o usuário seria salvo de novo
@@ -225,6 +272,27 @@ public class UsuarioService {
         if (usuarioEhAdministrador && administradores.size() == 1) {
             throw new IllegalArgumentException("O sistema precisa de ao menos um usuário ativo com acesso total.");
         }
+    }
+
+    // Proteção contra trancar o sistema: sempre precisa sobrar ao menos um usuário ativo cujo perfil
+    // tenha GERENCIAR_PERFIS ou ACESSO_TOTAL. "perdeAcesso" diz quais desses usuários deixariam de
+    // contar depois da operação (troca de perfil, retirada de acesso, inativação, mudança nas
+    // permissões de um perfil). Chamado antes de alterar: a consulta trava esses usuários, e duas
+    // operações simultâneas esperam uma pela outra
+    @Transactional
+    public void garantirGestorDePerfis(Predicate<Usuario> perdeAcesso) {
+        List<Usuario> gestores = usuarioRepository.travarComAlgumaPermissao(
+                List.of(PermissaoUsuarioLogado.ACESSO_TOTAL, GERENCIAR_PERFIS), StatusCadastro.ATIVO);
+        if (!gestores.isEmpty() && gestores.stream().allMatch(perdeAcesso)) {
+            throw new ConflitoException("Operação bloqueada: o sistema precisa de ao menos um usuário ativo "
+                    + "com permissão para gerenciar perfis (GERENCIAR_PERFIS ou ACESSO_TOTAL).");
+        }
+    }
+
+    public static boolean permiteGerenciarPerfis(Perfil perfil) {
+        return perfil.getPermissoes() != null && perfil.getPermissoes().stream()
+                .anyMatch(permissao -> PermissaoUsuarioLogado.ACESSO_TOTAL.equals(permissao.getNome())
+                        || GERENCIAR_PERFIS.equals(permissao.getNome()));
     }
 
     private Usuario buscarUsuario(Long idCadastro) {
@@ -245,7 +313,7 @@ public class UsuarioService {
                 pessoa.getIdCadastro(),
                 pessoa.getNome(),
                 pessoa.getCpf(),
-                profissional == null ? null : profissional.getEmail(),
+                pessoa.getEmail(),
                 TipoCadastro.de(pessoa),
                 pessoa.getStatusCadastro(),
                 profissional == null || profissional.getCargo() == null

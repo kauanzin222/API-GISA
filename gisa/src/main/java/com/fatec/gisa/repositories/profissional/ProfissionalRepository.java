@@ -19,16 +19,12 @@ public interface ProfissionalRepository extends JpaRepository<Profissional, Long
 
     Optional<Profissional> findByCpf(String cpf);
 
-    boolean existsByEmail(String email);
-
-    boolean existsByEmailAndIdCadastroNot(String email, Long idCadastro);
-
     List<Profissional> findByCargo_IdCargoOrderByNomeAsc(Long idCargo);
 
     boolean existsByCargo_IdCargo(Long idCargo);
 
-    // type(p) é a classe exata do cadastro (a herança é JOINED): Profissional, Especialista ou
-    // EspecialistaPJ. Os três indicadores dizem quais tipos entram; sem filtro, todos vêm true.
+    // type(p) é a classe exata do cadastro (a herança é JOINED): Profissional, Especialista,
+    // EspecialistaPJ ou AssistenteSocial. Os indicadores dizem quais tipos entram; sem filtro, todos vêm true.
     @Query("""
             select p from Profissional p
             where p.cpf like concat('%', :cpf, '%')
@@ -36,7 +32,8 @@ public interface ProfissionalRepository extends JpaRepository<Profissional, Long
               and p.statusCadastro in :status
               and ((:profissional = true and type(p) = Profissional)
                 or (:especialista = true and type(p) = Especialista)
-                or (:especialistaPJ = true and type(p) = EspecialistaPJ))
+                or (:especialistaPJ = true and type(p) = EspecialistaPJ)
+                or (:assistenteSocial = true and type(p) = AssistenteSocial))
             """)
     Page<Profissional> buscar(
             @Param("cpf") String cpf,
@@ -45,5 +42,6 @@ public interface ProfissionalRepository extends JpaRepository<Profissional, Long
             @Param("profissional") boolean profissional,
             @Param("especialista") boolean especialista,
             @Param("especialistaPJ") boolean especialistaPJ,
+            @Param("assistenteSocial") boolean assistenteSocial,
             Pageable pageable);
 }

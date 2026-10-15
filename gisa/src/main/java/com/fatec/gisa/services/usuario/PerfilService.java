@@ -31,6 +31,7 @@ public class PerfilService {
     private final PerfilRepository perfilRepository;
     private final UsuarioRepository usuarioRepository;
     private final PermissaoService permissaoService;
+    private final UsuarioService usuarioService;
 
     @Transactional(readOnly = true)
     public List<PerfilListaDTO> listarTodos() {
@@ -106,6 +107,7 @@ public class PerfilService {
             List<Permissao> permissoes = dto.getPermissoesIds() == null
                     ? List.of()
                     : permissaoService.buscarPorIds(dto.getPermissoesIds());
+            garantirGestorDePerfis(perfil, permissoes);
             perfil.getPermissoes().clear();
             perfil.getPermissoes().addAll(permissoes);
         }
@@ -130,12 +132,15 @@ public class PerfilService {
     @Transactional
     public Perfil removerPermissao(Long idPerfil, Long idPermissao) {
         Perfil perfil = buscarPerfil(idPerfil);
-        boolean removida = perfil.getPermissoes()
-                .removeIf(permissao -> permissao.getIdPermissao().equals(idPermissao));
-        if (!removida) {
+        List<Permissao> restantes = perfil.getPermissoes().stream()
+                .filter(permissao -> !permissao.getIdPermissao().equals(idPermissao))
+                .toList();
+        if (restantes.size() == perfil.getPermissoes().size()) {
             throw new ResourceNotFoundException(
                     "O perfil não possui a permissão com ID: " + idPermissao);
         }
+        garantirGestorDePerfis(perfil, restantes);
+        perfil.getPermissoes().removeIf(permissao -> permissao.getIdPermissao().equals(idPermissao));
         return perfilRepository.save(perfil);
     }
 
@@ -146,7 +151,19 @@ public class PerfilService {
             throw new IllegalArgumentException(
                     "Não é possível excluir o perfil: há usuários vinculados a ele.");
         }
+        // Sem usuários no perfil, a exclusão não tira ninguém da contagem; a verificação fica por garantia
+        garantirGestorDePerfis(perfil, List.of());
         perfilRepository.delete(perfil);
+    }
+
+    // Se o perfil deixar de permitir gerenciar perfis, os usuários dele deixam de contar para a
+    // proteção contra trancar o sistema (409 se não sobrar nenhum usuário ativo que gerencie perfis)
+    private void garantirGestorDePerfis(Perfil perfil, List<Permissao> novasPermissoes) {
+        Perfil depois = new Perfil(perfil.getIdPerfil(), perfil.getNome(), novasPermissoes);
+        if (!UsuarioService.permiteGerenciarPerfis(depois)) {
+            usuarioService.garantirGestorDePerfis(
+                    gestor -> gestor.getPerfil().getIdPerfil().equals(perfil.getIdPerfil()));
+        }
     }
 
     private Perfil buscarPerfil(Long idPerfil) {

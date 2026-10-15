@@ -49,6 +49,7 @@ public class PermissaoService {
         return new PermissaoResumoDTO(
                 permissao.getIdPermissao(),
                 permissao.getNome(),
-                permissao.getDescricao());
+                permissao.getDescricao(),
+                permissao.getCategoria());
     }
 }

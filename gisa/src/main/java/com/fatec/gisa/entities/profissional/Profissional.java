@@ -2,7 +2,6 @@ package com.fatec.gisa.entities.profissional;
 
 import com.fatec.gisa.entities.Pessoa;
 
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -21,9 +20,6 @@ import lombok.Setter;
 @Table(name = "Profissional")
 @PrimaryKeyJoinColumn(name = "IDProfissional", referencedColumnName = "IDCadastro")
 public class Profissional extends Pessoa {
-
-    @Column(name = "Email")
-    private String email;
 
     @ManyToOne
     @JoinColumn(name = "IDCargo")

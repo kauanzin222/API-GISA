@@ -51,4 +51,8 @@ public class LogAuditoria {
 
     @Column(name = "IP")
     private String ip;
+
+    // E-mail digitado nas tentativas de login; nulo nos demais registros
+    @Column(name = "EmailInformado")
+    private String emailInformado;
 }

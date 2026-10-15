@@ -6,13 +6,13 @@ Autenticação, convenções, enums, formato de erro e regras comuns de PATCH/DE
 
 | Método | Rota | Permissão | Descrição |
 |---|---|---|---|
-| `GET` | `/api/pacientes` | `VISUALIZAR_PACIENTES` | lista pacientes (paginado), com busca por CPF, nome e escola |
-| `GET` | `/api/pacientes/{idCadastro}` | `VISUALIZAR_PACIENTES` | detalhes de um paciente |
+| `GET` | `/api/pacientes` | `VISUALIZAR_PACIENTES` ou `VISUALIZAR_PACIENTES_VINCULADOS` | **busca** pacientes por CPF ou nome (até 20, sem paginação); lista os pacientes de uma escola |
+| `GET` | `/api/pacientes/{idCadastro}` | `VISUALIZAR_PACIENTES` ou `VISUALIZAR_PACIENTES_VINCULADOS` | detalhes de um paciente |
 | `GET` | `/api/pacientes/{idCadastro}/historico` | `VISUALIZAR_HISTORICO_PACIENTE` | linha do tempo do paciente (paginado) |
 | `POST` | `/api/pacientes` | `CADASTRAR_PACIENTE` | cadastra paciente com prontuário, endereços, responsáveis e CIDs |
 | `PATCH` | `/api/pacientes/{idCadastro}` | `EDITAR_PACIENTE` | atualiza paciente |
 | `POST` | `/api/pacientes/{idCadastro}/responsaveis` | `EDITAR_PACIENTE` | cadastra um responsável e o vincula ao paciente |
-| `DELETE` | `/api/pacientes/{idCadastro}` | `INATIVAR_PACIENTE` | inativa paciente |
+| `DELETE` | `/api/pacientes/{idCadastro}` | `INATIVAR_PACIENTE` | inativa paciente e cuida das terapias futuras dele |
 | `GET` | `/api/responsaveis` | `VISUALIZAR_PACIENTES` | busca responsáveis por CPF ou nome (paginado) |
 | `GET` | `/api/responsaveis/{idResponsavel}` | `VISUALIZAR_PACIENTES` | detalhes de um responsável |
 | `PATCH` | `/api/responsaveis/{idResponsavel}` | `EDITAR_PACIENTE` | atualiza dados pessoais do responsável |
@@ -22,75 +22,68 @@ Autenticação, convenções, enums, formato de erro e regras comuns de PATCH/DE
 
 > Escolas e CIDs usados no paciente têm documentos próprios: `ESCOLAS.md` e `CIDS.md`.
 
+### Escopo de acesso aos pacientes (LGPD)
+
+| Permissão do usuário | O que ele vê |
+|---|---|
+| `VISUALIZAR_PACIENTES` (ou `ACESSO_TOTAL`) | todos os pacientes |
+| só `VISUALIZAR_PACIENTES_VINCULADOS` | apenas os pacientes com **vínculo ativo com ele** (assistente social; ver `ASSISTENTES-SOCIAIS.md`). A busca traz só esses, e `GET /api/pacientes/{id}` e `GET /api/pacientes/{id}/historico` de paciente não vinculado respondem `403` (também para ID inexistente) |
+
+O filtro é sempre feito no back; o front não precisa filtrar nada.
+
 ---
 
-## `GET /api/pacientes` — listar pacientes (paginado)
+## `GET /api/pacientes` — buscar pacientes
 
-Aceita busca por CPF e/ou nome, além de paginação e ordenação. Pacientes inativos também aparecem (confira `statusPaciente`).
+Não existe listagem completa de pacientes: **só se encontra um paciente buscando por ele**. Sem paginação: no máximo **20** resultados, ordenados por nome. Pacientes inativos também aparecem (confira `statusCadastro`).
 
-**Query params (todos opcionais)**
+**Query params**
 
-| Param | Padrão | Descrição |
+| Param | Obrigatório | Descrição |
 |---|---|---|
-| `cpf` | — | trecho do CPF; a máscara é ignorada (`123.456` vira `123456`) |
-| `nome` | — | trecho do nome, sem diferenciar maiúsculas de minúsculas |
-| `idEscola` | — | só pacientes desta escola (ativos e inativos); é assim que a tela da escola lista os pacientes dela. Escola inexistente não é erro: a lista vem vazia |
-| `page` | `0` | número da página (começa em 0) |
-| `size` | `9` | itens por página |
-| `sort` | `nome,asc` | ordenação, ex.: `sort=nome,desc`. Campos úteis: `nome`, `dataCadastro`, `statusPaciente` |
+| `termo` | sim, exceto com `idEscola` | só dígitos (ignorando `.` e `-`): busca por **CPF exato**, exige os 11 dígitos. Qualquer outro texto: busca por **nome**, por trecho, sem diferenciar acento nem maiúsculas, com **ao menos 3 caracteres** |
+| `idEscola` | não | só pacientes desta escola (ativos e inativos); é assim que a tela da escola lista os pacientes dela. Com `idEscola`, o `termo` é opcional (e, se enviado, também filtra). Escola inexistente não é erro: a lista vem vazia |
+
+`page`, `size` e `sort` não existem nesta rota (são ignorados).
 
 **Exemplo**
 
 ```
-GET /api/pacientes?page=0&size=9&sort=nome,asc
-GET /api/pacientes?nome=lucas
-GET /api/pacientes?cpf=456789
-GET /api/pacientes?idEscola=3&nome=lucas
+GET /api/pacientes?termo=lucas
+GET /api/pacientes?termo=Lúcás           (encontra "Lucas")
+GET /api/pacientes?termo=456.789.012-49
+GET /api/pacientes?idEscola=3
+GET /api/pacientes?idEscola=3&termo=lucas
 ```
 
-Os filtros se combinam: com `cpf`, `nome` e `idEscola` juntos, o paciente precisa atender a todos. `idEscola` zero ou negativo responde `400` (`Valor inválido para 'idEscola': {valor}`).
-
-**Resposta `200`**
+**Resposta `200`** (lista simples, sem o objeto `page`):
 
 ```json
-{
-  "content": [
-    {
-      "idCadastro": 1,
-      "nome": "Lucas Almeida Souza",
-      "idade": 11,
-      "cpf": "45678901234",
-      "responsaveis": [
-        {
-          "nome": "Maria Almeida Souza",
-          "celular": "15999990000",
-          "grauParentesco": "MAE"
-        }
-      ],
-      "cids": [
-        { "codigoCID": "F84.0", "descricao": "Autismo infantil" }
-      ],
-      "statusPaciente": "MATRICULADO"
-    }
-  ],
-  "page": {
-    "size": 9,
-    "number": 0,
-    "totalElements": 1,
-    "totalPages": 1
+[
+  {
+    "idCadastro": 1,
+    "nome": "Lucas Almeida Souza",
+    "cpfMascarado": "***.789.012-**",
+    "statusCadastro": "ATIVO"
   }
-}
+]
 ```
 
-- Os dados de paginação vêm dentro do objeto `page` (não no nível raiz).
-- `idade` é calculada pelo back, em anos completos.
-- `responsaveis` e `cids` vêm como `[]` quando não há itens. Os CIDs vêm ordenados pelo código.
+- O CPF completo **não** sai nesta rota: `cpfMascarado` mostra só os dígitos do meio. Para os dados completos, use `GET /api/pacientes/{idCadastro}`.
+- Nenhum resultado: `[]`.
+
+| Situação | Status | Mensagem |
+|---|---|---|
+| Sem `termo` e sem `idEscola` | `400` | O parâmetro 'termo' é obrigatório. |
+| `termo` só com dígitos, mas sem 11 | `400` | A busca por CPF exige os 11 dígitos. |
+| `termo` de nome com menos de 3 caracteres | `400` | A busca por nome exige ao menos 3 caracteres. |
+| `idEscola` zero ou negativo | `400` | Valor inválido para 'idEscola': {valor} |
 
 ---
 
 ## `GET /api/pacientes/{idCadastro}` — detalhes do paciente
 
-Retorna dados pessoais, endereços, escola, CIDs, prontuário e responsáveis com o grau de parentesco. É a base para montar o formulário de edição.
+Retorna dados pessoais, endereços, escola, CIDs, prontuário, responsáveis com o grau de parentesco e os assistentes sociais vinculados. É a base para montar o formulário de edição.
 
 **Resposta `200`**
 
@@ -99,7 +92,7 @@ Retorna dados pessoais, endereços, escola, CIDs, prontuário e responsáveis co
   "pessoa": {
     "idCadastro": 1,
     "nome": "Lucas Almeida Souza",
-    "cpf": "45678901234",
+    "cpf": "45678901249",
     "dataNascimento": "2015-03-21",
     "sexo": "M",
     "celular": "15988887777",
@@ -140,7 +133,7 @@ Retorna dados pessoais, endereços, escola, CIDs, prontuário e responsáveis co
       "responsavel": {
         "idCadastro": 2,
         "nome": "Maria Almeida Souza",
-        "cpf": "56789012345",
+        "cpf": "56789012303",
         "dataNascimento": "1988-07-02",
         "sexo": "F",
         "celular": "15999990000",
@@ -152,14 +145,19 @@ Retorna dados pessoais, endereços, escola, CIDs, prontuário e responsáveis co
       "ocupacao": "Professora",
       "grauParentesco": "MAE"
     }
+  ],
+  "assistentesSociais": [
+    { "idCadastro": 20, "nome": "Paula Ribeiro" }
   ]
 }
 ```
 
 - `escola` e `prontuario` podem vir `null`.
 - O `idCadastro` de cada `responsavel` é o valor usado como `idResponsavel` no PATCH do paciente e nas rotas `/api/responsaveis/{idResponsavel}`.
+- `assistentesSociais`: vínculos **ativos**, ordenados pelo nome (`[]` quando não há). Para vincular ou desvincular a partir da tela do paciente, use as rotas do assistente social: `POST /api/assistentes-sociais/{idCadastro}/pacientes` e `DELETE /api/assistentes-sociais/{idCadastro}/pacientes/{idPaciente}` (ver `ASSISTENTES-SOCIAIS.md`).
+- Consultar esta rota gera um registro `CONSULTA` na auditoria (acesso a dados de saúde).
 
-**Resposta `404`** (paciente não existe): corpo de erro com `message` = `Paciente não encontrado com ID: {id}`.
+**Resposta `404`** (paciente não existe): corpo de erro com `message` = `Paciente não encontrado com ID: {id}`. **`403`** para quem só vê os pacientes vinculados e não tem vínculo com este (ver "Escopo de acesso").
 
 ---
 
@@ -241,6 +239,7 @@ Linha do tempo exibida na tela do paciente: cadastro, mudanças de status, respo
 | Situação | Status | Mensagem |
 |---|---|---|
 | Paciente inexistente | `404` | Paciente não encontrado com ID: {id} |
+| Usuário com só `VISUALIZAR_PACIENTES_VINCULADOS` e paciente não vinculado (ou inexistente) | `403` | Você não tem permissão para realizar esta ação. |
 | `tipo` inválido | `400` | Valor inválido para 'tipo': {valor} |
 | Data em formato errado | `400` | Valor inválido para 'inicio': {valor} |
 | `fim` antes de `inicio` | `400` | A data final deve ser igual ou posterior à data inicial. |
@@ -321,7 +320,7 @@ Um responsável é uma pessoa: exige os mesmos dados básicos do paciente (`nome
 ```json
 {
   "nome": "Lucas Almeida Souza",
-  "cpf": "45678901234",
+  "cpf": "45678901249",
   "dataNascimento": "2015-03-21",
   "sexo": "M",
   "estadoCivil": "SOLTEIRO",
@@ -351,7 +350,7 @@ Um responsável é uma pessoa: exige os mesmos dados básicos do paciente (`nome
   "responsaveis": [
     {
       "nome": "Maria Almeida Souza",
-      "cpf": "56789012345",
+      "cpf": "56789012303",
       "dataNascimento": "1988-07-02",
       "sexo": "F",
       "estadoCivil": "CASADO",
@@ -362,7 +361,7 @@ Um responsável é uma pessoa: exige os mesmos dados básicos do paciente (`nome
     },
     {
       "nome": "Carlos Souza",
-      "cpf": "67890123456",
+      "cpf": "67890123469",
       "dataNascimento": "1985-01-15",
       "sexo": "M",
       "estadoCivil": "DIVORCIADO",
@@ -391,7 +390,7 @@ Um responsável é uma pessoa: exige os mesmos dados básicos do paciente (`nome
 {
   "idCadastro": 1,
   "nome": "Lucas Almeida Souza",
-  "cpf": "45678901234",
+  "cpf": "45678901249",
   "statusPaciente": "MATRICULADO",
   "dataCadastro": "2026-10-08"
 }
@@ -473,7 +472,7 @@ Cadastra um responsável e o vincula a um paciente já existente, sem mexer nos 
 ```json
 {
   "nome": "Ana Souza",
-  "cpf": "78901234567",
+  "cpf": "78901234505",
   "dataNascimento": "1960-11-30",
   "sexo": "F",
   "estadoCivil": "VIUVO",
@@ -501,9 +500,29 @@ Não apaga o registro nem vínculos e histórico.
 
 - `statusCadastro` passa a `INATIVO`.
 - `statusPaciente` passa a `DESLIGADO`; se o paciente já estiver em `ALTA`, esse status é **preservado**.
-- Retorna `204 No Content`. Paciente inexistente: `404`.
+- **Terapias futuras**, na mesma transação (se algo falhar, nada é gravado). Só contam as terapias `AGENDADA` que ainda não começaram (data e hora de início depois de agora, no fuso de São Paulo):
+  1. **individuais** (o paciente é o único paciente): passam a `CANCELADA`, com `motivoCancelamento` = `Paciente inativado`;
+  2. **coletivas**: o paciente é **retirado** e a terapia continua para os demais. A modalidade é recalculada: se sobrar 1 paciente, ela vira `INDIVIDUAL`.
+  3. Terapias passadas, em atendimento, concluídas ou canceladas **não** são tocadas.
+- Os vínculos com assistentes sociais **não** são alterados.
+- As mudanças nas terapias geram os eventos de sempre no histórico (`TERAPIA_CANCELADA`, e `TERAPIA_ALTERADA` para quem sai e para quem continua na coletiva).
+- Paciente inexistente: `404`.
 
-Para reativar, use o PATCH com `"statusCadastro": "ATIVO"` (e, se for o caso, `"statusPaciente": "MATRICULADO"`).
+**Resposta `200`** (antes era `204`):
+
+```json
+{
+  "terapiasCanceladas": 3,
+  "terapiasColetivasRemovido": 2
+}
+```
+
+| Campo | Significado |
+|---|---|
+| `terapiasCanceladas` | terapias individuais canceladas |
+| `terapiasColetivasRemovido` | terapias coletivas de que o paciente foi retirado |
+
+Para reativar, use o PATCH com `"statusCadastro": "ATIVO"` (e, se for o caso, `"statusPaciente": "MATRICULADO"`). A reativação **não** devolve o paciente às terapias canceladas ou de que foi retirado.
 
 ---
 
@@ -514,7 +533,7 @@ Serve para encontrar um responsável **já cadastrado**, por exemplo no pop-up "
 **Query params (todos opcionais):** `cpf`, `nome`, `page`, `size` (padrão `9`) e `sort` (padrão `nome,asc`), com as mesmas regras da listagem de pacientes. Responsáveis inativos também aparecem.
 
 ```
-GET /api/responsaveis?cpf=56789012345
+GET /api/responsaveis?cpf=56789012303
 ```
 
 **Resposta `200`**
@@ -525,7 +544,7 @@ GET /api/responsaveis?cpf=56789012345
     {
       "idCadastro": 2,
       "nome": "Maria Almeida Souza",
-      "cpf": "56789012345",
+      "cpf": "56789012303",
       "celular": "15999990000",
       "ocupacao": "Professora",
       "statusCadastro": "ATIVO"
@@ -551,7 +570,7 @@ GET /api/responsaveis?cpf=56789012345
   "pessoa": {
     "idCadastro": 2,
     "nome": "Maria Almeida Souza",
-    "cpf": "56789012345",
+    "cpf": "56789012303",
     "dataNascimento": "1988-07-02",
     "sexo": "F",
     "celular": "15999990000",
@@ -608,7 +627,7 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. O responsáve
 | Campo | Mensagem |
 |---|---|
 | `nome` | O nome é obrigatório |
-| `cpf` | O CPF é obrigatório / O CPF deve conter 11 dígitos numéricos |
+| `cpf` | O CPF é obrigatório / O CPF deve conter 11 dígitos numéricos / CPF inválido (dígitos verificadores errados ou sequência repetida) |
 | `dataNascimento` | A data de nascimento é obrigatória |
 | `sexo` | O sexo é obrigatório / O sexo deve ser F, M ou O |
 | `estadoCivil` | O estado civil é obrigatório |
@@ -678,9 +697,20 @@ Erros do histórico: ver a seção `GET /api/pacientes/{idCadastro}/historico`.
 
 **Filtro por escola**
 
-19. `GET /api/pacientes?idEscola={idEscola}` com a escola do passo 1. Esperado: o paciente. Com outra escola (sem pacientes): `content` vazio. Com `idEscola=0`: `400`.
+19. `GET /api/pacientes?idEscola={idEscola}` com a escola do passo 1. Esperado: o paciente. Com outra escola (sem pacientes): `[]`. Com `idEscola=0`: `400`.
+
+**Busca**
+
+20. `GET /api/pacientes` (sem parâmetros). Esperado: `400` `O parâmetro 'termo' é obrigatório.`
+21. `GET /api/pacientes?termo=lu`. Esperado: `400` (menos de 3 caracteres). `GET /api/pacientes?termo=4567890`: `400` (CPF incompleto).
+22. `GET /api/pacientes?termo=lúcas` e `?termo=456.789.012-49`. Esperado: o paciente, com `cpfMascarado: "***.789.012-**"` e sem o CPF completo.
+
+**Inativação com terapias**
+
+23. Agende para o paciente uma terapia individual e uma coletiva (com outro paciente), ambas no futuro. `DELETE /api/pacientes/{id}`. Esperado: `200` com `{"terapiasCanceladas": 1, "terapiasColetivasRemovido": 1}`. A individual fica `CANCELADA` com `motivoCancelamento: "Paciente inativado"`; a coletiva continua `AGENDADA`, só com o outro paciente e `modalidade: "INDIVIDUAL"`.
 
 **Permissões** (crie usuários nos perfis padrão; ver `00-GERAL.md`)
 
-20. Com um usuário "Recepção": `GET /api/pacientes`, `GET /api/pacientes/{id}/historico` e `PATCH /api/pacientes/{id}`. Esperado: `200`. `POST /api/pacientes` com o corpo do passo 1 (CPF novo) e `DELETE /api/pacientes/{id}`. Esperado: `403`.
-21. Com um usuário "Assistente Social" ou "Especialista": `GET /api/pacientes` e `GET /api/responsaveis`. Esperado: `200`. `PATCH /api/pacientes/{id}` e `PATCH /api/responsaveis/{idMae}`. Esperado: `403`.
+24. Com um usuário "Recepção": `GET /api/pacientes?termo=lucas`, `GET /api/pacientes/{id}/historico` e `PATCH /api/pacientes/{id}`. Esperado: `200`. `POST /api/pacientes` com o corpo do passo 1 (CPF novo) e `DELETE /api/pacientes/{id}`. Esperado: `403`.
+25. Com um usuário "Especialista": `GET /api/pacientes?termo=lucas` e `GET /api/responsaveis`. Esperado: `200`. `PATCH /api/pacientes/{id}` e `PATCH /api/responsaveis/{idMae}`. Esperado: `403`.
+26. Com um usuário "Assistente Social" (só `VISUALIZAR_PACIENTES_VINCULADOS`) sem vínculos: `GET /api/pacientes?termo=lucas`. Esperado: `[]`. `GET /api/pacientes/{id}` e `GET /api/pacientes/{id}/historico`: `403`. Vincule o paciente a ele (`POST /api/assistentes-sociais/{idAssistente}/pacientes`) e repita. Esperado: `200` nos três.

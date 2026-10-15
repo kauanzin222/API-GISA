@@ -34,7 +34,7 @@ Corresponde à tela "Criar Consulta".
 
 | Campo | Tipo | Obrigatório | Observação |
 |---|---|---|---|
-| `pacientesIds` | lista de número | **sim, ao menos 1** | `idCadastro` dos pacientes (ver `GET /api/pacientes?nome=`); IDs repetidos são unificados |
+| `pacientesIds` | lista de número | **sim, ao menos 1** | `idCadastro` dos pacientes (ver `GET /api/pacientes?termo=`); IDs repetidos são unificados |
 | `especialistasIds` | lista de número | **sim, ao menos 1** | `idCadastro` dos especialistas ou PJ (ver `GET /api/profissionais?tipo=ESPECIALISTA&tipo=ESPECIALISTA_PJ&statusCadastro=ATIVO&nome=`) |
 | `data` | data | sim | `yyyy-MM-dd` |
 | `horaInicio` | string | sim | `HH:mm` |
@@ -399,6 +399,22 @@ Nesse caso, a outra terapia precisa ser cancelada ou remarcada antes.
 
 ---
 
+## Inativação do paciente e as terapias dele
+
+Inativar um paciente (`DELETE /api/pacientes/{idCadastro}`, ver `PACIENTES.md`) mexe nas terapias dele **na mesma transação**, mas só nas `AGENDADA` que ainda não começaram (início depois de agora, no fuso de São Paulo):
+
+| Terapia | O que acontece |
+|---|---|
+| Individual (o paciente é o único paciente) | passa a `CANCELADA`, com `motivoCancelamento` = `Paciente inativado`; o horário fica livre |
+| Coletiva | o paciente é **retirado** (com a marcação de presença dele) e a terapia continua para os demais. `modalidade` e `titulo` são recalculados: com 1 paciente restante, ela vira `INDIVIDUAL` |
+| Passada, em atendimento, concluída ou cancelada | nada muda |
+
+- Os especialistas e o horário das terapias coletivas não mudam.
+- Os eventos do histórico são os de sempre: `TERAPIA_CANCELADA` para a individual; na coletiva, `TERAPIA_ALTERADA` para o paciente retirado ("Paciente retirado da terapia...") e para os que continuam.
+- A resposta do `DELETE` informa quantas terapias foram canceladas e de quantas coletivas o paciente saiu.
+
+---
+
 ## Mensagens de erro
 
 ### Validação de campos (`400`, em `fields`)
@@ -462,7 +478,7 @@ Pré-requisito: dois pacientes ativos (`{p1}`, `{p2}`) e dois especialistas (`{e
 5. `POST /api/terapias` com `horaInicio: "10:00"` e `horaTermino: "09:00"`. Esperado: `400`.
 6. `GET /api/terapias`. Esperado: as duas terapias, `page.size: 6`.
 7. `GET /api/terapias?status=CANCELADA`. Esperado: `content: []`.
-8. Login com o CPF de `{e1}` e `GET /api/terapias/minhas`. Esperado: só a terapia do passo 1, com `outrosEspecialistas` contendo `{e2}`.
+8. Login com o e-mail de `{e1}` (com acesso concedido e primeiro acesso feito; ver `00-GERAL.md`) e `GET /api/terapias/minhas`. Esperado: só a terapia do passo 1, com `outrosEspecialistas` contendo `{e2}`.
 9. `GET /api/terapias/minhas` com o token do administrador. Esperado: `400` (não é especialista).
 
 **Filtros** (supondo os passos 1 e 2 no mesmo dia, `{dia}`)

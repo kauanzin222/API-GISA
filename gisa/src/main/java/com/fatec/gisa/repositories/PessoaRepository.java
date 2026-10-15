@@ -21,6 +21,10 @@ public interface PessoaRepository extends JpaRepository<Pessoa, Long> {
     boolean existsByCpf(String cpf);
     List<Pessoa> findByNomeContainingIgnoreCase(String nome);
 
+    // O e-mail é o login: único entre todas as pessoas, sem diferenciar maiúsculas
+    boolean existsByEmailIgnoreCase(String email);
+    boolean existsByEmailIgnoreCaseAndIdCadastroNot(String email, Long idCadastro);
+
     // Pessoas com usuário de acesso. Parte de Pessoa (e não de Usuario) para que o sort por
     // nome, cpf e statusCadastro funcione direto. idPerfil 0 = qualquer perfil; os indicadores
     // de tipo seguem ProfissionalRepository.buscar, e "pessoa" é quem não é profissional
@@ -33,7 +37,8 @@ public interface PessoaRepository extends JpaRepository<Pessoa, Long> {
               and ((:profissional = true and type(p) = Profissional)
                 or (:especialista = true and type(p) = Especialista)
                 or (:especialistaPJ = true and type(p) = EspecialistaPJ)
-                or (:pessoa = true and type(p) not in (Profissional, Especialista, EspecialistaPJ)))
+                or (:assistenteSocial = true and type(p) = AssistenteSocial)
+                or (:pessoa = true and type(p) not in (Profissional, Especialista, EspecialistaPJ, AssistenteSocial)))
             """)
     Page<Pessoa> buscarComUsuario(
             @Param("cpf") String cpf,
@@ -43,6 +48,7 @@ public interface PessoaRepository extends JpaRepository<Pessoa, Long> {
             @Param("profissional") boolean profissional,
             @Param("especialista") boolean especialista,
             @Param("especialistaPJ") boolean especialistaPJ,
+            @Param("assistenteSocial") boolean assistenteSocial,
             @Param("pessoa") boolean pessoa,
             Pageable pageable);
 }

@@ -45,6 +45,7 @@ public class HistoricoPacienteService {
     private final EventoPacienteRepository eventoPacienteRepository;
     private final PacienteRepository pacienteRepository;
     private final PessoaRepository pessoaRepository;
+    private final AcessoPacienteService acessoPacienteService;
 
     // MANDATORY: só grava dentro da transação de quem gerou o evento, nunca sozinho
     @Transactional(propagation = Propagation.MANDATORY)
@@ -73,6 +74,8 @@ public class HistoricoPacienteService {
     @Transactional(readOnly = true)
     public Page<EventoPacienteDTO> listar(Long idPaciente, List<TipoEventoPaciente> tipos,
             LocalDate inicio, LocalDate fim, Pageable pageable) {
+        // Quem só vê os pacientes vinculados recebe 403 para os demais
+        acessoPacienteService.exigirAcesso(idPaciente);
         if (!pacienteRepository.existsById(idPaciente)) {
             throw new ResourceNotFoundException("Paciente não encontrado com ID: " + idPaciente);
         }

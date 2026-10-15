@@ -55,10 +55,13 @@ class PermissoesPorRotaTest {
     // Rotas sem permissão específica (ver docs/00-GERAL.md)
     private static final Set<String> SO_LOGIN = Set.of(
             "POST /api/auth/login",
+            "POST /api/auth/esqueci-senha",
+            "POST /api/auth/redefinir-senha",
             "GET /api/usuarios/me",
             "PATCH /api/usuarios/minha-senha",
             "GET /api/terapias/minhas",
             "GET /api/especialistas/me",
+            "GET /api/assistentes-sociais/me/pacientes",
             "GET /api/especialidades");
 
     @Autowired

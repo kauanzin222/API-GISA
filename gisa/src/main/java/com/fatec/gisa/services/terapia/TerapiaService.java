@@ -57,6 +57,7 @@ import lombok.RequiredArgsConstructor;
 public class TerapiaService {
 
     private static final String TITULO_COLETIVA = "Terapia coletiva";
+    private static final String MOTIVO_PACIENTE_INATIVADO = "Paciente inativado";
     private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
     private static final Long NENHUMA_TERAPIA = 0L;
     private static final int TAMANHO_MAXIMO_PAGINA = 100;
@@ -310,6 +311,48 @@ public class TerapiaService {
                     terapiaAtualizada.getIdTerapia());
         }
         return terapiaAtualizada;
+    }
+
+    // Inativação do paciente (DELETE /api/pacientes/{id}), na mesma transação. Só terapias AGENDADAS que
+    // ainda não começaram: as individuais (só com este paciente) são canceladas; nas coletivas, o
+    // paciente sai e a terapia continua para os demais, com a modalidade recalculada. Terapias passadas,
+    // em atendimento, concluídas ou canceladas não são tocadas
+    @Transactional
+    public RetiradaDeTerapias retirarPacienteDasTerapiasFuturas(Paciente paciente) {
+        Long idPaciente = paciente.getIdCadastro();
+        int canceladas = 0;
+        int coletivasRemovido = 0;
+        for (Terapia terapia : terapiaRepository.travarFuturasDoPaciente(
+                idPaciente, StatusTerapia.AGENDADA, LocalDateTime.now(relogio))) {
+            if (terapia.getPresencaPacientes().size() <= 1) {
+                terapia.setStatus(StatusTerapia.CANCELADA);
+                terapia.setMotivoCancelamento(MOTIVO_PACIENTE_INATIVADO);
+                Terapia cancelada = terapiaRepository.save(terapia);
+                historicoPacienteService.registrar(pacientesDa(cancelada), TipoEventoPaciente.TERAPIA_CANCELADA,
+                        "Terapia de %s, com %s, cancelada.".formatted(horario(cancelada), especialistas(cancelada)),
+                        cancelada.getIdTerapia());
+                canceladas++;
+            } else {
+                String horarioAnterior = horario(terapia);
+                String especialistasAnteriores = especialistas(terapia);
+                Modalidade modalidadeAnterior = terapia.getModalidade();
+                List<Paciente> pacientesAnteriores = pacientesDa(terapia);
+
+                terapia.getPresencaPacientes().removeIf(
+                        presenca -> presenca.getPaciente().getIdCadastro().equals(idPaciente));
+                terapia.setModalidade(terapia.getPresencaPacientes().size() > 1
+                        ? Modalidade.COLETIVA
+                        : Modalidade.INDIVIDUAL);
+                Terapia atualizada = terapiaRepository.save(terapia);
+                registrarEdicao(atualizada, horarioAnterior, especialistasAnteriores, modalidadeAnterior,
+                        pacientesAnteriores, pacientesDa(atualizada));
+                coletivasRemovido++;
+            }
+        }
+        return new RetiradaDeTerapias(canceladas, coletivasRemovido);
+    }
+
+    public record RetiradaDeTerapias(int terapiasCanceladas, int terapiasColetivasRemovido) {
     }
 
     // Trava a linha da terapia até o fim da transação: mudanças simultâneas na mesma terapia

@@ -6,15 +6,16 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fatec.gisa.dtos.usuario.request.AlterarSenhaRequestDTO;
-import com.fatec.gisa.dtos.usuario.request.RedefinirSenhaRequestDTO;
 import com.fatec.gisa.dtos.usuario.response.LoginResponseDTO;
 import com.fatec.gisa.dtos.usuario.response.UsuarioLogadoDTO;
 import com.fatec.gisa.services.JwtService;
+import com.fatec.gisa.services.cadastro.CadastroFacadeService;
 import com.fatec.gisa.services.usuario.UsuarioDetailService;
 import com.fatec.gisa.services.usuario.UsuarioService;
 
@@ -29,6 +30,7 @@ public class UsuarioController {
     private final UsuarioService usuarioService;
     private final UsuarioDetailService usuarioDetailService;
     private final JwtService jwtService;
+    private final CadastroFacadeService cadastroFacadeService;
 
     // O token só carrega o CPF; o front usa esta rota para saber quem está logado
     @GetMapping("/me")
@@ -47,13 +49,12 @@ public class UsuarioController {
         return ResponseEntity.ok(new LoginResponseDTO(token));
     }
 
-    // Rota sensível: sem esta restrição, qualquer usuário logado poderia tomar a conta de outro
+    // Gera uma nova senha temporária e a envia ao e-mail do usuário (também serve para reenviar o
+    // acesso). Rota sensível: sem esta restrição, qualquer usuário logado poderia tomar a conta de outro
     @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'GERENCIAR_USUARIOS')")
-    @PatchMapping("/{idCadastro}/senha")
-    public ResponseEntity<Void> redefinirSenha(
-            @PathVariable Long idCadastro,
-            @Valid @RequestBody RedefinirSenhaRequestDTO request) {
-        usuarioService.redefinirSenha(idCadastro, request);
+    @PostMapping("/{idCadastro}/senha-temporaria")
+    public ResponseEntity<Void> gerarSenhaTemporaria(@PathVariable Long idCadastro) {
+        cadastroFacadeService.gerarNovaSenhaTemporaria(idCadastro);
         return ResponseEntity.noContent().build();
     }
 }

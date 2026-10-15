@@ -38,9 +38,12 @@ public class AuditoriaService {
 
     // Transação própria: o registro não depende da transação da requisição auditada
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void registrar(String cpf, AcaoAuditoria acao, String metodo, String caminho, int statusHttp, String ip) {
+    // emailInformado: e-mail digitado nas tentativas de login; null nos demais registros
+    public void registrar(String cpf, String emailInformado, AcaoAuditoria acao, String metodo, String caminho,
+            int statusHttp, String ip) {
         logAuditoriaRepository.save(new LogAuditoria(
-                null, Instant.now(), cpf, acao, metodo, limitar(caminho, 255), statusHttp, limitar(ip, 45)));
+                null, Instant.now(), cpf, acao, metodo, limitar(caminho, 255), statusHttp, limitar(ip, 45),
+                limitar(emailInformado, 255)));
     }
 
     // Datas no fuso de Brasília; "fim" inclui o dia inteiro
@@ -76,7 +79,8 @@ public class AuditoriaService {
                 log.getCaminho(),
                 log.getStatusHttp(),
                 log.getStatusHttp() < 400,
-                log.getIp()));
+                log.getIp(),
+                log.getEmailInformado()));
     }
 
     private String limitar(String valor, int tamanho) {

@@ -21,14 +21,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.fatec.gisa.dtos.FiltroPessoaDTO;
 import com.fatec.gisa.dtos.paciente.request.PacienteCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.response.EventoPacienteDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteCadastroResponseDTO;
+import com.fatec.gisa.dtos.paciente.response.InativacaoPacienteDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteDetalheDTO;
-import com.fatec.gisa.dtos.paciente.response.PacienteResumoDTO;
+import com.fatec.gisa.dtos.paciente.response.PacienteBuscaDTO;
 import com.fatec.gisa.entities.paciente.Paciente;
 import com.fatec.gisa.enums.TipoEventoPaciente;
 import com.fatec.gisa.services.cadastro.CadastroFacadeService;
@@ -47,17 +47,17 @@ public class PacienteController {
     private final PacienteService pacienteService;
     private final HistoricoPacienteService historicoPacienteService;
 
-    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PACIENTES')")
+    // Busca (LGPD): não há listagem completa. "termo" é obrigatório, exceto com idEscola; no máximo
+    // 20 resultados, sem paginação. Com só VISUALIZAR_PACIENTES_VINCULADOS, vêm só os vinculados
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PACIENTES', 'VISUALIZAR_PACIENTES_VINCULADOS')")
     @GetMapping
-    public ResponseEntity<Page<PacienteResumoDTO>> listarPaginado(
-            @RequestParam(required = false) String cpf,
-            @RequestParam(required = false) String nome,
-            @RequestParam(required = false) Long idEscola,
-            @PageableDefault(page = 0, size = 9, sort = "nome", direction = Sort.Direction.ASC) Pageable pageable) {
-        return ResponseEntity.ok(pacienteService.listarPaginado(FiltroPessoaDTO.de(cpf, nome), idEscola, pageable));
+    public ResponseEntity<List<PacienteBuscaDTO>> buscar(
+            @RequestParam(required = false) String termo,
+            @RequestParam(required = false) Long idEscola) {
+        return ResponseEntity.ok(pacienteService.buscar(termo, idEscola));
     }
 
-    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PACIENTES')")
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PACIENTES', 'VISUALIZAR_PACIENTES_VINCULADOS')")
     @GetMapping("/{idCadastro}")
     public ResponseEntity<PacienteDetalheDTO> buscarPorId(@PathVariable Long idCadastro) {
         return ResponseEntity.ok(pacienteService.buscarDetalhes(idCadastro));
@@ -95,9 +95,9 @@ public class PacienteController {
 
     @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'INATIVAR_PACIENTE')")
     @DeleteMapping("/{idCadastro}")
-    public ResponseEntity<Void> inativar(@PathVariable Long idCadastro) {
-        pacienteService.inativar(idCadastro);
-        return ResponseEntity.noContent().build();
+    // 200 com o resumo do que foi feito com as terapias agendadas futuras do paciente
+    public ResponseEntity<InativacaoPacienteDTO> inativar(@PathVariable Long idCadastro) {
+        return ResponseEntity.ok(pacienteService.inativar(idCadastro));
     }
 
     @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'CADASTRAR_PACIENTE')")

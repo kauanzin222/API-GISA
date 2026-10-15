@@ -59,6 +59,11 @@ public class Pessoa {
     @Column(name = "NumCNS")
     private String numCNS;
 
+    // Login do usuário de acesso. Obrigatório para profissionais e para quem tem usuário; nulo em
+    // pacientes e responsáveis
+    @Column(name = "Email")
+    private String email;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "EstadoCivil")
     private EstadoCivil estadoCivil;

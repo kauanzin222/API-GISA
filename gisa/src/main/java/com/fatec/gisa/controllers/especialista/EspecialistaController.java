@@ -23,9 +23,10 @@ import com.fatec.gisa.dtos.especialista.response.EspecialistaPJCadastroResponseD
 import com.fatec.gisa.dtos.especialista.response.EspecialistaPJResponseDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaResponseDTO;
 import com.fatec.gisa.dtos.usuario.request.UsuarioRequestDTO;
-import com.fatec.gisa.dtos.usuario.response.UsuarioResumoDTO;
+import com.fatec.gisa.dtos.usuario.response.AcessoConcedidoDTO;
 import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.especialista.EspecialistaPJ;
+import com.fatec.gisa.services.cadastro.CadastroComAcesso;
 import com.fatec.gisa.services.cadastro.CadastroFacadeService;
 import com.fatec.gisa.services.especialista.EspecialistaService;
 import com.fatec.gisa.services.especialista.EspecialistaPJService;
@@ -80,7 +81,7 @@ public class EspecialistaController {
 
     @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'GERENCIAR_USUARIOS')")
     @PostMapping("/{idCadastro}/usuario")
-    public ResponseEntity<UsuarioResumoDTO> concederAcesso(
+    public ResponseEntity<AcessoConcedidoDTO> concederAcesso(
             @PathVariable Long idCadastro,
             @Valid @RequestBody UsuarioRequestDTO request) {
         return ResponseEntity.status(201)
@@ -105,7 +106,7 @@ public class EspecialistaController {
 
     @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'GERENCIAR_USUARIOS')")
     @PostMapping("/pj/{idCadastro}/usuario")
-    public ResponseEntity<UsuarioResumoDTO> concederAcessoPJ(
+    public ResponseEntity<AcessoConcedidoDTO> concederAcessoPJ(
             @PathVariable Long idCadastro,
             @Valid @RequestBody UsuarioRequestDTO request) {
         return ResponseEntity.status(201)
@@ -117,7 +118,7 @@ public class EspecialistaController {
     public ResponseEntity<EspecialistaCadastroResponseDTO> cadastrar(
             @Valid @RequestBody EspecialistaCadastroRequestDTO request) {
         Especialista especialista = cadastroFacadeService.cadastrarEspecialista(request);
-        return ResponseEntity.status(201).body(toResponse(especialista, false));
+        return ResponseEntity.status(201).body(toResponse(especialista, false, null));
     }
 
     // Cria o usuário já com um perfil: escolher perfil é gerenciar usuários (como o idPerfil no PATCH)
@@ -126,8 +127,8 @@ public class EspecialistaController {
     @PostMapping("/com-usuario")
     public ResponseEntity<EspecialistaCadastroResponseDTO> cadastrarComUsuario(
             @Valid @RequestBody EspecialistaComUsuarioRequestDTO request) {
-        Especialista especialista = cadastroFacadeService.cadastrarEspecialistaComUsuario(request);
-        return ResponseEntity.status(201).body(toResponse(especialista, true));
+        CadastroComAcesso<Especialista> resultado = cadastroFacadeService.cadastrarEspecialistaComUsuario(request);
+        return ResponseEntity.status(201).body(toResponse(resultado.cadastro(), true, resultado.emailEnviado()));
     }
 
     @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'CADASTRAR_ESPECIALISTA_PJ')")
@@ -135,7 +136,7 @@ public class EspecialistaController {
     public ResponseEntity<EspecialistaPJCadastroResponseDTO> cadastrarPJ(
             @Valid @RequestBody EspecialistaPJCadastroRequestDTO request) {
         EspecialistaPJ especialistaPJ = cadastroFacadeService.cadastrarEspecialistaPJ(request);
-        return ResponseEntity.status(201).body(toResponse(especialistaPJ, false));
+        return ResponseEntity.status(201).body(toResponse(especialistaPJ, false, null));
     }
 
     // Cria o usuário já com um perfil: escolher perfil é gerenciar usuários (como o idPerfil no PATCH)
@@ -144,11 +145,12 @@ public class EspecialistaController {
     @PostMapping("/pj/com-usuario")
     public ResponseEntity<EspecialistaPJCadastroResponseDTO> cadastrarPJComUsuario(
             @Valid @RequestBody EspecialistaPJComUsuarioRequestDTO request) {
-        EspecialistaPJ especialistaPJ = cadastroFacadeService.cadastrarEspecialistaPJComUsuario(request);
-        return ResponseEntity.status(201).body(toResponse(especialistaPJ, true));
+        CadastroComAcesso<EspecialistaPJ> resultado = cadastroFacadeService.cadastrarEspecialistaPJComUsuario(request);
+        return ResponseEntity.status(201).body(toResponse(resultado.cadastro(), true, resultado.emailEnviado()));
     }
 
-        private EspecialistaCadastroResponseDTO toResponse(Especialista especialista, boolean acessoCriado) {
+        private EspecialistaCadastroResponseDTO toResponse(Especialista especialista, boolean acessoCriado,
+            Boolean emailEnviado) {
         return new EspecialistaCadastroResponseDTO(
             especialista.getIdCadastro(),
             especialista.getNome(),
@@ -156,10 +158,12 @@ public class EspecialistaController {
             especialista.getEmail(),
             especialista.getCargo().getIdCargo(),
             especialista.getRegistroConselho(),
-            acessoCriado);
+            acessoCriado,
+            emailEnviado);
         }
 
-        private EspecialistaPJCadastroResponseDTO toResponse(EspecialistaPJ especialista, boolean acessoCriado) {
+        private EspecialistaPJCadastroResponseDTO toResponse(EspecialistaPJ especialista, boolean acessoCriado,
+            Boolean emailEnviado) {
         return new EspecialistaPJCadastroResponseDTO(
             especialista.getIdCadastro(),
             especialista.getNome(),
@@ -169,6 +173,7 @@ public class EspecialistaController {
             especialista.getRegistroConselho(),
             especialista.getCnpj(),
             especialista.getRazaoSocial(),
-            acessoCriado);
+            acessoCriado,
+            emailEnviado);
     }
 }

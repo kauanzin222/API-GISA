@@ -1,7 +1,7 @@
 package com.fatec.gisa.services.paciente;
 
 import java.time.LocalDate;
-import java.time.Period;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -10,30 +10,28 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fatec.gisa.dtos.EnderecoDTO;
-import com.fatec.gisa.dtos.FiltroPessoaDTO;
 import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ProntuarioPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.PacienteCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelVinculoPatchDTO;
 import com.fatec.gisa.dtos.paciente.response.CidResponseDTO;
-import com.fatec.gisa.dtos.paciente.response.CidResumoDTO;
+import com.fatec.gisa.dtos.assistentesocial.response.AssistenteSocialResumoDTO;
 import com.fatec.gisa.dtos.paciente.response.EscolaResponseDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteDetalheDTO;
-import com.fatec.gisa.dtos.paciente.response.PacienteResumoDTO;
+import com.fatec.gisa.dtos.paciente.response.InativacaoPacienteDTO;
+import com.fatec.gisa.dtos.paciente.response.PacienteBuscaDTO;
 import com.fatec.gisa.dtos.paciente.response.ProntuarioResponseDTO;
-import com.fatec.gisa.dtos.paciente.response.ResponsavelResumoDTO;
 import com.fatec.gisa.dtos.paciente.response.ResponsavelVinculoResponseDTO;
 import com.fatec.gisa.entities.paciente.Paciente;
 import com.fatec.gisa.entities.paciente.Cid;
@@ -46,6 +44,7 @@ import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.enums.StatusPaciente;
 import com.fatec.gisa.enums.TipoEventoPaciente;
 import com.fatec.gisa.repositories.PessoaRepository;
+import com.fatec.gisa.repositories.assistentesocial.VinculoAssistenteSocialRepository;
 import com.fatec.gisa.repositories.paciente.PacienteRepository;
 import com.fatec.gisa.repositories.paciente.ResponsavelRepository;
 import com.fatec.gisa.repositories.paciente.VinculoResponsavelRepository;
@@ -53,6 +52,7 @@ import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.services.PessoaMapper;
 import com.fatec.gisa.services.PessoaService;
 import com.fatec.gisa.services.endereco.EnderecoService;
+import com.fatec.gisa.services.terapia.TerapiaService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -72,51 +72,83 @@ public class PacienteService {
     private final ProntuarioService prontuarioService;
     private final ResponsavelService responsavelService;
     private final HistoricoPacienteService historicoPacienteService;
+    private final AcessoPacienteService acessoPacienteService;
+    private final VinculoAssistenteSocialRepository vinculoAssistenteSocialRepository;
+    private final TerapiaService terapiaService;
 
-    // idEscola nulo não restringe; os pacientes de uma escola aparecem por este filtro
+    private static final int LIMITE_BUSCA = 20;
+    private static final int TAMANHO_MINIMO_BUSCA_NOME = 3;
+
+    // Busca de pacientes (LGPD): não há listagem completa, só se encontra um paciente buscando por ele.
+    // "termo" só com dígitos (ignorando "." e "-") é CPF exato com 11 dígitos; senão, trecho do nome
+    // com ao menos 3 caracteres, sem diferenciar acento nem maiúsculas. Com idEscola (tela da escola),
+    // o termo é opcional. Sem paginação: no máximo 20 resultados, ordenados por nome. Quem só vê os
+    // pacientes vinculados recebe só esses
     @Transactional(readOnly = true)
-    public Page<PacienteResumoDTO> listarPaginado(FiltroPessoaDTO filtro, Long idEscola, Pageable pageable) {
+    public List<PacienteBuscaDTO> buscar(String termo, Long idEscola) {
         if (idEscola != null && idEscola <= 0) {
             throw new IllegalArgumentException("Valor inválido para 'idEscola': " + idEscola);
         }
-        Page<Paciente> pagina = pacienteRepository.buscar(
-                filtro.cpf(), filtro.nome(), idEscola == null ? 0L : idEscola, pageable);
-        List<Long> pacienteIds = pagina.getContent().stream()
-                .map(Paciente::getIdCadastro)
-                .toList();
-
-        Map<Long, List<CidResumoDTO>> cidsPorPaciente = new HashMap<>();
-        Map<Long, List<ResponsavelResumoDTO>> responsaveisPorPaciente = new HashMap<>();
-
-        if (!pacienteIds.isEmpty()) {
-            pacienteRepository.buscarComCidsPorIds(pacienteIds).forEach(paciente -> {
-                List<CidResumoDTO> cids = paciente.getCids().stream()
-                        .sorted(Comparator.comparing(cid -> cid.getCodigoCID()))
-                        .map(cid -> new CidResumoDTO(cid.getCodigoCID(), cid.getDescricao()))
-                        .toList();
-                cidsPorPaciente.put(paciente.getIdCadastro(), cids);
-            });
-
-            vinculoResponsavelRepository.buscarComResponsaveisPorPacienteIds(pacienteIds).forEach(vinculo -> {
-                Responsavel responsavel = vinculo.getResponsavel();
-                ResponsavelResumoDTO resumo = new ResponsavelResumoDTO(
-                        responsavel.getNome(), responsavel.getCelular(), vinculo.getGrauParentesco());
-                responsaveisPorPaciente.computeIfAbsent(vinculo.getPaciente().getIdCadastro(), id -> new ArrayList<>()).add(resumo);
-            });
+        String texto = termo == null ? "" : termo.trim();
+        if (texto.isEmpty() && idEscola == null) {
+            throw new IllegalArgumentException("O parâmetro 'termo' é obrigatório.");
         }
 
-        return pagina.map(paciente -> new PacienteResumoDTO(
+        String cpf = "";
+        String nome = "";
+        if (!texto.isEmpty()) {
+            String semMascara = texto.replaceAll("[.\\-]", "");
+            if (semMascara.matches("\\d+")) {
+                if (semMascara.length() != 11) {
+                    throw new IllegalArgumentException("A busca por CPF exige os 11 dígitos.");
+                }
+                cpf = semMascara;
+            } else {
+                if (texto.length() < TAMANHO_MINIMO_BUSCA_NOME) {
+                    throw new IllegalArgumentException("A busca por nome exige ao menos 3 caracteres.");
+                }
+                nome = semAcento(texto).toLowerCase(Locale.ROOT);
+            }
+        }
+
+        List<Long> ids = pacienteRepository.buscarIds(cpf, nome,
+                PacienteRepository.LETRAS_ACENTUADAS, PacienteRepository.LETRAS_SEM_ACENTO,
+                idEscola == null ? 0L : idEscola, acessoPacienteService.restricaoDoUsuarioLogado(), LIMITE_BUSCA);
+        // findAllById não garante a ordem: volta para a ordem da busca (por nome)
+        Map<Long, Paciente> pacientesPorId = pacienteRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Paciente::getIdCadastro, paciente -> paciente));
+        return ids.stream()
+                .map(pacientesPorId::get)
+                .filter(Objects::nonNull)
+                .map(PacienteService::toBuscaDTO)
+                .toList();
+    }
+
+    public static PacienteBuscaDTO toBuscaDTO(Paciente paciente) {
+        return new PacienteBuscaDTO(
                 paciente.getIdCadastro(),
                 paciente.getNome(),
-                calcularIdade(paciente.getDataNascimento()),
-                paciente.getCpf(),
-                responsaveisPorPaciente.getOrDefault(paciente.getIdCadastro(), List.of()),
-                cidsPorPaciente.getOrDefault(paciente.getIdCadastro(), List.of()),
-                paciente.getStatusPaciente()));
+                mascararCpf(paciente.getCpf()),
+                paciente.getStatusCadastro());
+    }
+
+    // "45678901234" -> "***.789.012-**"; fora do formato de 11 dígitos, nada do CPF aparece
+    static String mascararCpf(String cpf) {
+        String digitos = cpf == null ? "" : cpf.replaceAll("\\D", "");
+        if (digitos.length() != 11) {
+            return "***.***.***-**";
+        }
+        return "***." + digitos.substring(3, 6) + "." + digitos.substring(6, 9) + "-**";
+    }
+
+    private static String semAcento(String texto) {
+        return Normalizer.normalize(texto, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
     }
 
     @Transactional(readOnly = true)
     public PacienteDetalheDTO buscarDetalhes(Long idCadastro) {
+        // Quem só vê os pacientes vinculados recebe 403 para os demais
+        acessoPacienteService.exigirAcesso(idCadastro);
         Paciente paciente = pacienteRepository.findById(idCadastro)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Paciente não encontrado com ID: " + idCadastro));
@@ -162,7 +194,12 @@ public class PacienteService {
                 escolaResponse,
                 cids,
                 prontuarioResponse,
-                responsaveis);
+                responsaveis,
+                vinculoAssistenteSocialRepository.buscarAtivosDoPaciente(idCadastro).stream()
+                        .map(vinculo -> new AssistenteSocialResumoDTO(
+                                vinculo.getAssistenteSocial().getIdCadastro(),
+                                vinculo.getAssistenteSocial().getNome()))
+                        .toList());
     }
 
     @Transactional
@@ -283,8 +320,10 @@ public class PacienteService {
         return pacienteSalvo;
     }
 
+    // Na mesma transação, cuida das terapias agendadas futuras do paciente (ver TerapiaService).
+    // Os vínculos com assistentes sociais não mudam
     @Transactional
-    public void inativar(Long idCadastro) {
+    public InativacaoPacienteDTO inativar(Long idCadastro) {
         Paciente paciente = pacienteRepository.findById(idCadastro)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Paciente não encontrado com ID: " + idCadastro));
@@ -300,6 +339,9 @@ public class PacienteService {
             historicoPacienteService.registrar(paciente, TipoEventoPaciente.INATIVADO, "Cadastro inativado.");
         }
         registrarMudancaDeStatus(paciente, statusPacienteAnterior, paciente.getStatusPaciente());
+
+        TerapiaService.RetiradaDeTerapias retirada = terapiaService.retirarPacienteDasTerapiasFuturas(paciente);
+        return new InativacaoPacienteDTO(retirada.terapiasCanceladas(), retirada.terapiasColetivasRemovido());
     }
 
     @Transactional
@@ -400,10 +442,6 @@ public class PacienteService {
     }
 
     private record VinculoParaHistorico(String nome, GrauParentesco grau) {
-    }
-
-    private int calcularIdade(LocalDate dataNascimento) {
-        return Period.between(dataNascimento, LocalDate.now()).getYears();
     }
 
     private void atualizarProntuario(Paciente paciente, ProntuarioPatchRequestDTO dto) {

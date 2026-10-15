@@ -35,6 +35,10 @@ public class Permissao {
     @Column(name = "Descricao")
     private String descricao;
 
+    // Agrupamento na tela de perfis (ex.: "Pacientes", "Segurança")
+    @Column(name = "Categoria")
+    private String categoria;
+
     @ManyToMany(mappedBy = "permissoes")
     private List<Perfil> perfis;
 }

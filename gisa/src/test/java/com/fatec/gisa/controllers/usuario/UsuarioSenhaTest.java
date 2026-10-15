@@ -71,7 +71,7 @@ class UsuarioSenhaTest {
     void preparar() {
         transactionTemplate.executeWithoutResult(status -> {
             Permissao acessoTotal = permissaoRepository.findByNome("ACESSO_TOTAL").orElseGet(() -> {
-                Permissao nova = new Permissao(null, "ACESSO_TOTAL", null, null);
+                Permissao nova = new Permissao(null, "ACESSO_TOTAL", null, null, null);
                 entityManager.persist(nova);
                 return nova;
             });

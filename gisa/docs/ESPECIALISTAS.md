@@ -33,7 +33,7 @@ Um **especialista** é um profissional (ver `PROFISSIONAIS.md`) com registro em 
 
 > **Separação das rotas:** as rotas `/api/especialistas/{idCadastro}` (GET, PATCH, DELETE e `/usuario`) **recusam** IDs de especialistas PJ com `400`:
 > `Este cadastro é de um especialista PJ. Use /api/especialistas/pj/{idCadastro}.`
-> Já as rotas `/pj/...` com o ID de um especialista que não é PJ respondem `404`.
+> Já as rotas `/pj/...` com o ID de um especialista que não é PJ respondem `404`. IDs de assistentes sociais (que não são especialistas; ver `ASSISTENTES-SOCIAIS.md`) também respondem `404` aqui.
 
 ---
 
@@ -54,7 +54,7 @@ O especialista lê o **próprio** cadastro: especialidades, registro no conselho
     "pessoa": {
       "idCadastro": 9,
       "nome": "Mariana Costa",
-      "cpf": "12345678902",
+      "cpf": "12345678062",
       "dataNascimento": "1985-08-20",
       "sexo": "F",
       "celular": null,
@@ -69,7 +69,7 @@ O especialista lê o **próprio** cadastro: especialidades, registro no conselho
       "idCadastro": 9,
       "perfil": { "idPerfil": 3, "nome": "Especialista" },
       "permissoes": [
-        { "idPermissao": 19, "nome": "EMITIR_ATESTADO", "descricao": "Emitir atestados" }
+        { "idPermissao": 19, "nome": "EMITIR_ATESTADO", "descricao": "Emitir atestados", "categoria": "Documentos" }
       ]
     }
   },
@@ -116,11 +116,11 @@ O especialista lê o **próprio** cadastro: especialidades, registro no conselho
     "pessoa": {
       "idCadastro": 10,
       "nome": "João Santos",
-      "cpf": "23456789012",
+      "cpf": "23456789092",
       "dataNascimento": "1985-08-20",
       "sexo": "M",
       "celular": "11988888888",
-      "numCNS": "234567890123456",
+      "numCNS": "234567890923456",
       "estadoCivil": "CASADO",
       "statusCadastro": "ATIVO",
       "enderecos": []
@@ -185,11 +185,11 @@ Todos os campos do `POST /api/profissionais` (`nome`, `cpf`, `dataNascimento`, `
 ```json
 {
   "nome": "João Santos",
-  "cpf": "23456789012",
+  "cpf": "23456789092",
   "dataNascimento": "1985-08-20",
   "sexo": "M",
   "celular": "11988888888",
-  "numCNS": "234567890123456",
+  "numCNS": "234567890923456",
   "estadoCivil": "CASADO",
   "enderecos": [],
   "email": "joao.santos@email.com",
@@ -212,7 +212,7 @@ Todos os campos do `POST /api/profissionais` (`nome`, `cpf`, `dataNascimento`, `
 {
   "idCadastro": 10,
   "nome": "João Santos",
-  "cpf": "23456789012",
+  "cpf": "23456789092",
   "email": "joao.santos@email.com",
   "idCargo": 1,
   "registroConselho": "CRP-12345",
@@ -226,13 +226,13 @@ Todos os campos do `POST /api/profissionais` (`nome`, `cpf`, `dataNascimento`, `
 
 ## `POST /api/especialistas/com-usuario` — cadastrar especialista com acesso
 
-Corpo com dois blocos: `especialista` (mesmos campos do `POST /api/especialistas`) e `usuario` (`senha` de 8 a 30 caracteres e `idPerfil`; ver `PROFISSIONAIS.md`). Exige `CADASTRAR_ESPECIALISTA` **e** `GERENCIAR_USUARIOS` (ou `ACESSO_TOTAL`); a rota `/pj/com-usuario` exige `CADASTRAR_ESPECIALISTA_PJ` e `GERENCIAR_USUARIOS`.
+Corpo com dois blocos: `especialista` (mesmos campos do `POST /api/especialistas`) e `usuario` (só `idPerfil`: a senha temporária é gerada pelo back e enviada ao e-mail do especialista; ver `PROFISSIONAIS.md` e "Acesso ao sistema" em `00-GERAL.md`). Exige `CADASTRAR_ESPECIALISTA` **e** `GERENCIAR_USUARIOS` (ou `ACESSO_TOTAL`); a rota `/pj/com-usuario` exige `CADASTRAR_ESPECIALISTA_PJ` e `GERENCIAR_USUARIOS`.
 
 ```json
 {
   "especialista": {
     "nome": "Pedro Almeida",
-    "cpf": "23456789013",
+    "cpf": "23456788010",
     "dataNascimento": "1985-08-20",
     "sexo": "M",
     "celular": "11988888887",
@@ -247,13 +247,12 @@ Corpo com dois blocos: `especialista` (mesmos campos do `POST /api/especialistas
     ]
   },
   "usuario": {
-    "senha": "SenhaSegura123",
     "idPerfil": 1
   }
 }
 ```
 
-**Resposta `201`:** mesmo formato do cadastro simples, com `"acessoCriado": true`. Em erros de validação, os nomes em `fields` levam o prefixo do bloco (ex.: `especialista.jornadas`, `usuario.senha`).
+**Resposta `201`:** mesmo formato do cadastro simples, com `"acessoCriado": true` e `"emailEnviado"` (`false` quando o e-mail com a senha temporária não saiu; o cadastro vale mesmo assim). Em erros de validação, os nomes em `fields` levam o prefixo do bloco (ex.: `especialista.jornadas`, `usuario.idPerfil`).
 
 ---
 
@@ -313,7 +312,7 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. Para reativar
       "pessoa": {
         "idCadastro": 12,
         "nome": "Ana Oliveira",
-        "cpf": "34567890123",
+        "cpf": "34567890175",
         "dataNascimento": "1982-03-15",
         "sexo": "F",
         "celular": "11977777777",
@@ -364,7 +363,7 @@ Todos os campos do `POST /api/especialistas`, mais:
 ```json
 {
   "nome": "Ana Oliveira",
-  "cpf": "34567890123",
+  "cpf": "34567890175",
   "dataNascimento": "1982-03-15",
   "sexo": "F",
   "celular": "11977777777",
@@ -390,7 +389,7 @@ Todos os campos do `POST /api/especialistas`, mais:
 {
   "idCadastro": 12,
   "nome": "Ana Oliveira",
-  "cpf": "34567890123",
+  "cpf": "34567890175",
   "email": "ana.oliveira@clinica.com",
   "idCargo": 1,
   "registroConselho": "CRM-67890",
@@ -410,7 +409,7 @@ Corpo com dois blocos: **`especialistaPJ`** (mesmos campos do `POST /api/especia
 {
   "especialistaPJ": {
     "nome": "Beatriz Lima",
-    "cpf": "34567890124",
+    "cpf": "34567890094",
     "dataNascimento": "1982-03-15",
     "sexo": "F",
     "celular": "11977777776",
@@ -429,13 +428,12 @@ Corpo com dois blocos: **`especialistaPJ`** (mesmos campos do `POST /api/especia
     "inscricaoEstadual": null
   },
   "usuario": {
-    "senha": "SenhaSegura123",
     "idPerfil": 1
   }
 }
 ```
 
-**Resposta `201`:** mesmo formato do cadastro simples de PJ, com `"acessoCriado": true`.
+**Resposta `201`:** mesmo formato do cadastro simples de PJ, com `"acessoCriado": true` e `"emailEnviado"` (ver `PROFISSIONAIS.md`).
 
 ### `PATCH /api/especialistas/pj/{idCadastro}` — atualizar especialista PJ
 
@@ -601,7 +599,7 @@ As demais mensagens de PATCH (nome, e-mail, cargo, perfil, status) são as mesma
 7. `PATCH /api/especialistas/{id}` do passo 2 com `{"novasEspecialidades": [{"nome": "Psicomotricidade"}]}`. Esperado: `200`, especialidades anteriores mantidas e a nova acrescentada.
 8. `PATCH /api/especialistas/{id}` com `{"jornadas": []}`. Esperado: `400`.
 9. `PATCH /api/especialistas/pj/{idPJ}` com `{"cnpj": "11111111000111", "nomeFantasia": "Novo nome"}`. Esperado: `200`, `nomeFantasia` alterado e `cnpj` inalterado.
-10. `POST /api/especialistas/pj/{idPJ}/usuario` com `{"senha": "SenhaTeste123", "idPerfil": 1}`. Esperado: `201`; repetir. Esperado: `400` (já possui usuário).
+10. `POST /api/especialistas/pj/{idPJ}/usuario` com `{"idPerfil": 1}`. Esperado: `201` com `emailEnviado: true`; repetir. Esperado: `400` (já possui usuário).
 11. `DELETE /api/especialistas/pj/{idPJ}`. Esperado: `204`; o GET mostra `statusCadastro: "INATIVO"`.
 12. `PATCH /api/especialistas/{id}` do passo 2 com `{"especialidadesIds": [1, 1]}`. Esperado: `200` com "Psicologia" uma única vez.
 
@@ -620,6 +618,6 @@ As demais mensagens de PATCH (nome, e-mail, cargo, perfil, status) são as mesma
 
 **Cadastro do especialista logado** (`/me`)
 
-20. Conceder acesso ao especialista do passo 2 com o perfil "Especialista" e fazer login com ele. `GET /api/especialistas/me`. Esperado: `200`, com o mesmo corpo de `GET /api/especialistas/{id}` (feito com o administrador). `GET /api/especialistas/{id}` com o token dele: `403`.
+20. Conceder acesso ao especialista do passo 2 com o perfil "Especialista" e fazer o primeiro acesso com ele (login com o e-mail e a senha temporária, depois `POST /api/auth/redefinir-senha`). `GET /api/especialistas/me`. Esperado: `200`, com o mesmo corpo de `GET /api/especialistas/{id}` (feito com o administrador). `GET /api/especialistas/{id}` com o token dele: `403`.
 21. O mesmo com o PJ do passo 10 (perfil "Especialista"). Esperado: `200`, com o mesmo corpo de `GET /api/especialistas/pj/{idPJ}` (campo `especialista` aninhado).
 22. `GET /api/especialistas/me` com o token do administrador. Esperado: `400` `O usuário logado não é um especialista.`

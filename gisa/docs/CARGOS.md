@@ -68,7 +68,7 @@ GET /api/cargos?nome=admin
   "codigoCBO": "999999",
   "tituloCBO": "Cargo de Teste - Desenvolvimento",
   "profissionais": [
-    { "idCadastro": 8, "nome": "Maria Silva", "cpf": "12345678901", "statusCadastro": "ATIVO" }
+    { "idCadastro": 8, "nome": "Maria Silva", "cpf": "12345678909", "statusCadastro": "ATIVO" }
   ]
 }
 ```

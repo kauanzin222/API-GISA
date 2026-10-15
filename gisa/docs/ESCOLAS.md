@@ -19,7 +19,7 @@ Autenticação, convenções, enums e formato de erro: ver `00-GERAL.md`. Todos 
 
 O autocomplete e o cadastro rápido continuam liberados para quem cadastra ou edita pacientes, porque são usados no formulário do paciente. A listagem, os detalhes, a edição e a exclusão são da tela de gestão de escolas.
 
-**Pacientes da escola:** use a listagem de pacientes com o filtro `idEscola` (`GET /api/pacientes?idEscola={idEscola}`; ver `PACIENTES.md`). Ela exige `VISUALIZAR_PACIENTES`.
+**Pacientes da escola:** use a busca de pacientes com o filtro `idEscola` (`GET /api/pacientes?idEscola={idEscola}`; ver `PACIENTES.md`); com `idEscola`, o `termo` é opcional. A resposta é uma lista simples de até 20 pacientes, ordenados por nome. Ela exige `VISUALIZAR_PACIENTES`.
 
 ---
 

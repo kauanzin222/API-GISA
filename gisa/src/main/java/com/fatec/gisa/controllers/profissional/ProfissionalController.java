@@ -26,10 +26,11 @@ import com.fatec.gisa.dtos.profissional.response.ProfissionalCadastroResponseDTO
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
 import com.fatec.gisa.dtos.usuario.request.UsuarioRequestDTO;
-import com.fatec.gisa.dtos.usuario.response.UsuarioResumoDTO;
+import com.fatec.gisa.dtos.usuario.response.AcessoConcedidoDTO;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.enums.StatusCadastro;
 import com.fatec.gisa.enums.TipoCadastro;
+import com.fatec.gisa.services.cadastro.CadastroComAcesso;
 import com.fatec.gisa.services.cadastro.CadastroFacadeService;
 import com.fatec.gisa.services.profissional.ProfissionalService;
 
@@ -82,7 +83,7 @@ public class ProfissionalController {
 
     @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'GERENCIAR_USUARIOS')")
     @PostMapping("/{idCadastro}/usuario")
-    public ResponseEntity<UsuarioResumoDTO> concederAcesso(
+    public ResponseEntity<AcessoConcedidoDTO> concederAcesso(
             @PathVariable Long idCadastro,
             @Valid @RequestBody UsuarioRequestDTO request) {
         return ResponseEntity.status(201)
@@ -94,7 +95,7 @@ public class ProfissionalController {
     public ResponseEntity<ProfissionalCadastroResponseDTO> cadastrar(
             @Valid @RequestBody ProfissionalCadastroRequestDTO request) {
         Profissional profissional = cadastroFacadeService.cadastrarProfissional(request);
-        return ResponseEntity.status(201).body(toResponse(profissional, false));
+        return ResponseEntity.status(201).body(toResponse(profissional, false, null));
     }
 
     // Cria o usuário já com um perfil: escolher perfil é gerenciar usuários (como o idPerfil no PATCH)
@@ -103,17 +104,19 @@ public class ProfissionalController {
     @PostMapping("/com-usuario")
     public ResponseEntity<ProfissionalCadastroResponseDTO> cadastrarComUsuario(
             @Valid @RequestBody ProfissionalComUsuarioRequestDTO request) {
-        Profissional profissional = cadastroFacadeService.cadastrarProfissionalComUsuario(request);
-        return ResponseEntity.status(201).body(toResponse(profissional, true));
+        CadastroComAcesso<Profissional> resultado = cadastroFacadeService.cadastrarProfissionalComUsuario(request);
+        return ResponseEntity.status(201).body(toResponse(resultado.cadastro(), true, resultado.emailEnviado()));
     }
 
-    private ProfissionalCadastroResponseDTO toResponse(Profissional profissional, boolean acessoCriado) {
+    private ProfissionalCadastroResponseDTO toResponse(Profissional profissional, boolean acessoCriado,
+            Boolean emailEnviado) {
         return new ProfissionalCadastroResponseDTO(
                 profissional.getIdCadastro(),
                 profissional.getNome(),
                 profissional.getCpf(),
                 profissional.getEmail(),
                 profissional.getCargo().getIdCargo(),
-                acessoCriado);
+                acessoCriado,
+                emailEnviado);
     }
 }

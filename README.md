@@ -34,14 +34,14 @@ Como trabalho de graduação em ADS, o projeto também tem finalidade acadêmica
 
 | Módulo | Principais recursos |
 |---|---|
-| **Autenticação e usuários** | login por CPF e senha com token JWT; dados do usuário logado (nome, tipo, perfil e permissões); troca da própria senha e redefinição pelo administrador, com encerramento das sessões abertas; administração de acessos (listar usuários, trocar perfil, retirar acesso), com trava para não ficar sem administrador |
-| **Pacientes e responsáveis** | cadastro completo em uma requisição (prontuário, endereços, responsáveis, CIDs); busca por CPF ou nome; inclusão de responsável em paciente existente; inativação; histórico de atividades do paciente (linha do tempo sem dados de saúde) |
+| **Autenticação e usuários** | login por e-mail e senha com token JWT; senha temporária gerada pelo back e enviada por e-mail ao conceder acesso, com troca obrigatória no primeiro acesso; "esqueci minha senha" por e-mail; dados do usuário logado (nome, e-mail, tipo, perfil e permissões); troca da própria senha, com encerramento das sessões abertas; administração de acessos (listar usuários, trocar perfil, gerar nova senha temporária, retirar acesso), com travas para não ficar sem administrador nem sem quem gerencie perfis |
+| **Pacientes e responsáveis** | cadastro completo em uma requisição (prontuário, endereços, responsáveis, CIDs), com validação de CPF; busca por CPF exato ou nome (sem listagem completa, LGPD); inclusão de responsável em paciente existente; inativação, que cancela ou ajusta as terapias futuras; histórico de atividades do paciente (linha do tempo sem dados de saúde) |
 | **Escolas e CIDs** | gestão de escolas (listagem, edição, exclusão sem pacientes) e autocomplete; consulta de CID por código; cadastro de CIDs novos junto com o paciente |
-| **Equipe** | profissionais, especialistas e especialistas PJ, com especialidades e jornadas de trabalho; listagem com filtro por tipo e status; concessão de acesso ao sistema; gestão de especialidades |
+| **Equipe** | profissionais, especialistas e especialistas PJ, com especialidades e jornadas de trabalho; assistentes sociais, com os pacientes vinculados a eles; listagem com filtro por tipo e status; concessão de acesso ao sistema; gestão de especialidades |
 | **Cargos e CBOs** | cadastro e manutenção de cargos ligados ao CBO; detalhes com os profissionais de cada cargo |
-| **Perfis e permissões** | toda rota exige permissão; perfis padrão (Administrador, Recepção, Especialista, Assistente Social); perfis de acesso com suas permissões e usuários |
+| **Perfis e permissões** | toda rota exige permissão; permissões com categoria e descrição; perfis padrão (Administrador, Recepção, Especialista, Assistente Social, que vê só os pacientes vinculados); perfis de acesso com suas permissões e usuários |
 | **Terapias** | agendamento individual ou coletivo, só para horários futuros (fuso de São Paulo), com verificação de conflito de horário (inclusive para cadastros e edições simultâneos); edição de terapia agendada; mudança de status e cancelamento com motivo; listagem geral e do especialista logado, com filtros por dia, intervalo, paciente e especialista; registro de presença e falta, com liberação do horário em falta justificada |
-| **Auditoria** | registro de logins, alterações e consultas a dados sensíveis, com consulta filtrada para o administrador |
+| **Auditoria** | registro de alterações, logins que falharam (com o e-mail digitado) e consultas aos detalhes de paciente, com consulta filtrada para o administrador |
 
 Comum a todos os módulos:
 
@@ -89,6 +89,12 @@ Hospedagem atual: **Render** (`https://api-gisa.onrender.com`).
    | `DB_PASSWORD` | senha do banco |
    | `JWT_SECRET` | chave de assinatura dos tokens: texto aleatório com **pelo menos 32 caracteres** |
    | `CORS_ORIGINS` | *(opcional)* origens do front liberadas no CORS, **separadas por vírgula** e sem barra no final (ex.: `https://gisa.exemplo.com,http://localhost:4200`). Sem a variável, valem `http://localhost:4200` e `https://eduardofproenca.github.io` (front publicado no GitHub Pages). Quando definida, **substitui** o padrão: inclua o `localhost` se ainda precisar dele. Não use `*` (a API envia credenciais) |
+   | `FRONT_URL` | *(opcional)* endereço do front usado nos links enviados por e-mail (ex.: `https://gisa.exemplo.com`, sem barra no final). Padrão: `http://localhost:4200` |
+   | `SMTP_HOST` | *(opcional)* servidor SMTP para os e-mails de senha temporária e de redefinição de senha. **Sem ele, nenhum e-mail é enviado**: o conteúdo (com a senha ou o link) vai para o log do servidor, o que serve para desenvolvimento local |
+   | `SMTP_PORT` | *(opcional)* porta do SMTP. Padrão: `587` |
+   | `SMTP_USERNAME` / `SMTP_PASSWORD` | *(opcionais)* usuário e senha do SMTP |
+   | `SMTP_AUTH` / `SMTP_STARTTLS` | *(opcionais)* autenticação e STARTTLS do SMTP. Padrão: `true` nos dois |
+   | `EMAIL_REMETENTE` | *(opcional)* remetente dos e-mails. Padrão: `nao-responda@gisa.local` |
 
    ```bash
    export DB_HOST="localhost:5432"
@@ -111,7 +117,7 @@ Hospedagem atual: **Render** (`https://api-gisa.onrender.com`).
 
 ### Usuário administrador inicial
 
-A migration `V6` cria um administrador para o primeiro acesso. As credenciais estão em `gisa/docs/00-GERAL.md`. **Troque a senha dele logo após o primeiro login** em qualquer ambiente publicado (`PATCH /api/usuarios/minha-senha`, ver `USUARIOS.md`), pois a senha inicial é conhecida por quem tem acesso ao repositório.
+A migration `V6` cria um administrador para o primeiro acesso, e a `V16` dá a ele o e-mail de login `admin@gisa.local`. As credenciais estão em `gisa/docs/00-GERAL.md`. **Troque a senha dele logo após o primeiro login** em qualquer ambiente publicado (`PATCH /api/usuarios/minha-senha`, ver `USUARIOS.md`), pois a senha inicial é conhecida por quem tem acesso ao repositório.
 
 ---
 
@@ -170,6 +176,7 @@ Os documentos ficam em [`gisa/docs/`](./gisa/docs/). Comece pelo **`00-GERAL.md`
 | [CIDS.md](./gisa/docs/CIDS.md) | consulta de CID e fluxo de cadastro |
 | [PROFISSIONAIS.md](./gisa/docs/PROFISSIONAIS.md) | profissionais |
 | [ESPECIALISTAS.md](./gisa/docs/ESPECIALISTAS.md) | especialistas, especialistas PJ e especialidades |
+| [ASSISTENTES-SOCIAIS.md](./gisa/docs/ASSISTENTES-SOCIAIS.md) | assistentes sociais e pacientes vinculados |
 | [CARGOS.md](./gisa/docs/CARGOS.md) | cargos e CBOs |
 | [PERFIS.md](./gisa/docs/PERFIS.md) | perfis de acesso, lista de permissões e perfis padrão |
 | [TERAPIAS.md](./gisa/docs/TERAPIAS.md) | agendamento, edição, status e filtros de terapias, conflitos de horário e presença |
@@ -182,10 +189,10 @@ Cada documento termina com um **roteiro rápido de testes** para Postman ou simi
 
 ## Estado do projeto e limitações conhecidas
 
-- **Permissões por rota:** toda rota exige permissão (tabela em `00-GERAL.md`). O corpo da requisição é validado antes da permissão: sem permissão e com corpo inválido, a resposta é `400`, e não `403`. A assistente social ainda lê todos os pacientes (a restrição a pacientes específicos fica para depois). Documentos (atestado, receita, recusa) têm permissões, mas só o front as usa.
+- **Permissões por rota:** toda rota exige permissão (tabela em `00-GERAL.md`). O corpo da requisição é validado antes da permissão: sem permissão e com corpo inválido, a resposta é `400`, e não `403`. O assistente social vê só os pacientes vinculados a ele (`VISUALIZAR_PACIENTES_VINCULADOS`). Documentos (atestado, receita, recusa) têm permissões, mas só o front as usa.
 - **CORS:** configurável pela variável `CORS_ORIGINS` (ver [Configuração](#configuração-e-execução-local)); sem ela, valem `http://localhost:4200` e `https://eduardofproenca.github.io` (front no GitHub Pages).
 - **Login sem limite de tentativas:** as tentativas que falham ficam na auditoria, mas não são bloqueadas.
-- **"Esqueci minha senha":** não há recuperação por e-mail. O usuário troca a própria senha (`/api/usuarios/minha-senha`) ou o administrador redefine.
+- **E-mails:** sem `SMTP_HOST`, os e-mails de senha temporária e de "esqueci minha senha" não são enviados, só registrados no log do servidor.
 - **Terapias:** já há mudança de status (iniciar, concluir, cancelar com motivo), edição de terapia agendada (remarcar e trocar participantes) e filtros por dia, intervalo, paciente e especialista. Ainda não há contadores prontos da visão por dia ("Consultas Diárias"): o front calcula a partir de `GET /api/terapias/minhas?data=`. A API não confere a data ao iniciar ou concluir um atendimento, nem a jornada de trabalho do especialista ao agendar.
 - **Histórico do paciente:** começa nesta versão, sem carga retroativa: pacientes e terapias anteriores não têm eventos. Não registra início e conclusão de atendimento, nem alterações feitas direto no banco.
 - **Receita e atestado:** gerados e impressos só no front; a API não guarda esses documentos.

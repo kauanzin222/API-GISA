@@ -9,6 +9,7 @@ public record UsuarioLogadoDTO(
         Long idCadastro,
         String nome,
         String cpf,
+        String email,
         TipoCadastro tipoCadastro,
         PerfilResponseDTO perfil,
         List<PermissaoResumoDTO> permissoes) {

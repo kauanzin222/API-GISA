@@ -8,6 +8,6 @@ public record ProfissionalResumoDTO(
     String nomeCargo,
     String registroConselho,
     String statusCadastro,
-    // PROFISSIONAL, ESPECIALISTA ou ESPECIALISTA_PJ: indica qual rota de detalhes usar
+    // PROFISSIONAL, ESPECIALISTA, ESPECIALISTA_PJ ou ASSISTENTE_SOCIAL: indica qual rota de detalhes usar
     TipoCadastro tipo
 ) {}

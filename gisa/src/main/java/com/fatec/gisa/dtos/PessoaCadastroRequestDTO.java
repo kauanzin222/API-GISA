@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import com.fatec.gisa.enums.EstadoCivil;
+import com.fatec.gisa.validation.CpfValido;
 import com.fatec.gisa.validation.SexoValido;
 
 import jakarta.validation.Valid;
@@ -24,6 +25,7 @@ public class PessoaCadastroRequestDTO {
 
     @NotBlank(message = "O CPF é obrigatório")
     @Pattern(regexp = "\\d{11}", message = "O CPF deve conter 11 dígitos numéricos")
+    @CpfValido
     private String cpf;
 
     @NotNull(message = "A data de nascimento é obrigatória")

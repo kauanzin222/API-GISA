@@ -3,6 +3,7 @@ package com.fatec.gisa.enums;
 import org.hibernate.Hibernate;
 
 import com.fatec.gisa.entities.Pessoa;
+import com.fatec.gisa.entities.assistentesocial.AssistenteSocial;
 import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.entities.profissional.Profissional;
@@ -12,6 +13,7 @@ public enum TipoCadastro {
     PROFISSIONAL,
     ESPECIALISTA,
     ESPECIALISTA_PJ,
+    ASSISTENTE_SOCIAL,
     // Pessoa sem cadastro de profissional: hoje, só o administrador inicial criado pela migration V6
     PESSOA;
 
@@ -23,6 +25,9 @@ public enum TipoCadastro {
         }
         if (real instanceof Especialista) {
             return ESPECIALISTA;
+        }
+        if (real instanceof AssistenteSocial) {
+            return ASSISTENTE_SOCIAL;
         }
         if (real instanceof Profissional) {
             return PROFISSIONAL;

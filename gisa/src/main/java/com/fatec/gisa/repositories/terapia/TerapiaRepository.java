@@ -57,6 +57,22 @@ public interface TerapiaRepository extends JpaRepository<Terapia, Long> {
     @Query("select t from Terapia t where t.idTerapia = :idTerapia")
     Optional<Terapia> buscarParaAlterar(@Param("idTerapia") Long idTerapia);
 
+    // Inativação do paciente: terapias com o status pedido (AGENDADA) que começam depois de "agora"
+    // e de que o paciente participa. Trava as terapias até o fim da transação, na ordem do ID
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select t from Terapia t
+            where t.status = :status
+              and t.dataHoraInicio > :agora
+              and exists (select 1 from PresencaPaciente p
+                          where p.terapia = t and p.paciente.idCadastro = :idPaciente)
+            order by t.idTerapia
+            """)
+    List<Terapia> travarFuturasDoPaciente(
+            @Param("idPaciente") Long idPaciente,
+            @Param("status") StatusTerapia status,
+            @Param("agora") LocalDateTime agora);
+
     // Trava as linhas das pessoas envolvidas até o fim da transação, para que dois
     // cadastros simultâneos com alguém em comum não passem juntos pela verificação de
     // conflito. A ordenação por ID evita deadlock entre cadastros concorrentes.

@@ -68,8 +68,8 @@ class UsuarioLogadoTest {
     @BeforeEach
     void preparar() {
         transactionTemplate.executeWithoutResult(status -> {
-            Permissao segunda = new Permissao(null, "PERMISSAO_B" + SEQUENCIA.incrementAndGet(), "Segunda", null);
-            Permissao primeira = new Permissao(null, "PERMISSAO_A" + SEQUENCIA.incrementAndGet(), "Primeira", null);
+            Permissao segunda = new Permissao(null, "PERMISSAO_B" + SEQUENCIA.incrementAndGet(), "Segunda", null, null);
+            Permissao primeira = new Permissao(null, "PERMISSAO_A" + SEQUENCIA.incrementAndGet(), "Primeira", null, null);
             entityManager.persist(primeira);
             entityManager.persist(segunda);
             perfil = new Perfil(null, "Especialista" + SEQUENCIA.incrementAndGet(),

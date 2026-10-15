@@ -1,9 +1,12 @@
 package com.fatec.gisa.services.profissional;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
+import org.hibernate.Hibernate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -14,6 +17,7 @@ import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.dtos.profissional.request.ProfissionalPatchRequestDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
+import com.fatec.gisa.entities.assistentesocial.AssistenteSocial;
 import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Profissional;
 import com.fatec.gisa.enums.StatusCadastro;
@@ -21,6 +25,7 @@ import com.fatec.gisa.enums.TipoCadastro;
 import com.fatec.gisa.exceptions.ConflitoException;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.repositories.PessoaRepository;
+import com.fatec.gisa.repositories.assistentesocial.VinculoAssistenteSocialRepository;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.repositories.profissional.ProfissionalRepository;
 import com.fatec.gisa.services.PessoaService;
@@ -41,6 +46,8 @@ public class ProfissionalService {
     private final ProfissionalMapper profissionalMapper;
     private final EnderecoService enderecoService;
     private final PessoaService pessoaService;
+    private final VinculoAssistenteSocialRepository vinculoAssistenteSocialRepository;
+    private final Clock relogio;
 
     @Transactional
     public Profissional criarProfissional(ProfissionalCadastroRequestDTO dto) {
@@ -65,7 +72,8 @@ public class ProfissionalService {
         if (pessoaRepository.existsByCpf(dto.getCpf())) {
             throw new IllegalArgumentException("CPF já cadastrado.");
         }
-        if (profissionalRepository.existsByEmail(dto.getEmail())) {
+        // O e-mail é o login: único entre todos os cadastros, sem diferenciar maiúsculas
+        if (pessoaRepository.existsByEmailIgnoreCase(dto.getEmail())) {
             throw new IllegalArgumentException("E-mail já cadastrado.");
         }
     }
@@ -75,7 +83,8 @@ public class ProfissionalService {
     public Page<ProfissionalResumoDTO> listarPaginado(FiltroPessoaDTO filtro, List<TipoCadastro> tipos,
             StatusCadastro statusCadastro, Pageable pageable) {
         Set<TipoCadastro> tiposFiltrados = tipos == null || tipos.isEmpty()
-                ? EnumSet.of(TipoCadastro.PROFISSIONAL, TipoCadastro.ESPECIALISTA, TipoCadastro.ESPECIALISTA_PJ)
+                ? EnumSet.of(TipoCadastro.PROFISSIONAL, TipoCadastro.ESPECIALISTA, TipoCadastro.ESPECIALISTA_PJ,
+                        TipoCadastro.ASSISTENTE_SOCIAL)
                 : EnumSet.copyOf(tipos);
         // PESSOA existe só para o usuário logado (administrador inicial), que não é profissional
         if (tiposFiltrados.contains(TipoCadastro.PESSOA)) {
@@ -89,6 +98,7 @@ public class ProfissionalService {
                         tiposFiltrados.contains(TipoCadastro.PROFISSIONAL),
                         tiposFiltrados.contains(TipoCadastro.ESPECIALISTA),
                         tiposFiltrados.contains(TipoCadastro.ESPECIALISTA_PJ),
+                        tiposFiltrados.contains(TipoCadastro.ASSISTENTE_SOCIAL),
                         pageable)
                 .map(profissionalMapper::toResumoDTO);
     }
@@ -119,13 +129,20 @@ public class ProfissionalService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Profissional não encontrado com ID: " + idCadastro));
 
+        boolean inativando = dto.hasField("statusCadastro")
+                && dto.getStatusCadastro() == StatusCadastro.INATIVO
+                && profissional.getStatusCadastro() != StatusCadastro.INATIVO;
+        if (inativando) {
+            antesDeInativar(profissional);
+        }
+
         pessoaService.aplicarAlteracoes(profissional, dto);
 
         if (dto.hasField("email")) {
             if (dto.getEmail() == null || dto.getEmail().isBlank()) {
                 throw new IllegalArgumentException("O e-mail não pode ser vazio.");
             }
-            if (profissionalRepository.existsByEmailAndIdCadastroNot(
+            if (pessoaRepository.existsByEmailIgnoreCaseAndIdCadastroNot(
                     dto.getEmail(), profissional.getIdCadastro())) {
                 throw new IllegalArgumentException("E-mail já cadastrado.");
             }
@@ -160,6 +177,23 @@ public class ProfissionalService {
         Profissional profissional = profissionalRepository.findById(idCadastro)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Profissional não encontrado com ID: " + idCadastro));
+        if (profissional.getStatusCadastro() != StatusCadastro.INATIVO) {
+            antesDeInativar(profissional);
+        }
         profissional.setStatusCadastro(StatusCadastro.INATIVO);
+    }
+
+    // Vale para o DELETE e para o PATCH com statusCadastro INATIVO, de qualquer tipo de profissional:
+    // não deixa o sistema sem quem gerencie perfis (409) e encerra os vínculos do assistente social
+    private void antesDeInativar(Profissional profissional) {
+        if (profissional.getUsuario() != null) {
+            Long idUsuario = profissional.getIdCadastro();
+            usuarioService.garantirGestorDePerfis(gestor -> gestor.getIdCadastro().equals(idUsuario));
+        }
+        if (Hibernate.unproxy(profissional) instanceof AssistenteSocial) {
+            LocalDate hoje = LocalDate.now(relogio);
+            vinculoAssistenteSocialRepository.buscarAtivosDoAssistenteSocial(profissional.getIdCadastro())
+                    .forEach(vinculo -> vinculo.setDataFim(hoje));
+        }
     }
 }

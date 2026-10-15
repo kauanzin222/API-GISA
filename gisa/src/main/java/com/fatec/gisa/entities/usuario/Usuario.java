@@ -49,6 +49,14 @@ public class Usuario {
     @Column(name = "DataCriacao", nullable = false, updatable = false)
     private Instant dataCriacao;
 
+    // Senha gerada pelo back ao conceder acesso (ou a pedido do administrador). O login com ela não
+    // devolve o token normal: o usuário precisa cadastrar uma senha nova (POST /api/auth/redefinir-senha)
+    @Column(name = "SenhaTemporaria", nullable = false)
+    private boolean senhaTemporaria;
+
+    @Column(name = "SenhaTemporariaExpiraEm")
+    private Instant senhaTemporariaExpiraEm;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "IDPerfil", nullable = false)
     private Perfil perfil;

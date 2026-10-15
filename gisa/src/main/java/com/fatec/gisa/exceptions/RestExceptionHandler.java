@@ -34,6 +34,20 @@ public class RestExceptionHandler {
         return response(HttpStatus.UNAUTHORIZED, "Credenciais inválidas.", request, Map.of());
     }
 
+    @ExceptionHandler(NaoAutorizadoException.class)
+    public ResponseEntity<ApiErrorResponse> handleNaoAutorizado(
+            NaoAutorizadoException exception,
+            HttpServletRequest request) {
+        return response(HttpStatus.UNAUTHORIZED, exception.getMessage(), request, Map.of());
+    }
+
+    @ExceptionHandler(EnvioEmailException.class)
+    public ResponseEntity<ApiErrorResponse> handleEnvioEmail(
+            EnvioEmailException exception,
+            HttpServletRequest request) {
+        return response(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), request, Map.of());
+    }
+
     // Usuário autenticado, mas sem a permissão exigida pela rota (@PreAuthorize)
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiErrorResponse> handleAccessDenied(

@@ -321,7 +321,7 @@ class AcessoUsuarioTest {
 
     private Permissao permissao(String nome) {
         return permissaoRepository.findByNome(nome).orElseGet(() -> {
-            Permissao nova = new Permissao(null, nome, null, null);
+            Permissao nova = new Permissao(null, nome, null, null, null);
             entityManager.persist(nova);
             return nova;
         });

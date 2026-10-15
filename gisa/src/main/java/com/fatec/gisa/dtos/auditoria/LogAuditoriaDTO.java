@@ -16,5 +16,7 @@ public record LogAuditoriaDTO(
         int statusHttp,
         // true quando a requisição foi atendida (status abaixo de 400)
         boolean sucesso,
-        String ip) {
+        String ip,
+        // E-mail digitado nas tentativas de login; null nos demais registros
+        String emailInformado) {
 }

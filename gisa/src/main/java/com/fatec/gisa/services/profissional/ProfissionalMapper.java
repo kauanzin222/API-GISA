@@ -13,6 +13,7 @@ import com.fatec.gisa.dtos.profissional.request.ProfissionalCadastroRequestDTO;
 import com.fatec.gisa.dtos.profissional.response.CargoResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResponseDTO;
 import com.fatec.gisa.dtos.profissional.response.ProfissionalResumoDTO;
+import com.fatec.gisa.entities.assistentesocial.AssistenteSocial;
 import com.fatec.gisa.entities.especialista.Especialista;
 import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.entities.profissional.Cargo;
@@ -40,9 +41,12 @@ public class ProfissionalMapper {
     }
 
     public ProfissionalResumoDTO toResumoDTO(Profissional profissional) {
-        String registroConselho = (profissional instanceof Especialista especialista)
-                ? especialista.getRegistroConselho()
-                : null;
+        String registroConselho = null;
+        if (profissional instanceof Especialista especialista) {
+            registroConselho = especialista.getRegistroConselho();
+        } else if (profissional instanceof AssistenteSocial assistenteSocial) {
+            registroConselho = assistenteSocial.getRegistroConselho();
+        }
 
         String nomeCargo = (profissional.getCargo() != null)
                 ? profissional.getCargo().getNome()
@@ -86,7 +90,8 @@ public class ProfissionalMapper {
                                 .map(permissao -> new PermissaoResumoDTO(
                                         permissao.getIdPermissao(),
                                         permissao.getNome(),
-                                        permissao.getDescricao()))
+                                        permissao.getDescricao(),
+                                        permissao.getCategoria()))
                                 .toList());
     }
 
