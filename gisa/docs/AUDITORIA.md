@@ -11,7 +11,7 @@ A API registra automaticamente **quem fez o quê, quando e com qual resultado**.
 | Ação (`acao`) | Quando |
 |---|---|
 | `LOGIN` | **só as tentativas de login que falharam** (útil para detectar tentativas de adivinhar senha). Logins bem-sucedidos **não** são registrados |
-| `CRIACAO` | todo `POST` (exceto login), inclusive `POST /api/auth/esqueci-senha` e `POST /api/auth/redefinir-senha` |
+| `CRIACAO` | todo `POST` (exceto login e `POST /api/terapias/verificar-conflitos`, que só consulta), inclusive `POST /api/auth/esqueci-senha` e `POST /api/auth/redefinir-senha` |
 | `ALTERACAO` | todo `PATCH` ou `PUT` |
 | `EXCLUSAO` | todo `DELETE` (inativações e exclusões) |
 | `CONSULTA` | **só** `GET /api/pacientes/{id}` (acesso aos dados de saúde de um paciente) |

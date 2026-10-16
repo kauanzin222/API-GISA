@@ -1,5 +1,7 @@
 package com.fatec.gisa.config;
 
+import java.util.Set;
+
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -17,7 +19,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 // Registra na auditoria as alterações (POST, PATCH, PUT, DELETE), os logins que falharam e a
-// consulta aos detalhes de um paciente (dados de saúde). Nenhum outro GET é registrado.
+// consulta aos detalhes de um paciente (dados de saúde). Nenhum outro GET é registrado, nem os POSTs
+// que só consultam (POSTS_DE_CONSULTA). Alterações que falharam também ficam registradas.
 // Roda depois da resposta pronta, então o status gravado já é o final (inclusive de erros).
 @Slf4j
 @Component
@@ -33,6 +36,9 @@ public class AuditoriaInterceptor implements HandlerInterceptor {
 
     // Único GET auditado: acesso aos dados de saúde de um paciente (LGPD)
     private static final String CONSULTA_SENSIVEL = "/api/pacientes/{idCadastro}";
+
+    // POSTs que só consultam (não gravam nada): não são auditados
+    private static final Set<String> POSTS_DE_CONSULTA = Set.of("/api/terapias/verificar-conflitos");
 
     private final AuditoriaService auditoriaService;
 
@@ -58,6 +64,9 @@ public class AuditoriaInterceptor implements HandlerInterceptor {
         if ("POST".equals(metodo) && ROTA_LOGIN.equals(request.getRequestURI())) {
             // Logins bem-sucedidos não são registrados; só as tentativas que falharam
             return response.getStatus() >= 400 ? AcaoAuditoria.LOGIN : null;
+        }
+        if ("POST".equals(metodo) && POSTS_DE_CONSULTA.contains(request.getRequestURI())) {
+            return null;
         }
         return switch (metodo) {
             case "POST" -> AcaoAuditoria.CRIACAO;
