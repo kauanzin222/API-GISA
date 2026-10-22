@@ -1,9 +1,11 @@
 package com.fatec.gisa.services.especialista;
 
+import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.fatec.gisa.dtos.especialista.JornadaTrabalhoDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaCadastroRequestDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaPatchRequestDTO;
 import com.fatec.gisa.dtos.especialista.response.EspecialistaResponseDTO;
@@ -66,6 +68,26 @@ public class EspecialistaService {
                 .map(profissionalMapper::toEspecialistaResponseDTO)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Especialista não encontrado com ID: " + idCadastro));
+    }
+
+    // Só as jornadas, para quem agenda terapias (resumo no formulário). Vale para especialista e PJ
+    @Transactional(readOnly = true)
+    public List<JornadaTrabalhoDTO> buscarJornadas(Long idCadastro) {
+        Especialista especialista = especialistaRepository.findById(idCadastro)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Especialista não encontrado com ID: " + idCadastro));
+        if (especialista.getJornadaTrabalho() == null) {
+            return List.of();
+        }
+        return especialista.getJornadaTrabalho().stream()
+                .sorted(Comparator.comparing(JornadaTrabalho::getDiaSemana)
+                        .thenComparing(JornadaTrabalho::getHoraInicio))
+                .map(jornada -> new JornadaTrabalhoDTO(
+                        jornada.getIdJornada(),
+                        jornada.getDiaSemana(),
+                        jornada.getHoraInicio(),
+                        jornada.getHoraTermino()))
+                .toList();
     }
 
     @Transactional

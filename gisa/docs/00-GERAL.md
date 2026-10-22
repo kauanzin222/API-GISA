@@ -172,6 +172,7 @@ Cada perfil de acesso tem um conjunto de permissões (lista completa e perfis pa
 | `GET /api/cids/{codigo}` | `CADASTRAR_PACIENTE` ou `EDITAR_PACIENTE` |
 | `GET /api/profissionais` | `VISUALIZAR_PROFISSIONAIS` ou `VISUALIZAR_TERAPIAS` (a recepção lista especialistas para agendar) |
 | `GET /api/profissionais/{id}`, `GET /api/especialistas/{id}`, `GET /api/especialistas/pj/{id}`, `GET /api/assistentes-sociais/{id}` | `VISUALIZAR_PROFISSIONAIS` |
+| `GET /api/especialistas/{id}/jornadas` | `VISUALIZAR_PROFISSIONAIS`, `VISUALIZAR_TERAPIAS`, `AGENDAR_TERAPIA` ou `EDITAR_TERAPIA` (resumo das jornadas no agendamento) |
 | `POST /api/profissionais`, `POST /api/assistentes-sociais` | `CADASTRAR_PROFISSIONAL` |
 | `POST /api/especialistas` | `CADASTRAR_ESPECIALISTA` |
 | `POST /api/especialistas/pj` | `CADASTRAR_ESPECIALISTA_PJ` |

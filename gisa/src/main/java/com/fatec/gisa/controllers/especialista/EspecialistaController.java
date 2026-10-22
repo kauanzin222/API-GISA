@@ -1,5 +1,7 @@
 package com.fatec.gisa.controllers.especialista;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fatec.gisa.dtos.especialista.JornadaTrabalhoDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaCadastroRequestDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaComUsuarioRequestDTO;
 import com.fatec.gisa.dtos.especialista.request.EspecialistaPJCadastroRequestDTO;
@@ -55,6 +58,15 @@ public class EspecialistaController {
     @GetMapping("/{idCadastro}")
     public ResponseEntity<EspecialistaResponseDTO> buscarPorId(@PathVariable Long idCadastro) {
         return ResponseEntity.ok(especialistaService.buscarDetalhes(idCadastro));
+    }
+
+    // Jornadas de especialista ou PJ, para o resumo no agendamento: quem agenda não costuma ter
+    // VISUALIZAR_PROFISSIONAIS (a recepção já lista os especialistas por VISUALIZAR_TERAPIAS)
+    @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PROFISSIONAIS', 'VISUALIZAR_TERAPIAS', "
+            + "'AGENDAR_TERAPIA', 'EDITAR_TERAPIA')")
+    @GetMapping("/{idCadastro}/jornadas")
+    public ResponseEntity<List<JornadaTrabalhoDTO>> buscarJornadas(@PathVariable Long idCadastro) {
+        return ResponseEntity.ok(especialistaService.buscarJornadas(idCadastro));
     }
 
     @PreAuthorize("hasAnyAuthority('ACESSO_TOTAL', 'VISUALIZAR_PROFISSIONAIS')")

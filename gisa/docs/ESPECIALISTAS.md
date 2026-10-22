@@ -10,6 +10,7 @@ Um **especialista** é um profissional (ver `PROFISSIONAIS.md`) com registro em 
 |---|---|---|---|
 | `GET` | `/api/especialistas/me` | autenticado (especialista) | cadastro do especialista logado (comum ou PJ) |
 | `GET` | `/api/especialistas/{idCadastro}` | `VISUALIZAR_PROFISSIONAIS` | detalhes de um especialista |
+| `GET` | `/api/especialistas/{idCadastro}/jornadas` | `VISUALIZAR_PROFISSIONAIS`, `VISUALIZAR_TERAPIAS`, `AGENDAR_TERAPIA` ou `EDITAR_TERAPIA` | só as jornadas de trabalho, de especialista **ou** PJ (resumo no agendamento) |
 | `POST` | `/api/especialistas` | `CADASTRAR_ESPECIALISTA` | cadastra especialista sem acesso ao sistema |
 | `POST` | `/api/especialistas/com-usuario` | `CADASTRAR_ESPECIALISTA` **e** `GERENCIAR_USUARIOS` | cadastra especialista e cria o usuário de acesso |
 | `POST` | `/api/especialistas/{idCadastro}/usuario` | `GERENCIAR_USUARIOS` | concede acesso a um especialista já cadastrado (ver `00-GERAL.md`) |
@@ -34,6 +35,24 @@ Um **especialista** é um profissional (ver `PROFISSIONAIS.md`) com registro em 
 > **Separação das rotas:** as rotas `/api/especialistas/{idCadastro}` (GET, PATCH, DELETE e `/usuario`) **recusam** IDs de especialistas PJ com `400`:
 > `Este cadastro é de um especialista PJ. Use /api/especialistas/pj/{idCadastro}.`
 > Já as rotas `/pj/...` com o ID de um especialista que não é PJ respondem `404`. IDs de assistentes sociais (que não são especialistas; ver `ASSISTENTES-SOCIAIS.md`) também respondem `404` aqui.
+
+---
+
+## `GET /api/especialistas/{idCadastro}/jornadas` — jornadas de trabalho
+
+Usada no formulário de agendamento para mostrar quando cada especialista atende. Diferente do GET de detalhes, aceita também IDs de especialistas PJ e não exige `VISUALIZAR_PROFISSIONAIS`.
+
+**Resposta `200`**, ordenada por dia da semana e hora de início (`[]` se não houver jornada):
+
+```json
+[
+  { "idJornada": 4, "diaSemana": 1, "horaInicio": "08:00", "horaTermino": "12:00" },
+  { "idJornada": 5, "diaSemana": 1, "horaInicio": "14:00", "horaTermino": "18:00" },
+  { "idJornada": 6, "diaSemana": 3, "horaInicio": "09:00", "horaTermino": "16:00" }
+]
+```
+
+ID que não é de especialista nem de PJ: `404` `Especialista não encontrado com ID: {id}`.
 
 ---
 
