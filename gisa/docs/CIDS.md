@@ -78,6 +78,10 @@ Quando o CID não existe na API do GISA e é encontrado na API pública, a **des
 
 > A API pública de CID ainda **não foi definida**. Quando for escolhida, este documento será atualizado com a URL e o formato da resposta.
 
+**CID fora da tabela oficial**
+
+A tabela usada pelo front (DATASUS, CID-10 versão 2008) não tem códigos criados depois, como `U07.1` (COVID-19). Para esses casos, a tela de paciente permite **cadastrar o CID manualmente**, informando código e descrição, que vão em `novosCids`. A API valida o formato dos CIDs novos: letra maiúscula, dois dígitos e, opcionalmente, ponto e um dígito (`F84` ou `F84.0`); fora disso, `400` com `Código CID inválido. Use o formato do CID-10, como F84 ou F84.0`. A descrição tem no máximo 255 caracteres. Se o código já existir na base, o CID existente é usado e a descrição enviada é ignorada.
+
 **Exemplo de uso no front (JavaScript)**
 
 ```js

@@ -636,7 +636,7 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. O responsáve
 | endereço | O CEP é obrigatório / A rua é obrigatório / O número é obrigatório / O bairro é obrigatório / A cidade é obrigatória / O estado é obrigatório |
 | `idEscola` | O ID da escola deve ser positivo |
 | `codigosCid[]` | O código CID não pode ser vazio |
-| `novosCids[]` | O código CID é obrigatório / A descrição do CID é obrigatória |
+| `novosCids[]` | O código CID é obrigatório / Código CID inválido. Use o formato do CID-10, como F84 ou F84.0 / A descrição do CID é obrigatória / A descrição do CID deve ter no máximo 255 caracteres |
 | `prontuario` | Os dados do prontuário são obrigatórios |
 | `responsaveis` | Informe ao menos um responsável |
 | responsável | O grau de parentesco é obrigatório / Informe se o responsável não reside com o paciente |
