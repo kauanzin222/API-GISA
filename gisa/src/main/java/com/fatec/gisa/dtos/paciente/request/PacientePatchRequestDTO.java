@@ -18,6 +18,7 @@ public class PacientePatchRequestDTO extends PessoaPatchRequestDTO {
     private Boolean convenio;
     private Long idEscola;
     private List<String> codigosCid;
+    private List<@Valid CidCadastroRequestDTO> novosCids;
     private ProntuarioPatchRequestDTO prontuario;
     private List<@Valid ResponsavelVinculoPatchDTO> responsaveis;
 
@@ -43,6 +44,12 @@ public class PacientePatchRequestDTO extends PessoaPatchRequestDTO {
     public void setCodigosCid(List<String> codigosCid) {
         this.codigosCid = codigosCid;
         markProvided("codigosCid");
+    }
+
+    @JsonSetter("novosCids")
+    public void setNovosCids(List<@Valid CidCadastroRequestDTO> novosCids) {
+        this.novosCids = novosCids;
+        markProvided("novosCids");
     }
 
     @JsonSetter("prontuario")

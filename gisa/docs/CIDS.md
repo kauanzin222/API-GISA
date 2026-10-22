@@ -10,7 +10,7 @@ Autenticação, convenções, enums e formato de erro: ver `00-GERAL.md`. Todos 
 
 **Permissão:** `CADASTRAR_PACIENTE` ou `EDITAR_PACIENTE` (ou `ACESSO_TOTAL`). A busca de CID só é usada nos formulários do paciente. Sem a permissão: `403`.
 
-> **Não existe endpoint nem tela separada para cadastrar CID.** Todo CID novo é cadastrado pelo campo `novosCids` do cadastro de paciente (`POST /api/pacientes`, ver `PACIENTES.md`).
+> **Não existe endpoint nem tela separada para cadastrar CID.** Todo CID novo é cadastrado pelo campo `novosCids` do cadastro ou da edição de paciente (`POST /api/pacientes` ou `PATCH /api/pacientes/{idCadastro}`, ver `PACIENTES.md`).
 
 ---
 
@@ -67,11 +67,10 @@ Adiciona o código à lista "codigosCid"
 
           │
           ▼
-No POST do paciente, enviar as duas listas
-(no PATCH, somente "codigosCid")
+No POST e no PATCH do paciente, enviar as duas listas
 ```
 
-> **PATCH do paciente:** o `PATCH /api/pacientes/{idCadastro}` aceita apenas `codigosCid` (CIDs que já existem). O campo `novosCids` é ignorado no PATCH. Na tela de edição, um CID que retornar `404` ainda não pode ser vinculado; ele só passa a existir depois de ser enviado em `novosCids` no cadastro de algum paciente.
+> **PATCH do paciente:** o `PATCH /api/pacientes/{idCadastro}` aceita `codigosCid` e `novosCids`, como o cadastro. Se só `novosCids` for enviado, os CIDs atuais do paciente são mantidos e os novos são somados a eles.
 
 **Como a descrição é gravada**
 

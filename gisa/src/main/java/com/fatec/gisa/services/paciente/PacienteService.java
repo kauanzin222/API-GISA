@@ -224,10 +224,14 @@ public class PacienteService {
         if (dto.hasField("idEscola")) {
             paciente.setEscola(escolaService.buscarOpcional(dto.getIdEscola()));
         }
-        if (dto.hasField("codigosCid")) {
-            paciente.setCids(cidService.obterOuCriar(
-                    dto.getCodigosCid() == null ? List.of() : dto.getCodigosCid(),
-                    List.of()));
+        if (dto.hasField("codigosCid") || dto.hasField("novosCids")) {
+            // Sem codigosCid, os CIDs atuais são mantidos e os novos são somados a eles
+            List<String> codigos = dto.hasField("codigosCid")
+                    ? (dto.getCodigosCid() == null ? List.of() : dto.getCodigosCid())
+                    : paciente.getCids() == null ? List.of()
+                            : paciente.getCids().stream().map(Cid::getCodigoCID).toList();
+            paciente.setCids(cidService.obterOuCriar(codigos,
+                    dto.getNovosCids() == null ? List.of() : dto.getNovosCids()));
         }
         if (dto.hasField("prontuario")) {
             atualizarProntuario(paciente, dto.getProntuario());

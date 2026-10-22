@@ -415,12 +415,13 @@ Segue as regras comuns de PATCH (`00-GERAL.md`): envie só o que quer alterar; l
 | `idEscola` | troca a escola; `null` remove a escola do paciente |
 | `enderecos` | substitui a lista; `[]` remove todos |
 | `codigosCid` | substitui a lista; aceita **somente CIDs já existentes**; `[]` remove todos |
+| `novosCids` | lista de `{codigoCID, descricao}`; CIDs **novos**, cadastrados na base e vinculados ao paciente. Somados a `codigosCid` (ou aos CIDs atuais, se `codigosCid` não for enviado) |
 | `prontuario` | atualiza só os campos enviados dentro do objeto; `"prontuario": null` remove o prontuário |
 | `responsaveis` | substitui os vínculos; lista de `{ idResponsavel, grauParentesco }` (ver abaixo) |
 
 **Ignorados (somente leitura):** `cpf`, `dataNascimento`, `sexo`, `dataCadastro`.
 
-> **`novosCids` não existe no PATCH** e é ignorado se enviado. Para vincular um CID que ainda não existe na base, ele precisa ter sido cadastrado antes pelo `POST /api/pacientes` de algum paciente. Ver `CIDS.md`.
+> **CIDs no PATCH:** funciona como no cadastro. CIDs que já existem vão em `codigosCid`; CIDs que ainda não existem na base vão em `novosCids` e são cadastrados junto. Ver `CIDS.md`.
 
 ### Responsáveis no PATCH
 
