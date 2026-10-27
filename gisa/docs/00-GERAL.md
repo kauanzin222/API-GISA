@@ -81,7 +81,7 @@ Authorization: Bearer <token>
 - O token vale por **24 horas**, ou até a senha do usuário ser trocada ou o acesso ser retirado (ver `USUARIOS.md`).
 - O token identifica o usuário internamente. Depois do login, chame `GET /api/usuarios/me` para obter nome, e-mail, tipo de cadastro, perfil e permissões de quem entrou (ver `USUARIOS.md`).
 - Trocar a própria senha devolve um token novo; o front deve substituir o token salvo.
-- Token ausente, inválido ou expirado nas demais rotas: `401` ou `403`.
+- Token ausente, inválido ou expirado nas demais rotas: `401` com `message` = `Sessão expirada ou inválida. Faça login novamente.` (o front deve levar o usuário ao login).
 - Para encerrar a sessão, basta remover o token da aplicação.
 - **Cadastros inativos não conseguem autenticar.**
 
@@ -89,6 +89,7 @@ Authorization: Bearer <token>
 |---|---|---|
 | E-mail não cadastrado, senha errada ou cadastro inativo | `401` | Credenciais inválidas. |
 | Senha temporária correta, mas vencida (vale **7 dias**) | `401` | Senha temporária expirada. Use 'Esqueci minha senha' ou peça um novo acesso ao administrador. |
+| **5 falhas** seguidas para o mesmo e-mail em **15 minutos** (o e-mail fica bloqueado até a janela vencer, mesmo com a senha certa; um login certo antes disso zera a contagem) | `429` | Muitas tentativas de login sem sucesso. Aguarde alguns minutos e tente novamente. |
 
 ### `POST /api/auth/esqueci-senha`
 
@@ -96,7 +97,7 @@ Authorization: Bearer <token>
 { "email": "maria.silva@email.com" }
 ```
 
-**Resposta: sempre `204 No Content`**, exista o e-mail ou não (para não revelar quais e-mails estão cadastrados). Se o e-mail for de um usuário **ativo**, a API envia para ele o link:
+**Resposta: sempre `204 No Content`**, exista o e-mail ou não (para não revelar quais e-mails estão cadastrados). São aceitos até **3 pedidos por e-mail a cada 15 minutos**; acima disso a resposta continua `204`, mas nenhum link novo é enviado. Se o e-mail for de um usuário **ativo**, a API envia para ele o link:
 
 ```
 {FRONT_URL}/redefinir-senha?token=<token>
@@ -249,11 +250,12 @@ Cada perfil de acesso tem um conjunto de permissões (lista completa e perfis pa
 | `201 Created` | cadastro realizado (inclusive concessão de acesso) |
 | `204 No Content` | inativação ou exclusão (DELETE) realizada (exceção: a inativação de paciente responde `200` com um resumo; ver `PACIENTES.md`) |
 | `400 Bad Request` | validação de campos, corpo malformado ou regra de negócio violada |
-| `401` / `403` | credenciais inválidas; token ausente, inválido, expirado, emitido antes da última troca de senha ou de um usuário cujo acesso foi retirado |
+| `401 Unauthorized` | credenciais inválidas; token ausente, inválido, expirado, emitido antes da última troca de senha ou de um usuário cujo acesso foi retirado |
 | `403 Forbidden` (com corpo) | usuário logado sem a permissão exigida pela rota: `Você não tem permissão para realizar esta ação.` |
 | `404 Not Found` | o recurso da **URL** não existe (ex.: `GET /api/pacientes/999`). Um ID inexistente enviado no **corpo** (ex.: `idCargo` em um PATCH) torna o pedido inválido e responde `400` |
 | `405 Method Not Allowed` | método HTTP que a rota não aceita (ex.: `DELETE /api/cbos`): `O método DELETE não é suportado nesta rota.` |
 | `409 Conflict` | operação incompatível com o estado do cadastro (ex.: alterar perfil de quem não tem usuário; vínculo de paciente que já existe), conflito de agenda nas terapias (horário ocupado ou fora da jornada; ver `TERAPIAS.md`), jornada que deixaria terapias futuras fora do horário (ver `ESPECIALISTAS.md`), operação que deixaria o sistema sem quem gerencie perfis (ver abaixo) ou, raramente, violação de restrição do banco (`Os dados informados violam uma regra de integridade do banco.`) |
+| `429 Too Many Requests` | login bloqueado por muitas falhas seguidas para o mesmo e-mail (ver "Autenticação") |
 | `500 Internal Server Error` | erro inesperado no servidor: `Erro interno do servidor. Tente novamente mais tarde.` (o detalhe fica só no log do servidor) |
 | `503 Service Unavailable` | o e-mail da nova senha temporária não pôde ser enviado e nada foi alterado (`POST /api/usuarios/{id}/senha-temporaria`; ver `USUARIOS.md`) |
 

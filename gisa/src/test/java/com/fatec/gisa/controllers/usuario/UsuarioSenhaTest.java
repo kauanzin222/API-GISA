@@ -96,7 +96,7 @@ class UsuarioSenhaTest {
                 .andReturn().getResponse().getContentAsString();
         String tokenNovo = JsonPath.read(resposta, "$.token");
 
-        assertThat(rotaProtegida(tokenAntigo)).isIn(401, 403);
+        assertThat(rotaProtegida(tokenAntigo)).isEqualTo(401);
         assertThat(rotaProtegida(tokenNovo)).isEqualTo(200);
         tentarLogin(cpfComum, SENHA).andExpect(status().isUnauthorized());
         tentarLogin(cpfComum, "NovaSenha123").andExpect(status().isOk());
@@ -138,24 +138,20 @@ class UsuarioSenhaTest {
                 .andExpect(jsonPath("$.fields.novaSenha").value("A senha deve conter entre 8 e 30 caracteres."));
     }
 
+    // A senha temporária vai por e-mail (sem SMTP nos testes, só para o log)
     @Test
-    void adminRedefineASenhaEInvalidaOsTokensDoUsuario() throws Exception {
+    void adminGeraSenhaTemporariaEInvalidaASenhaEOsTokensDoUsuario() throws Exception {
         String tokenDoUsuario = login(cpfComum, SENHA);
 
-        patchJson("/api/usuarios/" + idComum + "/senha", login(cpfAdmin, SENHA), """
-                { "novaSenha": "Redefinida123" }
-                """)
-                .andExpect(status().isNoContent());
+        senhaTemporaria(idComum, login(cpfAdmin, SENHA)).andExpect(status().isNoContent());
 
-        assertThat(rotaProtegida(tokenDoUsuario)).isIn(401, 403);
-        tentarLogin(cpfComum, "Redefinida123").andExpect(status().isOk());
+        assertThat(rotaProtegida(tokenDoUsuario)).isEqualTo(401);
+        tentarLogin(cpfComum, SENHA).andExpect(status().isUnauthorized());
     }
 
     @Test
-    void usuarioSemPermissaoNaoRedefineSenhaDeOutro() throws Exception {
-        patchJson("/api/usuarios/" + idComum + "/senha", login(cpfComum, SENHA), """
-                { "novaSenha": "Redefinida123" }
-                """)
+    void usuarioSemPermissaoNaoGeraSenhaTemporariaDeOutro() throws Exception {
+        senhaTemporaria(idComum, login(cpfComum, SENHA))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message").value("Você não tem permissão para realizar esta ação."));
 
@@ -163,13 +159,15 @@ class UsuarioSenhaTest {
     }
 
     @Test
-    void redefinirCadastroSemUsuarioRetorna404() throws Exception {
+    void senhaTemporariaParaCadastroSemUsuarioRetorna404() throws Exception {
         Long idSemUsuario = transactionTemplate.execute(status -> pessoa(cpfNovo()).getIdCadastro());
 
-        patchJson("/api/usuarios/" + idSemUsuario + "/senha", login(cpfAdmin, SENHA), """
-                { "novaSenha": "Redefinida123" }
-                """)
-                .andExpect(status().isNotFound());
+        senhaTemporaria(idSemUsuario, login(cpfAdmin, SENHA)).andExpect(status().isNotFound());
+    }
+
+    private ResultActions senhaTemporaria(Long idCadastro, String token) throws Exception {
+        return mockMvc.perform(post("/api/usuarios/" + idCadastro + "/senha-temporaria")
+                .header("Authorization", "Bearer " + token));
     }
 
     private String login(String cpf, String senha) throws Exception {
@@ -182,7 +180,7 @@ class UsuarioSenhaTest {
     private ResultActions tentarLogin(String cpf, String senha) throws Exception {
         return mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{ \"cpf\": \"%s\", \"senha\": \"%s\" }".formatted(cpf, senha)));
+                .content("{ \"email\": \"%s@email.com\", \"senha\": \"%s\" }".formatted(cpf, senha)));
     }
 
     private ResultActions patchJson(String url, String token, String corpo) throws Exception {
@@ -216,6 +214,7 @@ class UsuarioSenhaTest {
         Pessoa pessoa = new Pessoa();
         pessoa.setNome("Pessoa " + cpf);
         pessoa.setCpf(cpf);
+        pessoa.setEmail(cpf + "@email.com");
         pessoa.setDataNascimento(LocalDate.of(1990, 1, 1));
         pessoa.setSexo('F');
         pessoa.setEstadoCivil(EstadoCivil.SOLTEIRO);

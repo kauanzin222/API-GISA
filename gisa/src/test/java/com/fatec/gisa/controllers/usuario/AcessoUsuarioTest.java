@@ -58,6 +58,8 @@ class AcessoUsuarioTest {
     private static final String SENHA = "SenhaInicial1";
     private static final String SEM_PERMISSAO = "Você não tem permissão para realizar esta ação.";
     private static final String ULTIMO_ADMINISTRADOR = "O sistema precisa de ao menos um usuário ativo com acesso total.";
+    private static final String ULTIMO_GESTOR_DE_PERFIS = "Operação bloqueada: o sistema precisa de ao menos um usuário "
+            + "ativo com permissão para gerenciar perfis (GERENCIAR_PERFIS ou ACESSO_TOTAL).";
 
     @Autowired
     private MockMvc mockMvc;
@@ -153,7 +155,7 @@ class AcessoUsuarioTest {
 
         chamar(tokenGestor, get("/api/usuarios/" + administrador.getIdCadastro()))
                 .andExpect(jsonPath("$.tipoCadastro").value("PESSOA"))
-                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.email").value(administrador.getEmail()))
                 .andExpect(jsonPath("$.cargo").doesNotExist())
                 .andExpect(jsonPath("$.permissoes[0].nome").value("ACESSO_TOTAL"));
     }
@@ -234,19 +236,30 @@ class AcessoUsuarioTest {
         String tokenGestor = login(gestor);
         String rotaAdministrador = "/api/usuarios/" + administrador.getIdCadastro();
 
+        // O administrador é também o único que gerencia perfis: essa trava (409) vem antes
         chamar(tokenGestor, patchJson(rotaAdministrador + "/perfil", "{ \"idPerfil\": " + perfilComum.getIdPerfil() + " }"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(ULTIMO_ADMINISTRADOR));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(ULTIMO_GESTOR_DE_PERFIS));
         chamar(tokenGestor, delete(rotaAdministrador))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(ULTIMO_ADMINISTRADOR));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(ULTIMO_GESTOR_DE_PERFIS));
 
         // Um segundo administrador inativo não conta
         transactionTemplate.executeWithoutResult(status -> {
             Profissional inativo = comUsuario(new Profissional(), "Administrador Inativo", perfilAdministrador);
             inativo.setStatusCadastro(StatusCadastro.INATIVO);
         });
-        chamar(tokenGestor, delete(rotaAdministrador)).andExpect(status().isBadRequest());
+        chamar(tokenGestor, delete(rotaAdministrador)).andExpect(status().isConflict());
+
+        // Com outro usuário ativo que gerencia perfis (sem acesso total), vale a trava do administrador
+        transactionTemplate.executeWithoutResult(status ->
+                comUsuario(new Profissional(), "Gestor de Perfis", perfil("Perfis", permissao("GERENCIAR_PERFIS"))));
+        chamar(tokenGestor, patchJson(rotaAdministrador + "/perfil", "{ \"idPerfil\": " + perfilComum.getIdPerfil() + " }"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(ULTIMO_ADMINISTRADOR));
+        chamar(tokenGestor, delete(rotaAdministrador))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(ULTIMO_ADMINISTRADOR));
 
         // Com outro administrador ativo, o primeiro pode perder o acesso total
         chamar(tokenGestor, patchJson("/api/usuarios/" + comum.getIdCadastro() + "/perfil",
@@ -272,7 +285,7 @@ class AcessoUsuarioTest {
 
         chamar(tokenGestor, delete("/api/usuarios/" + comum.getIdCadastro())).andExpect(status().isNoContent());
 
-        assertThat(statusDe(tokenAntigo)).isIn(401, 403);
+        assertThat(statusDe(tokenAntigo)).isEqualTo(401);
         tentarLogin(comum.getCpf()).andExpect(status().isUnauthorized());
         // O cadastro continua ativo; só o usuário foi apagado
         chamar(tokenGestor, get("/api/usuarios/" + comum.getIdCadastro()))
@@ -283,13 +296,15 @@ class AcessoUsuarioTest {
                 entityManager.find(Especialista.class, comum.getIdCadastro()).getStatusCadastro());
         assertThat(statusDoCadastro).isEqualTo(StatusCadastro.ATIVO);
 
-        // Concedido de novo: o usuário recomeça a versão do token em 0, mas o token antigo continua recusado
+        // Concedido de novo: o usuário recomeça a versão do token em 0, mas o token antigo continua recusado.
+        // O acesso novo vem com senha temporária (enviada por e-mail), então a senha antiga não vale mais
         chamar(tokenGestor, post("/api/especialistas/" + comum.getIdCadastro() + "/usuario")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{ \"senha\": \"%s\", \"idPerfil\": %d }".formatted(SENHA, perfilComum.getIdPerfil())))
+                .content("{ \"idPerfil\": %d }".formatted(perfilComum.getIdPerfil())))
                 .andExpect(status().isCreated());
-        assertThat(statusDe(tokenAntigo)).isIn(401, 403);
-        assertThat(statusDe(login(comum))).isEqualTo(200);
+        assertThat(statusDe(tokenAntigo)).isEqualTo(401);
+        tentarLogin(comum.getCpf()).andExpect(status().isUnauthorized());
+        chamar(tokenGestor, get("/api/usuarios/" + comum.getIdCadastro())).andExpect(status().isOk());
     }
 
     // ---------- Apoio ----------
@@ -308,7 +323,7 @@ class AcessoUsuarioTest {
     private ResultActions tentarLogin(String cpf) throws Exception {
         return mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{ \"cpf\": \"%s\", \"senha\": \"%s\" }".formatted(cpf, SENHA)));
+                .content("{ \"email\": \"%s@email.com\", \"senha\": \"%s\" }".formatted(cpf, SENHA)));
     }
 
     private ResultActions chamar(String token, MockHttpServletRequestBuilder requisicao) throws Exception {
@@ -351,8 +366,8 @@ class AcessoUsuarioTest {
         pessoa.setDataNascimento(LocalDate.of(1990, 1, 1));
         pessoa.setSexo('F');
         pessoa.setEstadoCivil(EstadoCivil.SOLTEIRO);
+        pessoa.setEmail(cpf + "@email.com");
         if (pessoa instanceof Profissional profissional) {
-            profissional.setEmail(cpf + "@email.com");
             profissional.setCargo(cargo);
         }
         if (pessoa instanceof Especialista especialista) {

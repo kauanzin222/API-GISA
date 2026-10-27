@@ -21,6 +21,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.JornadasDeTeste;
 import com.fatec.gisa.config.RelogioInicioDoDiaConfig;
 import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ProntuarioPatchRequestDTO;
@@ -295,18 +296,19 @@ class HistoricoPacienteTest {
     @Test
     void filtraPorTipoEPeriodoEOrdenaDoMaisRecente() {
         cadastrar(DATA, List.of(lucas), List.of(ana), "09:00", "10:00");
+        // Inativar cancela a terapia individual futura do paciente (ver PACIENTES.md)
         pacienteService.inativar(lucas.getIdCadastro());
 
         assertThat(eventos(lucas)).extracting(EventoPacienteDTO::tipo).containsExactly(
-                TipoEventoPaciente.STATUS_PACIENTE_ALTERADO, TipoEventoPaciente.INATIVADO,
-                TipoEventoPaciente.TERAPIA_AGENDADA);
+                TipoEventoPaciente.TERAPIA_CANCELADA, TipoEventoPaciente.STATUS_PACIENTE_ALTERADO,
+                TipoEventoPaciente.INATIVADO, TipoEventoPaciente.TERAPIA_AGENDADA);
         assertThat(eventos(lucas, TipoEventoPaciente.TERAPIA_AGENDADA, TipoEventoPaciente.INATIVADO))
                 .extracting(EventoPacienteDTO::tipo)
                 .containsExactly(TipoEventoPaciente.INATIVADO, TipoEventoPaciente.TERAPIA_AGENDADA);
 
         // O período é o dia em que o evento foi gravado (hoje), e não o dia da terapia
         assertThat(historicoPacienteService.listar(lucas.getIdCadastro(), null, HOJE, HOJE, pagina())
-                .getTotalElements()).isEqualTo(3);
+                .getTotalElements()).isEqualTo(4);
         assertThat(historicoPacienteService.listar(lucas.getIdCadastro(), null, HOJE.plusDays(1), null, pagina())
                 .getTotalElements()).isZero();
         assertThat(historicoPacienteService.listar(lucas.getIdCadastro(), null, null, HOJE.minusDays(1), pagina())
@@ -364,7 +366,7 @@ class HistoricoPacienteTest {
         especialista.setCargo(cargo);
         especialista.setRegistroConselho("CRP-" + cpf);
         especialista.setEspecialidades(new ArrayList<>());
-        especialista.setJornadaTrabalho(new ArrayList<>());
+        especialista.setJornadaTrabalho(JornadasDeTeste.diaInteiroTodosOsDias(especialista));
         entityManager.persist(especialista);
         return especialista;
     }

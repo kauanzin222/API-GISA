@@ -116,7 +116,7 @@ class UsuarioLogadoTest {
     @Test
     void semTokenNaoResponde() throws Exception {
         int status = mockMvc.perform(get("/api/usuarios/me")).andReturn().getResponse().getStatus();
-        org.assertj.core.api.Assertions.assertThat(status).isIn(401, 403);
+        org.assertj.core.api.Assertions.assertThat(status).isEqualTo(401);
     }
 
     private ResultActions me(String token) throws Exception {
@@ -126,7 +126,7 @@ class UsuarioLogadoTest {
     private String login(String cpf) throws Exception {
         String resposta = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"cpf\": \"%s\", \"senha\": \"%s\" }".formatted(cpf, SENHA)))
+                        .content("{ \"email\": \"%s@email.com\", \"senha\": \"%s\" }".formatted(cpf, SENHA)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(resposta, "$.token");
@@ -140,8 +140,8 @@ class UsuarioLogadoTest {
             pessoa.setDataNascimento(LocalDate.of(1990, 1, 1));
             pessoa.setSexo('F');
             pessoa.setEstadoCivil(EstadoCivil.SOLTEIRO);
+            pessoa.setEmail(cpf + "@email.com");
             if (pessoa instanceof Profissional profissional) {
-                profissional.setEmail(cpf + "@email.com");
                 profissional.setCargo(cargo);
             }
             if (pessoa instanceof Especialista especialista) {

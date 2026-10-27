@@ -45,6 +45,13 @@ public class RestExceptionHandler {
         return response(HttpStatus.UNAUTHORIZED, exception.getMessage(), request, Map.of());
     }
 
+    @ExceptionHandler(MuitasTentativasException.class)
+    public ResponseEntity<ApiErrorResponse> handleMuitasTentativas(
+            MuitasTentativasException exception,
+            HttpServletRequest request) {
+        return response(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), request, Map.of());
+    }
+
     @ExceptionHandler(EnvioEmailException.class)
     public ResponseEntity<ApiErrorResponse> handleEnvioEmail(
             EnvioEmailException exception,

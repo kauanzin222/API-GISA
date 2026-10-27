@@ -11,7 +11,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.IOException;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -23,12 +25,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.fatec.gisa.validation.CpfValidator;
 import com.jayway.jsonpath.JsonPath;
 
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
@@ -70,6 +74,8 @@ class ApiPostgresTest {
     private static final EmbeddedPostgres POSTGRES = iniciarPostgres();
     private static final AtomicInteger SEQUENCIA = new AtomicInteger();
     private static final String CPF_ADMIN = "99999999999";
+    // E-mail de login do administrador semeado (migration V16)
+    private static final String EMAIL_ADMIN = "admin@gisa.local";
 
     @DynamicPropertySource
     static void banco(DynamicPropertyRegistry registry) {
@@ -89,13 +95,16 @@ class ApiPostgresTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     private String token;
 
     @BeforeEach
     void entrarComoAdministrador() throws Exception {
         String resposta = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"cpf\": \"" + CPF_ADMIN + "\", \"senha\": \"Admin@12345\" }"))
+                        .content("{ \"email\": \"" + EMAIL_ADMIN + "\", \"senha\": \"Admin@12345\" }"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         token = JsonPath.read(resposta, "$.token");
@@ -108,23 +117,25 @@ class ApiPostgresTest {
         List<String> indices = jdbcTemplate.queryForList(
                 "select indexname from pg_indexes where indexname like 'idx_%'", String.class);
 
-        assertThat(ultimaVersao).isEqualTo(15);
+        assertThat(ultimaVersao).isEqualTo(20);
         assertThat(indices).contains(
                 "idx_pessoa_nome_trgm", "idx_pessoa_cpf_trgm", "idx_escola_nome_trgm", "idx_cbo_titulo_trgm",
                 "idx_terapia_status_data_inicio", "idx_especialista_terapia_especialista",
                 "idx_paciente_terapia_terapia", "idx_log_auditoria_data_hora", "idx_evento_paciente_data_hora");
     }
 
-    // V15: lista definitiva de permissões e permissões exatas dos perfis padrão
+    // V15: lista definitiva de permissões e permissões exatas dos perfis padrão. V18: permissão
+    // VISUALIZAR_PACIENTES_VINCULADOS, que substitui VISUALIZAR_PACIENTES no perfil "Assistente Social"
     @Test
     void migracaoCriaAsPermissoesEOsPerfisPadrao() {
         assertThat(jdbcTemplate.queryForObject(
                 "select \"Nome\" from \"Permissao\" where \"IDPermissao\" = 5", String.class))
                 .isEqualTo("GERENCIAR_USUARIOS");
         assertThat(jdbcTemplate.queryForList("select \"Nome\" from \"Permissao\"", String.class))
-                .hasSize(26)
+                .hasSize(27)
                 .doesNotContain("CADASTRAR_USUARIO")
-                .contains("VISUALIZAR_PACIENTES", "EMITIR_RECUSA", "GERENCIAR_ESPECIALIDADES", "VISUALIZAR_AUDITORIA");
+                .contains("VISUALIZAR_PACIENTES", "VISUALIZAR_PACIENTES_VINCULADOS", "EMITIR_RECUSA",
+                        "GERENCIAR_ESPECIALIDADES", "VISUALIZAR_AUDITORIA");
 
         assertThat(permissoesDoPerfil("Administrador")).containsExactly("ACESSO_TOTAL");
         assertThat(permissoesDoPerfil("Recepção")).containsExactly(
@@ -133,7 +144,7 @@ class ApiPostgresTest {
         assertThat(permissoesDoPerfil("Especialista")).containsExactly(
                 "EMITIR_ATESTADO", "EMITIR_RECEITA", "VISUALIZAR_HISTORICO_PACIENTE", "VISUALIZAR_PACIENTES");
         assertThat(permissoesDoPerfil("Assistente Social")).containsExactly(
-                "VISUALIZAR_HISTORICO_PACIENTE", "VISUALIZAR_PACIENTES");
+                "VISUALIZAR_HISTORICO_PACIENTE", "VISUALIZAR_PACIENTES_VINCULADOS");
     }
 
     private List<String> permissoesDoPerfil(String perfil) {
@@ -151,7 +162,7 @@ class ApiPostgresTest {
         Cenario cenario = criarCenario();
 
         for (String rota : List.of(
-                "/api/pacientes", "/api/pacientes?nome=paciente&cpf=" + cenario.cpfPaciente().substring(0, 5),
+                "/api/pacientes?termo=paciente", "/api/pacientes?termo=" + cenario.cpfPaciente(),
                 "/api/pacientes/" + cenario.idPaciente(),
                 "/api/responsaveis", "/api/responsaveis/" + cenario.idResponsavel(),
                 "/api/profissionais", "/api/profissionais/" + cenario.idEspecialista(),
@@ -222,7 +233,7 @@ class ApiPostgresTest {
                 { "pacientesIds": [%d], "especialistasIds": [%d],
                   "data": "%s", "horaInicio": "09:30", "horaTermino": "10:30" }
                 """.formatted(outroPaciente, cenario.idEspecialista(), cenario.dataTerapia())))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value(
                         org.hamcrest.Matchers.startsWith("Conflito de horário: Especialista")));
     }
@@ -259,22 +270,24 @@ class ApiPostgresTest {
         chamar(get("/api/pacientes/" + idPaciente)).andExpect(status().isOk());
         mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{ \"cpf\": \"" + CPF_ADMIN + "\", \"senha\": \"errada\" }"))
+                .content("{ \"email\": \"" + EMAIL_ADMIN + "\", \"senha\": \"errada\" }"))
                 .andExpect(status().isUnauthorized());
         // Listagens comuns não são auditadas
-        chamar(get("/api/pacientes")).andExpect(status().isOk());
+        chamar(get("/api/pacientes?termo=Paciente")).andExpect(status().isOk());
 
         List<String> registros = jdbcTemplate.queryForList("""
                 select "Acao" || ' ' || "Metodo" || ' ' || "Caminho" || ' ' || "StatusHttp" || ' ' || coalesce("CPFUsuario", '-')
                 from "LogAuditoria" order by "IDLog"
                 """, String.class);
 
+        // Só as tentativas de login que falham são registradas
         assertThat(registros).contains(
                 "CRIACAO POST /api/pacientes 201 " + CPF_ADMIN,
                 "CONSULTA GET /api/pacientes/" + idPaciente + " 200 " + CPF_ADMIN,
-                "LOGIN POST /api/auth/login 401 " + CPF_ADMIN,
+                "LOGIN POST /api/auth/login 401 " + CPF_ADMIN);
+        assertThat(registros).doesNotContain(
+                "CONSULTA GET /api/pacientes 200 " + CPF_ADMIN,
                 "LOGIN POST /api/auth/login 200 " + CPF_ADMIN);
-        assertThat(registros).doesNotContain("CONSULTA GET /api/pacientes 200 " + CPF_ADMIN);
 
         chamar(get("/api/auditoria?acao=LOGIN&cpf=" + CPF_ADMIN))
                 .andExpect(status().isOk())
@@ -547,7 +560,7 @@ class ApiPostgresTest {
         String recepcao = tokenComPerfil("Recepção");
         String paciente = "/api/pacientes/" + cenario.idPaciente();
 
-        assertThat(statusCom(recepcao, get("/api/pacientes"))).isEqualTo(200);
+        assertThat(statusCom(recepcao, get("/api/pacientes?termo=Paciente"))).isEqualTo(200);
         assertThat(statusCom(recepcao, json(patch(paciente), "{ \"nome\": \"Paciente Editado\" }"))).isEqualTo(200);
         assertThat(statusCom(recepcao, json(post("/api/terapias"),
                 corpoTerapia(cenario.idPaciente(), cenario.idEspecialista())))).isEqualTo(201);
@@ -600,18 +613,31 @@ class ApiPostgresTest {
                 corpoTerapia(seu.idPaciente(), seu.idEspecialista())))).isEqualTo(403);
     }
 
+    // V18: o perfil "Assistente Social" só lê os pacientes vinculados a ele (LGPD)
     @Test
-    void assistenteSocialSoLePacientes() throws Exception {
+    void assistenteSocialSoLeOsPacientesVinculados() throws Exception {
         Cenario cenario = criarCenario();
-        String assistente = tokenComPerfil("Assistente Social");
+        Long naoVinculado = criarPaciente();
+        String cpf = cpfNovo();
+        Long idAssistente = criar("/api/assistentes-sociais", """
+                { "nome": "Assistente %1$s", "cpf": "%1$s", "dataNascimento": "1988-04-12", "sexo": "F",
+                  "estadoCivil": "CASADO", "enderecos": [], "email": "as%1$s@email.com", "idCargo": 1,
+                  "registroConselho": "CRESS-9/%1$s", "idsPacientes": [%2$d] }
+                """.formatted(cpf, cenario.idPaciente()));
+        String assistente = concederAcesso("/api/assistentes-sociais/" + idAssistente, cpf, "Assistente Social");
 
-        for (String permitida : List.of("/api/pacientes", "/api/pacientes/" + cenario.idPaciente(),
-                "/api/pacientes/" + cenario.idPaciente() + "/historico", "/api/responsaveis",
+        for (String permitida : List.of("/api/pacientes/" + cenario.idPaciente(),
+                "/api/pacientes/" + cenario.idPaciente() + "/historico", "/api/assistentes-sociais/me/pacientes",
                 "/api/especialidades")) {
             assertThat(statusCom(assistente, get(permitida))).as(permitida).isEqualTo(200);
         }
+        // A busca traz só os vinculados
+        mockMvc.perform(get("/api/pacientes?termo=Paciente").header("Authorization", "Bearer " + assistente))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].idCadastro", org.hamcrest.Matchers.contains(cenario.idPaciente().intValue())));
         for (MockHttpServletRequestBuilder proibida : List.of(
-                get("/api/terapias"), get("/api/profissionais"), get("/api/cids/F84.0"),
+                get("/api/pacientes/" + naoVinculado), get("/api/pacientes/" + naoVinculado + "/historico"),
+                get("/api/responsaveis"), get("/api/terapias"), get("/api/profissionais"), get("/api/cids/F84.0"),
                 json(patch("/api/pacientes/" + cenario.idPaciente()), "{ \"nome\": \"Outro\" }"))) {
             assertThat(statusCom(assistente, proibida)).as(proibida.toString()).isEqualTo(403);
         }
@@ -646,11 +672,11 @@ class ApiPostgresTest {
 
         // Com paciente vinculado (mesmo inativo), a exclusão é recusada
         Long idPaciente = criar("/api/pacientes", corpoPaciente(cpfNovo(), idEscola));
-        chamar(delete("/api/pacientes/" + idPaciente)).andExpect(status().isNoContent());
+        chamar(delete("/api/pacientes/" + idPaciente)).andExpect(status().isOk());
         chamar(get(rota)).andExpect(jsonPath("$.quantidadePacientes").value(1));
         chamar(get("/api/pacientes?idEscola=" + idEscola))
-                .andExpect(jsonPath("$.content[0].idCadastro").value(idPaciente))
-                .andExpect(jsonPath("$.page.totalElements").value(1));
+                .andExpect(jsonPath("$[0].idCadastro").value(idPaciente))
+                .andExpect(jsonPath("$.length()").value(1));
         chamar(delete(rota))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Não é possível excluir a escola: há pacientes vinculados a ela."));
@@ -738,7 +764,9 @@ class ApiPostgresTest {
                   "cnpj": "%2$s", "razaoSocial": "Clínica %1$s Ltda" }
                 """.formatted(cpfPJ, "000" + cpfPJ));
 
-        LocalDate data = LocalDate.of(2099, 1, 1).plusDays(SEQUENCIA.incrementAndGet());
+        // Uma segunda-feira diferente por cenário, dentro da jornada do especialista (diaSemana 1)
+        LocalDate data = LocalDate.of(2099, 1, 1).plusWeeks(SEQUENCIA.incrementAndGet())
+                .with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY));
         Long idTerapia = criar("/api/terapias", """
                 { "pacientesIds": [%d], "especialistasIds": [%d],
                   "data": "%s", "horaInicio": "09:00", "horaTermino": "10:00" }
@@ -783,10 +811,18 @@ class ApiPostgresTest {
         Long idPerfil = jdbcTemplate.queryForObject(
                 "select \"IDPerfil\" from \"Perfil\" where \"Nome\" = ?", Long.class, perfil);
         chamar(post(rotaDoCadastro + "/usuario").contentType(MediaType.APPLICATION_JSON)
-                .content("{ \"senha\": \"SenhaTeste123\", \"idPerfil\": %d }".formatted(idPerfil)))
+                .content("{ \"idPerfil\": %d }".formatted(idPerfil)))
                 .andExpect(status().isCreated());
+        // O acesso vem com senha temporária enviada por e-mail: o teste grava uma senha definitiva
+        // conhecida para entrar direto, sem passar pelo primeiro acesso
+        jdbcTemplate.update("""
+                update "Usuario" set "Senha" = ?, "SenhaTemporaria" = false
+                where "IDCadastro" = (select "IDCadastro" from "Pessoa" where "CPF" = ?)
+                """, passwordEncoder.encode("SenhaTeste123"), cpf);
+        String email = jdbcTemplate.queryForObject(
+                "select \"Email\" from \"Pessoa\" where \"CPF\" = ?", String.class, cpf);
         String resposta = mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"cpf\": \"%s\", \"senha\": \"SenhaTeste123\" }".formatted(cpf)))
+                        .content("{ \"email\": \"%s\", \"senha\": \"SenhaTeste123\" }".formatted(email)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(resposta, "$.token");
@@ -806,7 +842,8 @@ class ApiPostgresTest {
         return """
                 { "pacientesIds": [%d], "especialistasIds": [%d],
                   "data": "%s", "horaInicio": "14:00", "horaTermino": "15:00" }
-                """.formatted(idPaciente, idEspecialista, LocalDate.of(2099, 6, 1).plusDays(SEQUENCIA.incrementAndGet()));
+                """.formatted(idPaciente, idEspecialista, LocalDate.of(2099, 6, 1).plusWeeks(SEQUENCIA.incrementAndGet())
+                        .with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY)));
     }
 
     private void criarEscola() throws Exception {
@@ -830,8 +867,16 @@ class ApiPostgresTest {
         return mockMvc.perform(requisicao.header("Authorization", "Bearer " + token));
     }
 
+    // CPF válido (passa no @CpfValido): base sequencial com os dígitos verificadores certos
     private static String cpfNovo() {
-        return "%011d".formatted(70000000000L + SEQUENCIA.incrementAndGet());
+        String base = "%09d".formatted(700000000L + SEQUENCIA.incrementAndGet());
+        for (int verificadores = 0; verificadores < 100; verificadores++) {
+            String cpf = base + "%02d".formatted(verificadores);
+            if (CpfValidator.valido(cpf)) {
+                return cpf;
+            }
+        }
+        throw new IllegalStateException("Sem dígitos verificadores para " + base);
     }
 
     private static EmbeddedPostgres iniciarPostgres() {

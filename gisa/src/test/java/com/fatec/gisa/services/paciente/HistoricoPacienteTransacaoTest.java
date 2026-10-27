@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.fatec.gisa.JornadasDeTeste;
 import com.fatec.gisa.dtos.terapia.request.TerapiaCadastroRequestDTO;
 import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.especialista.Especialista;
@@ -68,7 +69,7 @@ class HistoricoPacienteTransacaoTest {
             especialista.setCargo(cargo);
             especialista.setRegistroConselho("CRP-1");
             especialista.setEspecialidades(new ArrayList<>());
-            especialista.setJornadaTrabalho(new ArrayList<>());
+            especialista.setJornadaTrabalho(JornadasDeTeste.diaInteiroTodosOsDias(especialista));
             entityManager.persist(especialista);
 
             Paciente paciente = new Paciente();

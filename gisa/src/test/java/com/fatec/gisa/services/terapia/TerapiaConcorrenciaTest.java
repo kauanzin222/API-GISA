@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.fatec.gisa.JornadasDeTeste;
 import com.fatec.gisa.dtos.terapia.request.TerapiaCadastroRequestDTO;
 import com.fatec.gisa.dtos.terapia.request.TerapiaPatchRequestDTO;
 import com.fatec.gisa.entities.Pessoa;
@@ -26,6 +27,7 @@ import com.fatec.gisa.entities.profissional.Cargo;
 import com.fatec.gisa.entities.profissional.Cbo;
 import com.fatec.gisa.enums.EstadoCivil;
 import com.fatec.gisa.enums.StatusPaciente;
+import com.fatec.gisa.exceptions.ConflitoHorarioException;
 import com.fatec.gisa.repositories.terapia.TerapiaRepository;
 
 import jakarta.persistence.EntityManager;
@@ -88,7 +90,7 @@ class TerapiaConcorrenciaTest {
                             List.of(idPaciente), List.of(idEspecialista),
                             LocalDate.of(2099, 10, 27), LocalTime.of(9, 0), LocalTime.of(10, 0)));
                     return true;
-                } catch (IllegalArgumentException conflito) {
+                } catch (ConflitoHorarioException conflito) {
                     assertThat(conflito).hasMessageStartingWith("Conflito de horário:");
                     return false;
                 }
@@ -123,7 +125,7 @@ class TerapiaConcorrenciaTest {
             especialista.setCargo(cargo);
             especialista.setRegistroConselho("CRP-2");
             especialista.setEspecialidades(new ArrayList<>());
-            especialista.setJornadaTrabalho(new ArrayList<>());
+            especialista.setJornadaTrabalho(JornadasDeTeste.diaInteiroTodosOsDias(especialista));
             entityManager.persist(especialista);
 
             List<Long> pacientes = new ArrayList<>();
@@ -160,7 +162,7 @@ class TerapiaConcorrenciaTest {
                 try {
                     terapiaService.atualizar(idTerapia, dto);
                     return true;
-                } catch (IllegalArgumentException conflito) {
+                } catch (ConflitoHorarioException conflito) {
                     assertThat(conflito).hasMessageStartingWith("Conflito de horário:");
                     return false;
                 }
@@ -186,7 +188,7 @@ class TerapiaConcorrenciaTest {
         especialista.setCargo(cargo);
         especialista.setRegistroConselho("CRP-1");
         especialista.setEspecialidades(new ArrayList<>());
-        especialista.setJornadaTrabalho(new ArrayList<>());
+        especialista.setJornadaTrabalho(JornadasDeTeste.diaInteiroTodosOsDias(especialista));
         entityManager.persist(especialista);
         return especialista;
     }

@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fatec.gisa.JornadasDeTeste;
 import com.fatec.gisa.config.RelogioInicioDoDiaConfig;
 import com.fatec.gisa.dtos.terapia.FiltroTerapiaDTO;
 import com.fatec.gisa.dtos.terapia.request.PresencaRequestDTO;
@@ -85,7 +86,7 @@ class TerapiaServiceTest {
     @Test
     void cadastraTerapiaColetivaQuandoHaMaisDeUmPaciente() {
         var terapia = terapiaService.cadastrar(requisicao(
-                List.of(lucas.getIdCadastro(), maria.getIdCadastro(), maria.getIdCadastro()),
+                List.of(lucas.getIdCadastro(), maria.getIdCadastro()),
                 List.of(ana.getIdCadastro(), carlos.getIdCadastro()),
                 "09:00", "10:00"));
         entityManager.flush();
@@ -100,6 +101,16 @@ class TerapiaServiceTest {
         assertThat(detalhes.pacientes()).extracting("nome").containsExactly("Lucas Martins", "Maria Costa");
         assertThat(detalhes.pacientes()).extracting("presenca").containsOnly(StatusPresenca.PENDENTE);
         assertThat(detalhes.especialistas()).extracting("nome").containsExactly("Ana Souza", "Carlos Lima");
+    }
+
+    @Test
+    void recusaPacienteOuEspecialistaRepetido() {
+        assertThatThrownBy(() -> terapiaService.cadastrar(requisicao(
+                List.of(lucas.getIdCadastro(), lucas.getIdCadastro()), List.of(ana.getIdCadastro()), "09:00", "10:00")))
+                .hasMessage("O mesmo paciente foi informado mais de uma vez.");
+        assertThatThrownBy(() -> terapiaService.cadastrar(requisicao(
+                List.of(lucas.getIdCadastro()), List.of(ana.getIdCadastro(), ana.getIdCadastro()), "09:00", "10:00")))
+                .hasMessage("O mesmo especialista foi informado mais de uma vez.");
     }
 
     @Test
@@ -478,7 +489,7 @@ class TerapiaServiceTest {
         Paciente bia = paciente("Beatriz Lima", "20000000003");
 
         TerapiaPatchRequestDTO dto = new TerapiaPatchRequestDTO();
-        dto.setPacientesIds(List.of(lucas.getIdCadastro(), bia.getIdCadastro(), bia.getIdCadastro()));
+        dto.setPacientesIds(List.of(lucas.getIdCadastro(), bia.getIdCadastro()));
         dto.setEspecialistasIds(List.of(carlos.getIdCadastro()));
         terapiaService.atualizar(idTerapia, dto);
 
@@ -803,7 +814,7 @@ class TerapiaServiceTest {
         especialista.setCargo(cargo);
         especialista.setRegistroConselho("CRP-" + cpf);
         especialista.setEspecialidades(new ArrayList<>());
-        especialista.setJornadaTrabalho(new ArrayList<>());
+        especialista.setJornadaTrabalho(JornadasDeTeste.diaInteiroTodosOsDias(especialista));
         entityManager.persist(especialista);
         return especialista;
     }

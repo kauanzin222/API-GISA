@@ -92,6 +92,7 @@ class PermissoesPorRotaTest {
             Pessoa pessoa = new Pessoa();
             pessoa.setNome("Sem Permissões");
             pessoa.setCpf(CPF);
+            pessoa.setEmail(CPF + "@email.com");
             pessoa.setDataNascimento(LocalDate.of(1990, 1, 1));
             pessoa.setSexo('F');
             pessoa.setEstadoCivil(EstadoCivil.SOLTEIRO);
@@ -172,7 +173,7 @@ class PermissoesPorRotaTest {
     private String login() throws Exception {
         String resposta = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"cpf\": \"%s\", \"senha\": \"%s\" }".formatted(CPF, SENHA)))
+                        .content("{ \"email\": \"%s@email.com\", \"senha\": \"%s\" }".formatted(CPF, SENHA)))
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(resposta, "$.token");
     }
