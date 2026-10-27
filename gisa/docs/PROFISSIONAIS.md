@@ -267,7 +267,7 @@ Segue as regras comuns de PATCH (`00-GERAL.md`).
 | `celular`, `numCNS` | `null` limpa |
 | `estadoCivil` | não pode ser `null` |
 | `statusCadastro` | `ATIVO` ou `INATIVO`; não pode ser `null`. Permite **reativar** um cadastro inativado. Inativar por aqui segue as mesmas regras do `DELETE` (proteção contra trancar o sistema) |
-| `enderecos` | substitui a lista; `[]` remove todos |
+| `enderecos` | substitui a lista. Endereço cadastrado não é removido, só alterado: `[]` ou `null` em quem já tem endereço dá `400` (O endereço não pode ser removido, apenas alterado.) |
 | `email` | não pode ser vazio nem `null`; formato válido; não pode ser de outro cadastro (sem diferenciar maiúsculas). Se o profissional tiver acesso, muda também o login |
 | `idCargo` | não pode ser `null`; o cargo precisa existir |
 | `idPerfil` | altera o perfil do usuário de acesso; **só funciona se o profissional já tiver usuário**. Não cria usuário e não altera senha. Exige **também** `GERENCIAR_USUARIOS` (sem ela: `403`, e nada do PATCH é gravado) e segue as travas de `PATCH /api/usuarios/{idCadastro}/perfil` (ver `USUARIOS.md`), que faz o mesmo para qualquer tipo de cadastro |

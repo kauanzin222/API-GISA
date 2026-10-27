@@ -3,8 +3,6 @@ package com.fatec.gisa.dtos.paciente.request;
 import com.fatec.gisa.dtos.PessoaCadastroRequestDTO;
 import com.fatec.gisa.enums.GrauParentesco;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
@@ -26,13 +24,7 @@ public class ResponsavelCadastroRequestDTO extends PessoaCadastroRequestDTO {
     @NotNull(message = "O grau de parentesco é obrigatório")
     private GrauParentesco grauParentesco;
 
+    // false: o responsável fica com os endereços do paciente (os enviados para ele são ignorados)
     @NotNull(message = "Informe se o responsável não reside com o paciente")
     private Boolean naoResideComPaciente;
-
-    @JsonIgnore
-    @AssertTrue(message = "Informe ao menos um endereço para o responsável que não reside com o paciente")
-    public boolean isEnderecoAlternativoValido() {
-        return !Boolean.TRUE.equals(naoResideComPaciente)
-            || (getEnderecos() != null && !getEnderecos().isEmpty());
-    }
 }

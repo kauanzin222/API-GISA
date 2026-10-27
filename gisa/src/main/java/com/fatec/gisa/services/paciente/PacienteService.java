@@ -19,7 +19,6 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.fatec.gisa.dtos.EnderecoDTO;
 import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ProntuarioPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.PacienteCadastroRequestDTO;
@@ -33,6 +32,7 @@ import com.fatec.gisa.dtos.paciente.response.InativacaoPacienteDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteBuscaDTO;
 import com.fatec.gisa.dtos.paciente.response.ProntuarioResponseDTO;
 import com.fatec.gisa.dtos.paciente.response.ResponsavelVinculoResponseDTO;
+import com.fatec.gisa.entities.Endereco;
 import com.fatec.gisa.entities.paciente.Paciente;
 import com.fatec.gisa.entities.paciente.Cid;
 import com.fatec.gisa.entities.paciente.Escola;
@@ -166,7 +166,8 @@ public class PacienteService {
                         .map(vinculo -> new ResponsavelVinculoResponseDTO(
                                 pessoaMapper.toPessoaResponseDTO(vinculo.getResponsavel()),
                                 vinculo.getResponsavel().getOcupacao(),
-                                vinculo.getGrauParentesco()))
+                                vinculo.getGrauParentesco(),
+                                vinculo.isResideComPaciente()))
                         .toList();
 
         Escola escola = paciente.getEscola();
@@ -209,6 +210,7 @@ public class PacienteService {
                         "Paciente não encontrado com ID: " + idCadastro));
         // Para o histórico: só o que realmente mudou vira evento (o front costuma reenviar o formulário inteiro)
         DadosParaHistorico antes = DadosParaHistorico.de(paciente, pessoaMapper);
+        Set<Long> enderecosAntes = idsDosEnderecos(paciente);
 
         pessoaService.aplicarAlteracoes(paciente, dto);
 
@@ -240,6 +242,7 @@ public class PacienteService {
         if (dto.hasField("responsaveis")) {
             responsaveisDesvinculados = substituirResponsaveis(paciente, dto.getResponsaveis());
         }
+        acompanharEnderecoDoPaciente(paciente, antes, !enderecosAntes.equals(idsDosEnderecos(paciente)));
 
         Paciente pacienteAtualizado = pacienteRepository.save(paciente);
         registrarAlteracoes(pacienteAtualizado, antes, DadosParaHistorico.de(pacienteAtualizado, pessoaMapper));
@@ -248,6 +251,31 @@ public class PacienteService {
             responsavelService.removerOrfaosSemVinculos(responsaveisDesvinculados);
         }
         return pacienteAtualizado;
+    }
+
+    // Quem reside com o paciente fica com os endereços dele: quem já residia vai junto quando o endereço
+    // muda; quem passou a residir agora recebe os endereços (ou é recusado, se tiver outro)
+    private void acompanharEnderecoDoPaciente(Paciente paciente, DadosParaHistorico antes, boolean enderecoMudou) {
+        if (paciente.getResponsaveis() == null) {
+            return;
+        }
+        for (VinculoResponsavel vinculo : paciente.getResponsaveis()) {
+            if (!vinculo.isResideComPaciente()) {
+                continue;
+            }
+            VinculoParaHistorico anterior = antes.responsaveis().get(vinculo.getResponsavel().getIdCadastro());
+            if (anterior == null || !anterior.reside()) {
+                responsavelService.passarAResidir(vinculo.getResponsavel(), paciente);
+            } else if (enderecoMudou) {
+                responsavelService.mudarComPaciente(vinculo.getResponsavel(), paciente);
+            }
+        }
+    }
+
+    private static Set<Long> idsDosEnderecos(Paciente paciente) {
+        return paciente.getEnderecos() == null
+                ? Set.of()
+                : paciente.getEnderecos().stream().map(Endereco::getIdEndereco).collect(Collectors.toSet());
     }
 
     private void registrarAlteracoes(Paciente paciente, DadosParaHistorico antes, DadosParaHistorico depois) {
@@ -299,8 +327,7 @@ public class PacienteService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Paciente não encontrado com ID: " + idCadastro));
 
-        List<EnderecoDTO> enderecosPaciente = pessoaMapper.toPessoaResponseDTO(paciente).enderecos();
-        Responsavel responsavel = responsavelService.obterOuCriar(dto, enderecosPaciente);
+        Responsavel responsavel = responsavelService.obterOuCriar(dto);
 
         if (paciente.getResponsaveis() == null) {
             paciente.setResponsaveis(new ArrayList<>());
@@ -317,7 +344,11 @@ public class PacienteService {
         vinculo.setPaciente(paciente);
         vinculo.setResponsavel(responsavel);
         vinculo.setGrauParentesco(dto.getGrauParentesco());
+        vinculo.setResideComPaciente(!Boolean.TRUE.equals(dto.getNaoResideComPaciente()));
         paciente.getResponsaveis().add(vinculo);
+        if (vinculo.isResideComPaciente()) {
+            responsavelService.passarAResidir(responsavel, paciente);
+        }
 
         Paciente pacienteSalvo = pacienteRepository.save(paciente);
         registrarVinculo(pacienteSalvo, responsavel.getNome(), dto.getGrauParentesco());
@@ -374,13 +405,17 @@ public class PacienteService {
                 throw new IllegalArgumentException("O mesmo responsável foi informado mais de uma vez");
             }
 
-            Responsavel responsavel = responsavelService.obterOuCriar(responsavelDto, dto.getEnderecos());
+            Responsavel responsavel = responsavelService.obterOuCriar(responsavelDto);
 
             VinculoResponsavel vinculo = new VinculoResponsavel();
             vinculo.setPaciente(pacienteSalvo);
             vinculo.setResponsavel(responsavel);
             vinculo.setGrauParentesco(responsavelDto.getGrauParentesco());
+            vinculo.setResideComPaciente(!Boolean.TRUE.equals(responsavelDto.getNaoResideComPaciente()));
             vinculos.add(vinculo);
+            if (vinculo.isResideComPaciente()) {
+                responsavelService.passarAResidir(responsavel, pacienteSalvo);
+            }
         }
 
         pacienteSalvo.setResponsaveis(vinculos);
@@ -422,7 +457,8 @@ public class PacienteService {
             if (paciente.getResponsaveis() != null) {
                 paciente.getResponsaveis().forEach(vinculo -> responsaveis.put(
                         vinculo.getResponsavel().getIdCadastro(),
-                        new VinculoParaHistorico(vinculo.getResponsavel().getNome(), vinculo.getGrauParentesco())));
+                        new VinculoParaHistorico(vinculo.getResponsavel().getNome(), vinculo.getGrauParentesco(),
+                                vinculo.isResideComPaciente())));
             }
             return new DadosParaHistorico(
                     paciente.getStatusCadastro(), paciente.getStatusPaciente(), campos, responsaveis);
@@ -440,12 +476,15 @@ public class PacienteService {
                 if (atual != null && atual.grau() != vinculo.grau()) {
                     alterados.add("parentesco de " + vinculo.nome());
                 }
+                if (atual != null && atual.reside() != vinculo.reside()) {
+                    alterados.add("residência de " + vinculo.nome());
+                }
             });
             return alterados;
         }
     }
 
-    private record VinculoParaHistorico(String nome, GrauParentesco grau) {
+    private record VinculoParaHistorico(String nome, GrauParentesco grau, boolean reside) {
     }
 
     private void atualizarProntuario(Paciente paciente, ProntuarioPatchRequestDTO dto) {
@@ -507,6 +546,9 @@ public class PacienteService {
                 vinculo.setResponsavel(responsavel);
             }
             vinculo.setGrauParentesco(dto.grauParentesco());
+            if (dto.resideComPaciente() != null) {
+                vinculo.setResideComPaciente(dto.resideComPaciente());
+            }
             vinculosAtualizados.add(vinculo);
         }
 

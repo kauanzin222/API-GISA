@@ -273,7 +273,7 @@ class HistoricoPacienteTest {
         entityManager.flush();
 
         PacientePatchRequestDTO dto = new PacientePatchRequestDTO();
-        dto.setResponsaveis(List.of(new ResponsavelVinculoPatchDTO(pai.getIdCadastro(), GrauParentesco.PAI)));
+        dto.setResponsaveis(List.of(new ResponsavelVinculoPatchDTO(pai.getIdCadastro(), GrauParentesco.PAI, null)));
         pacienteService.atualizar(lucas.getIdCadastro(), dto);
 
         assertThat(eventos(lucas)).extracting(EventoPacienteDTO::tipo, EventoPacienteDTO::descricao)
@@ -284,7 +284,7 @@ class HistoricoPacienteTest {
                                 "Responsável Rosa Martins (mãe) desvinculado."));
 
         PacientePatchRequestDTO grau = new PacientePatchRequestDTO();
-        grau.setResponsaveis(List.of(new ResponsavelVinculoPatchDTO(pai.getIdCadastro(), GrauParentesco.TUTOR_LEGAL)));
+        grau.setResponsaveis(List.of(new ResponsavelVinculoPatchDTO(pai.getIdCadastro(), GrauParentesco.TUTOR_LEGAL, null)));
         pacienteService.atualizar(lucas.getIdCadastro(), grau);
         assertThat(eventos(lucas).get(0).descricao())
                 .isEqualTo("Dados do cadastro alterados: parentesco de Paulo Martins.");

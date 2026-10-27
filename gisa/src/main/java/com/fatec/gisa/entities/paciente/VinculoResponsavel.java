@@ -41,4 +41,8 @@ public class VinculoResponsavel {
     @Enumerated(EnumType.STRING)
     @Column(name = "GrauParentesco")
     private GrauParentesco grauParentesco;
+
+    // Enquanto for true, os endereços do responsável acompanham os do paciente
+    @Column(name = "ResideComPaciente", nullable = false)
+    private boolean resideComPaciente;
 }

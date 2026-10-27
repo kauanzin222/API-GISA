@@ -49,6 +49,11 @@ public class PessoaService {
         }
 
         if (dto.hasField("enderecos")) {
+            // Endereço cadastrado não é removido, só alterado (sai apenas se a pessoa for excluída)
+            boolean semEndereco = dto.getEnderecos() == null || dto.getEnderecos().isEmpty();
+            if (semEndereco && enderecoService.temEndereco(pessoa)) {
+                throw new IllegalArgumentException("O endereço não pode ser removido, apenas alterado.");
+            }
             enderecoService.substituirEnderecos(pessoa, dto.getEnderecos());
         }
     }

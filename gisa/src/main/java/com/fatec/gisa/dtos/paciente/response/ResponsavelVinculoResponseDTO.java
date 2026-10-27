@@ -6,5 +6,6 @@ import com.fatec.gisa.enums.GrauParentesco;
 public record ResponsavelVinculoResponseDTO(
         PessoaResponseDTO responsavel,
         String ocupacao,
-        GrauParentesco grauParentesco) {
+        GrauParentesco grauParentesco,
+        boolean resideComPaciente) {
 }

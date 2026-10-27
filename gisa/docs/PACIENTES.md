@@ -143,7 +143,8 @@ Retorna dados pessoais, endereços, escola, CIDs, prontuário, responsáveis com
         "enderecos": []
       },
       "ocupacao": "Professora",
-      "grauParentesco": "MAE"
+      "grauParentesco": "MAE",
+      "resideComPaciente": true
     }
   ],
   "assistentesSociais": [
@@ -154,6 +155,7 @@ Retorna dados pessoais, endereços, escola, CIDs, prontuário, responsáveis com
 
 - `escola` e `prontuario` podem vir `null`.
 - O `idCadastro` de cada `responsavel` é o valor usado como `idResponsavel` no PATCH do paciente e nas rotas `/api/responsaveis/{idResponsavel}`.
+- `resideComPaciente`: o responsável mora com o paciente. Enquanto for `true`, a API mantém os endereços dele iguais aos do paciente (ver "Endereços e residência").
 - `assistentesSociais`: vínculos **ativos**, ordenados pelo nome (`[]` quando não há). Para vincular ou desvincular a partir da tela do paciente, use as rotas do assistente social: `POST /api/assistentes-sociais/{idCadastro}/pacientes` e `DELETE /api/assistentes-sociais/{idCadastro}/pacientes/{idPaciente}` (ver `ASSISTENTES-SOCIAIS.md`).
 - Consultar esta rota gera um registro `CONSULTA` na auditoria (acesso a dados de saúde).
 
@@ -232,7 +234,8 @@ Linha do tempo exibida na tela do paciente: cadastro, mudanças de status, respo
 
 - Em terapia **coletiva**, os eventos de terapia entram no histórico de **cada** paciente envolvido. `PRESENCA_REGISTRADA` entra só no do paciente marcado.
 - Iniciar e concluir o atendimento (`EM_ATENDIMENTO`, `CONCLUIDA`) não geram evento.
-- Na descrição de `DADOS_ALTERADOS`, os campos se chamam: nome, celular, CNS, estado civil, endereços, convênio, escola, informações clínicas (CIDs e prontuário) e "parentesco de {responsável}".
+- Na descrição de `DADOS_ALTERADOS`, os campos se chamam: nome, celular, CNS, estado civil, endereços, convênio, escola, informações clínicas (CIDs e prontuário), "parentesco de {responsável}" e "residência de {responsável}".
+- "residência de {responsável}" também aparece sozinho no histórico de um paciente quando o responsável muda de endereço por outro paciente (ou no cadastro dele) e deixa de residir com este (ver "Endereços e residência").
 
 **Erros**
 
@@ -263,7 +266,7 @@ Cadastra o paciente junto com prontuário, endereços, responsáveis e CIDs, em 
 | `estadoCivil` | enum | sim | ver `00-GERAL.md` |
 | `celular` | string | não | |
 | `numCNS` | string | não | |
-| `enderecos` | lista de endereço | **sim, ao menos 1** | ver abaixo |
+| `enderecos` | lista de endereço | não | ver abaixo e "Endereços e residência" |
 | `idEscola` | número | não | se enviado, deve ser positivo e a escola precisa existir (ver `ESCOLAS.md`) |
 | `convenio` | boolean | não | |
 | `codigosCid` | lista de string | não | códigos de CIDs **que já existem** (ver `CIDS.md`) |
@@ -304,13 +307,14 @@ Um responsável é uma pessoa: exige os mesmos dados básicos do paciente (`nome
 | `ocupacao` | string | não | |
 | `celular` | string | não | |
 | `numCNS` | string | não | |
-| `enderecos` | lista de endereço | só se `naoResideComPaciente = true` | |
+| `enderecos` | lista de endereço | não | só usado com `naoResideComPaciente = true` |
 | `idResponsavel` | número | não | para selecionar um responsável já cadastrado |
 
 **Regras dos responsáveis**
 
-- **Endereço:** com `naoResideComPaciente = false`, o responsável recebe os endereços do paciente (qualquer `enderecos` enviado para ele é ignorado). Com `true`, `enderecos` é obrigatório (ao menos 1).
-- **Reaproveitamento por CPF:** se já existir um responsável com o mesmo CPF, ele é reaproveitado e os dados enviados **não alteram** o cadastro existente, inclusive os endereços (os endereços do paciente ou os enviados só são associados a responsáveis criados nesta requisição). Para alterar dados de um responsável existente, use `PATCH /api/responsaveis/{idResponsavel}`. Os campos obrigatórios de pessoa precisam ser enviados mesmo assim, pois a validação ocorre antes.
+- **Endereço:** com `naoResideComPaciente = false`, o responsável fica com os endereços do paciente (qualquer `enderecos` enviado para ele é ignorado). Com `true`, usa os `enderecos` enviados para ele, que são opcionais.
+- **Reaproveitamento por CPF:** se já existir um responsável com o mesmo CPF, ele é reaproveitado e os dados enviados **não alteram** o cadastro existente, inclusive os endereços. Para alterar dados de um responsável existente, use `PATCH /api/responsaveis/{idResponsavel}`. Os campos obrigatórios de pessoa precisam ser enviados mesmo assim, pois a validação ocorre antes.
+- **Responsável já cadastrado que reside com o paciente:** se ele não tem endereço, recebe os do paciente. Se tem, precisa ser o mesmo do paciente; com outro endereço o cadastro é recusado (`400`) e ele deve ser marcado com `naoResideComPaciente = true`. Se o paciente ainda não tem endereço, o front pode oferecer usar o do responsável (enviando-o em `enderecos` do paciente).
 - **`idResponsavel`:** se enviado, o responsável precisa existir e o CPF informado precisa ser o dele.
 - **CPF de quem não é responsável:** se o CPF pertencer a alguém já cadastrado que não é responsável (por exemplo, um paciente ou profissional), o cadastro é recusado.
 - **Duplicidade:** o mesmo CPF não pode aparecer duas vezes em `responsaveis` na mesma requisição.
@@ -413,11 +417,11 @@ Segue as regras comuns de PATCH (`00-GERAL.md`): envie só o que quer alterar; l
 | `statusPaciente` | `MATRICULADO`, `ALTA` ou `DESLIGADO`; não pode ser `null` |
 | `convenio` | `null` limpa |
 | `idEscola` | troca a escola; `null` remove a escola do paciente |
-| `enderecos` | substitui a lista; `[]` remove todos |
+| `enderecos` | substitui a lista. Endereço cadastrado não é removido, só alterado: `[]` ou `null` em quem já tem endereço dá `400`. Os responsáveis que residem com o paciente vão junto (ver "Endereços e residência") |
 | `codigosCid` | substitui a lista; aceita **somente CIDs já existentes**; `[]` remove todos |
 | `novosCids` | lista de `{codigoCID, descricao}`; CIDs **novos**, cadastrados na base e vinculados ao paciente. Somados a `codigosCid` (ou aos CIDs atuais, se `codigosCid` não for enviado) |
 | `prontuario` | atualiza só os campos enviados dentro do objeto; `"prontuario": null` remove o prontuário |
-| `responsaveis` | substitui os vínculos; lista de `{ idResponsavel, grauParentesco }` (ver abaixo) |
+| `responsaveis` | substitui os vínculos; lista de `{ idResponsavel, grauParentesco, resideComPaciente }` (ver abaixo) |
 
 **Ignorados (somente leitura):** `cpf`, `dataNascimento`, `sexo`, `dataCadastro`.
 
@@ -429,13 +433,14 @@ Cada item referencia um responsável **já cadastrado** pelo ID:
 
 ```json
 "responsaveis": [
-  { "idResponsavel": 2, "grauParentesco": "MAE" },
-  { "idResponsavel": 3, "grauParentesco": "PAI" }
+  { "idResponsavel": 2, "grauParentesco": "MAE", "resideComPaciente": true },
+  { "idResponsavel": 3, "grauParentesco": "PAI", "resideComPaciente": false }
 ]
 ```
 
 - A lista precisa ter ao menos um responsável e não pode repetir o mesmo `idResponsavel`.
-- Responsável já vinculado: só o `grauParentesco` é atualizado. Responsável não vinculado: passa a ser vinculado.
+- Responsável já vinculado: `grauParentesco` e `resideComPaciente` são atualizados. Responsável não vinculado: passa a ser vinculado.
+- `resideComPaciente` é opcional: sem ele, o vínculo mantém o valor atual (vínculo novo: `false`). Passar a `true` segue a regra do cadastro: sem endereço, o responsável recebe os do paciente; com outro endereço, `400`.
 - Responsável que estava vinculado e não veio na lista é **desvinculado**. Se ele não tiver mais nenhum paciente e não tiver usuário de acesso, o cadastro dele é **excluído** da base (não apenas inativado).
 - O PATCH do paciente **não altera dados pessoais** do responsável; para isso, use `PATCH /api/responsaveis/{idResponsavel}`.
 - Para **adicionar** um responsável (novo ou já cadastrado) sem reenviar a lista inteira, use `POST /api/pacientes/{idCadastro}/responsaveis`.
@@ -466,7 +471,7 @@ Cadastra um responsável e o vincula a um paciente já existente, sem mexer nos 
 
 **Corpo:** um único responsável, com **os mesmos campos e regras** de um item de `responsaveis[]` do `POST /api/pacientes` (ver "Responsável" acima): reaproveitamento por CPF, `idResponsavel` opcional, `naoResideComPaciente` e endereços.
 
-- Com `naoResideComPaciente = false`, o responsável novo recebe os endereços **atuais** do paciente.
+- Com `naoResideComPaciente = false`, o responsável fica com os endereços **atuais** do paciente (o já cadastrado precisa ter o mesmo endereço, ou nenhum).
 - Se o CPF (ou `idResponsavel`) for de um responsável já cadastrado, ele é apenas vinculado, sem alterar os dados dele.
 - Se o responsável já estiver vinculado a este paciente, o pedido é recusado.
 
@@ -598,7 +603,7 @@ Atualiza os dados pessoais do responsável (o vínculo com o paciente e o grau d
 | `celular`, `numCNS`, `ocupacao` | `null` limpa |
 | `estadoCivil` | não pode ser `null` |
 | `statusCadastro` | `ATIVO` ou `INATIVO`; não pode ser `null` |
-| `enderecos` | substitui a lista; `[]` remove todos |
+| `enderecos` | substitui a lista. Endereço cadastrado não é removido, só alterado (`[]` ou `null` dá `400`) |
 
 **Ignorados:** `cpf`, `dataNascimento`, `sexo`.
 
@@ -611,7 +616,18 @@ Atualiza os dados pessoais do responsável (o vínculo com o paciente e o grau d
 
 **Resposta `200`:** mesmo formato do `GET /api/responsaveis/{idResponsavel}`.
 
-> Os endereços do responsável são independentes dos do paciente depois do cadastro: alterar o endereço de um não altera o do outro.
+> Mudar o endereço aqui é a correção manual do cadastro do responsável. Os pacientes com quem ele residia e que ficaram em outro endereço passam a `resideComPaciente = false` (com evento "residência de {responsável}" no histórico deles).
+
+---
+
+## Endereços e residência
+
+- **Endereço compartilhado:** `cep` + `numero` + `complemento` identificam o endereço. Quem mora no mesmo endereço aponta para o mesmo registro.
+- **Correção:** enviar um endereço com a mesma chave e outros campos diferentes (rua, bairro, cidade, estado) corrige o registro para **todos** os moradores.
+- **Sem remoção:** o endereço é opcional no cadastro, mas, uma vez cadastrado, só é alterado. Ele só deixa de existir quando ninguém mais mora nele (a API exclui o registro sem moradores).
+- **Quem reside acompanha o paciente:** com `resideComPaciente = true`, os endereços do responsável são sempre os do paciente. Quando o endereço do paciente muda, os residentes vão junto. Para alguém ficar no endereço antigo, envie `resideComPaciente: false` para ele no mesmo PATCH.
+- **Irmãos:** se o responsável que foi junto também residia com outro paciente que ficou no endereço antigo, esse outro vínculo passa a `resideComPaciente = false` (evento "residência de {responsável}" no histórico daquele paciente). O ajuste, se necessário, é feito manualmente no cadastro daquele paciente.
+- **Inativar paciente** (`DELETE`) não mexe em endereços.
 
 ---
 
@@ -632,7 +648,6 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. O responsáve
 | `dataNascimento` | A data de nascimento é obrigatória |
 | `sexo` | O sexo é obrigatório / O sexo deve ser F, M ou O |
 | `estadoCivil` | O estado civil é obrigatório |
-| `enderecos` (paciente) | Informe ao menos um endereço para o paciente |
 | endereço | O CEP é obrigatório / A rua é obrigatório / O número é obrigatório / O bairro é obrigatório / A cidade é obrigatória / O estado é obrigatório |
 | `idEscola` | O ID da escola deve ser positivo |
 | `codigosCid[]` | O código CID não pode ser vazio |
@@ -640,7 +655,6 @@ Define `statusCadastro` como `INATIVO` e retorna `204 No Content`. O responsáve
 | `prontuario` | Os dados do prontuário são obrigatórios |
 | `responsaveis` | Informe ao menos um responsável |
 | responsável | O grau de parentesco é obrigatório / Informe se o responsável não reside com o paciente |
-| responsável | Informe ao menos um endereço para o responsável que não reside com o paciente |
 | `idResponsavel` | O ID do responsável deve ser positivo |
 
 Os nomes em `fields` seguem o caminho do campo, por exemplo `responsaveis[1].enderecos` ou `enderecos[0].cep`.
@@ -656,6 +670,8 @@ No PATCH, `responsaveis[].idResponsavel` e `responsaveis[].grauParentesco` ausen
 | Mesmo CPF repetido em `responsaveis` (POST) | `400` | O mesmo responsável foi informado mais de uma vez |
 | Mesmo `idResponsavel` repetido (PATCH) | `400` | O mesmo responsável foi informado mais de uma vez. |
 | `responsaveis` vazio ou `null` no PATCH | `400` | O paciente deve possuir ao menos um responsável. |
+| `enderecos` vazio ou `null` em quem já tem endereço (PATCH) | `400` | O endereço não pode ser removido, apenas alterado. |
+| Responsável já cadastrado, com outro endereço, marcado como residente | `400` | O responsável {nome} tem outro endereço cadastrado. Marque que ele não reside com o paciente ou altere o endereço no cadastro do responsável. |
 | `idEscola` inexistente | `400` | Escola não encontrada com ID: {id} |
 | CID inexistente em `codigosCid` | `400` | CID(s) não encontrado(s): {códigos} |
 | `idResponsavel` inexistente (POST) | `400` | Responsável não encontrado com ID: {id} |

@@ -7,5 +7,7 @@ import jakarta.validation.constraints.Positive;
 
 public record ResponsavelVinculoPatchDTO(
         @NotNull @Positive Long idResponsavel,
-        @NotNull GrauParentesco grauParentesco) {
+        @NotNull GrauParentesco grauParentesco,
+        // null mantém o valor atual (em vínculo novo, false)
+        Boolean resideComPaciente) {
 }

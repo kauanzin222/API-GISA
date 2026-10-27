@@ -2,7 +2,6 @@ package com.fatec.gisa.dtos.paciente.request;
 
 import java.util.List;
 
-import com.fatec.gisa.dtos.EnderecoDTO;
 import com.fatec.gisa.dtos.PessoaCadastroRequestDTO;
 
 import jakarta.validation.Valid;
@@ -36,10 +35,4 @@ public class PacienteCadastroRequestDTO extends PessoaCadastroRequestDTO {
 
     @NotEmpty(message = "Informe ao menos um responsável")
     private List<@Valid ResponsavelCadastroRequestDTO> responsaveis;
-
-    @Override
-    @NotEmpty(message = "Informe ao menos um endereço para o paciente")
-    public List<EnderecoDTO> getEnderecos() {
-        return super.getEnderecos();
-    }
 }
