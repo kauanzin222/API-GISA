@@ -230,7 +230,7 @@ Cada perfil de acesso tem um conjunto de permissões (lista completa e perfis pa
 | `estadoCivil` | `SOLTEIRO`, `CASADO`, `VIUVO`, `SEPARADO`, `DIVORCIADO` |
 | `sexo` | um único caractere: `F`, `M` ou `O` (outros valores: `400`, "O sexo deve ser F, M ou O") |
 | `grauParentesco` | `PAI`, `MAE`, `AVO`, `TUTOR_LEGAL`, `OUTRO` |
-| `tipoEscola` | `PUBLICA`, `PARTICULAR` |
+| `tipoEscola` | `REGULAR`, `ESPECIAL` |
 | `statusPaciente` | `MATRICULADO`, `ALTA`, `DESLIGADO` (definido pelo back no cadastro; pode ser alterado no PATCH do paciente) |
 | `statusCadastro` | `ATIVO`, `INATIVO` (pode ser alterado nos PATCH) |
 | `modalidade` (resposta) | `INDIVIDUAL`, `COLETIVA` (calculada pelo número de pacientes) |

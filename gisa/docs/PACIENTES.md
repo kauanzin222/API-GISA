@@ -117,7 +117,7 @@ Retorna dados pessoais, endereços, escola, CIDs, prontuário, responsáveis com
   "escola": {
     "idEscola": 3,
     "nome": "Escola Municipal Maria Silva",
-    "tipoEscola": "PUBLICA",
+    "tipoEscola": "REGULAR",
     "telefone": "1533330000"
   },
   "cids": [

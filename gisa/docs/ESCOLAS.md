@@ -28,11 +28,11 @@ O autocomplete e o cadastro rápido continuam liberados para quem cadastra ou ed
 | Param | Padrão | Descrição |
 |---|---|---|
 | `nome` | — | trecho do nome, sem diferenciar maiúsculas de minúsculas |
-| `tipoEscola` | todos | `PUBLICA` ou `PARTICULAR` |
+| `tipoEscola` | todos | `REGULAR` ou `ESPECIAL` |
 | `page` / `size` / `sort` | `0` / `9` / `nome,asc` | `sort` aceita `nome`, `tipoEscola` e `telefone` |
 
 ```
-GET /api/escolas?nome=municipal&tipoEscola=PUBLICA
+GET /api/escolas?nome=municipal&tipoEscola=REGULAR
 ```
 
 **Resposta `200`**
@@ -43,7 +43,7 @@ GET /api/escolas?nome=municipal&tipoEscola=PUBLICA
     {
       "idEscola": 3,
       "nome": "Escola Municipal Maria Silva",
-      "tipoEscola": "PUBLICA",
+      "tipoEscola": "REGULAR",
       "telefone": "1533330000",
       "quantidadePacientes": 12
     }
@@ -77,7 +77,7 @@ GET /api/escolas/sugestoes?nome=esc
   {
     "idEscola": 3,
     "nome": "Escola Municipal Maria Silva",
-    "tipoEscola": "PUBLICA",
+    "tipoEscola": "REGULAR",
     "telefone": "1533330000"
   }
 ]
@@ -100,7 +100,7 @@ O `idEscola` retornado é o valor a enviar no campo `idEscola` ao cadastrar ou a
 | Campo | Tipo | Obrigatório | Observação |
 |---|---|---|---|
 | `nome` | string | sim | espaços nas pontas são removidos |
-| `tipoEscola` | enum | sim | `PUBLICA` ou `PARTICULAR` |
+| `tipoEscola` | enum | sim | `REGULAR` ou `ESPECIAL` |
 | `telefone` | string | não | |
 
 **Requisição**
@@ -108,7 +108,7 @@ O `idEscola` retornado é o valor a enviar no campo `idEscola` ao cadastrar ou a
 ```json
 {
   "nome": "Colégio Exemplo",
-  "tipoEscola": "PARTICULAR",
+  "tipoEscola": "ESPECIAL",
   "telefone": "1533331111"
 }
 ```
@@ -119,7 +119,7 @@ O `idEscola` retornado é o valor a enviar no campo `idEscola` ao cadastrar ou a
 {
   "idEscola": 4,
   "nome": "Colégio Exemplo",
-  "tipoEscola": "PARTICULAR",
+  "tipoEscola": "ESPECIAL",
   "telefone": "1533331111"
 }
 ```
@@ -182,7 +182,7 @@ Com o token do administrador, salvo onde indicado.
 
 1. `POST /api/escolas` com o exemplo acima. Esperado: `201` e o `idEscola`.
 2. `GET /api/escolas/sugestoes?nome=` com parte do nome cadastrado, em minúsculas. Esperado: a escola aparece na lista (array, até 10).
-3. `GET /api/escolas?tipoEscola=PARTICULAR`. Esperado: `200` com `content` e `page`; a escola com `quantidadePacientes: 0`.
+3. `GET /api/escolas?tipoEscola=ESPECIAL`. Esperado: `200` com `content` e `page`; a escola com `quantidadePacientes: 0`.
 4. `PATCH /api/escolas/{id}` com `{"telefone": null}`. Esperado: `200` sem `telefone`. Com `{"nome": ""}`: `400` `O nome da escola não pode ser vazio.`
 5. Cadastrar um paciente com esse `idEscola` (ver `PACIENTES.md`). `GET /api/escolas/{id}`. Esperado: `quantidadePacientes: 1`. `GET /api/pacientes?idEscola={id}`. Esperado: o paciente.
 6. `DELETE /api/escolas/{id}`. Esperado: `400` `Não é possível excluir a escola: há pacientes vinculados a ela.` Inativar o paciente e repetir. Esperado: `400` (inativos também contam).

@@ -117,7 +117,7 @@ class ApiPostgresTest {
         List<String> indices = jdbcTemplate.queryForList(
                 "select indexname from pg_indexes where indexname like 'idx_%'", String.class);
 
-        assertThat(ultimaVersao).isEqualTo(20);
+        assertThat(ultimaVersao).isEqualTo(21);
         assertThat(indices).contains(
                 "idx_pessoa_nome_trgm", "idx_pessoa_cpf_trgm", "idx_escola_nome_trgm", "idx_cbo_titulo_trgm",
                 "idx_terapia_status_data_inicio", "idx_especialista_terapia_especialista",
@@ -170,7 +170,7 @@ class ApiPostgresTest {
                 "/api/especialidades", "/api/cargos", "/api/cargos/1", "/api/cbos?titulo=teste", "/api/cbos/999999",
                 "/api/perfis", "/api/perfis/1", "/api/permissoes",
                 "/api/terapias", "/api/terapias?status=AGENDADA", "/api/terapias/" + cenario.idTerapia(),
-                "/api/escolas", "/api/escolas?nome=escola&tipoEscola=PUBLICA", "/api/escolas/sugestoes?nome=escola",
+                "/api/escolas", "/api/escolas?nome=escola&tipoEscola=REGULAR", "/api/escolas/sugestoes?nome=escola",
                 "/api/especialidades/1", "/api/usuarios", "/api/usuarios?tipoCadastro=PESSOA&idPerfil=1",
                 "/api/pacientes?idEscola=1", "/api/cids/F84.0", "/api/auditoria")) {
             assertThat(chamar(get(rota)).andReturn().getResponse().getStatus())
@@ -648,19 +648,19 @@ class ApiPostgresTest {
     @Test
     void gestaoDeEscolas() throws Exception {
         String nome = "Escola Gestão " + SEQUENCIA.incrementAndGet();
-        Long idEscola = criar("/api/escolas", "{ \"nome\": \"%s\", \"tipoEscola\": \"PUBLICA\" }".formatted(nome),
+        Long idEscola = criar("/api/escolas", "{ \"nome\": \"%s\", \"tipoEscola\": \"REGULAR\" }".formatted(nome),
                 "$.idEscola");
         String rota = "/api/escolas/" + idEscola;
 
-        chamar(get("/api/escolas?nome=" + nome.toUpperCase() + "&tipoEscola=PUBLICA"))
+        chamar(get("/api/escolas?nome=" + nome.toUpperCase() + "&tipoEscola=REGULAR"))
                 .andExpect(jsonPath("$.content[0].idEscola").value(idEscola))
                 .andExpect(jsonPath("$.content[0].quantidadePacientes").value(0));
-        chamar(get("/api/escolas?nome=" + nome + "&tipoEscola=PARTICULAR"))
+        chamar(get("/api/escolas?nome=" + nome + "&tipoEscola=ESPECIAL"))
                 .andExpect(jsonPath("$.page.totalElements").value(0));
 
-        chamar(json(patch(rota), "{ \"tipoEscola\": \"PARTICULAR\", \"telefone\": \"1533334444\" }"))
+        chamar(json(patch(rota), "{ \"tipoEscola\": \"ESPECIAL\", \"telefone\": \"1533334444\" }"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.tipoEscola").value("PARTICULAR"))
+                .andExpect(jsonPath("$.tipoEscola").value("ESPECIAL"))
                 .andExpect(jsonPath("$.nome").value(nome));
         chamar(json(patch(rota), "{ \"telefone\": null }")).andExpect(jsonPath("$.telefone").doesNotExist());
         chamar(json(patch(rota), "{ \"nome\": \" \" }"))
@@ -681,7 +681,7 @@ class ApiPostgresTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Não é possível excluir a escola: há pacientes vinculados a ela."));
 
-        Long semPacientes = criar("/api/escolas", "{ \"nome\": \"Escola Vazia\", \"tipoEscola\": \"PUBLICA\" }",
+        Long semPacientes = criar("/api/escolas", "{ \"nome\": \"Escola Vazia\", \"tipoEscola\": \"REGULAR\" }",
                 "$.idEscola");
         chamar(delete("/api/escolas/" + semPacientes)).andExpect(status().isNoContent());
         chamar(get("/api/escolas/" + semPacientes))
@@ -848,7 +848,7 @@ class ApiPostgresTest {
 
     private void criarEscola() throws Exception {
         chamar(post("/api/escolas").contentType(MediaType.APPLICATION_JSON)
-                .content("{ \"nome\": \"Escola Teste\", \"tipoEscola\": \"PUBLICA\" }"))
+                .content("{ \"nome\": \"Escola Teste\", \"tipoEscola\": \"REGULAR\" }"))
                 .andExpect(status().isCreated());
     }
 
