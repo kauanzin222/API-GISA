@@ -167,11 +167,17 @@ public class PacienteService {
         List<ResponsavelVinculoResponseDTO> responsaveis = paciente.getResponsaveis() == null
                 ? List.of()
                 : paciente.getResponsaveis().stream()
-                        .map(vinculo -> new ResponsavelVinculoResponseDTO(
-                                pessoaMapper.toPessoaResponseDTO(vinculo.getResponsavel()),
-                                vinculo.getResponsavel().getOcupacao(),
-                                vinculo.getGrauParentesco(),
-                                vinculo.isResideComPaciente()))
+                        .map(vinculo -> {
+                            // A residência é derivada: o responsável reside nos endereços que divide com o paciente
+                            List<Long> idsResidencia = enderecoService.idsCompartilhados(
+                                    paciente, vinculo.getResponsavel());
+                            return new ResponsavelVinculoResponseDTO(
+                                    pessoaMapper.toPessoaResponseDTO(vinculo.getResponsavel()),
+                                    vinculo.getResponsavel().getOcupacao(),
+                                    vinculo.getGrauParentesco(),
+                                    !idsResidencia.isEmpty(),
+                                    idsResidencia);
+                        })
                         .toList();
 
         Escola escola = paciente.getEscola();
@@ -215,8 +221,11 @@ public class PacienteService {
         // Para o histórico: só o que realmente mudou vira evento (o front costuma reenviar o formulário inteiro)
         DadosParaHistorico antes = DadosParaHistorico.de(paciente, pessoaMapper);
         Set<Long> enderecosAntes = idsDosEnderecos(paciente);
+        Map<Long, Set<Long>> compartilhadasAntes = linhasCompartilhadas(paciente);
+        List<EnderecoDTO> itensEnderecos = dto.hasField("enderecos") ? dto.getEnderecos() : null;
+        Map<Long, Pedido> pedidos = pedidosDoPatch(paciente, dto, itensEnderecos);
 
-        pessoaService.aplicarAlteracoes(paciente, dto, moradiaDosResponsaveis(paciente, dto));
+        pessoaService.aplicarAlteracoes(paciente, dto, moradiaDosResponsaveis(pedidos, itensEnderecos));
 
         if (dto.hasField("statusPaciente")) {
             if (dto.getStatusPaciente() == null) {
@@ -246,7 +255,7 @@ public class PacienteService {
         if (dto.hasField("responsaveis")) {
             responsaveisDesvinculados = substituirResponsaveis(paciente, dto.getResponsaveis());
         }
-        acompanharEnderecoDoPaciente(paciente, antes, !enderecosAntes.equals(idsDosEnderecos(paciente)));
+        aplicarResidencias(paciente, pedidos, itensEnderecos, enderecosAntes, compartilhadasAntes);
 
         Paciente pacienteAtualizado = pacienteRepository.save(paciente);
         registrarAlteracoes(pacienteAtualizado, antes, DadosParaHistorico.de(pacienteAtualizado, pessoaMapper));
@@ -257,42 +266,147 @@ public class PacienteService {
         return pacienteAtualizado;
     }
 
-    // Quem reside com o paciente fica com os endereços dele: quem já residia vai junto quando o endereço
-    // muda; quem passou a residir agora recebe os endereços (ou é recusado, se tiver outro)
-    private void acompanharEnderecoDoPaciente(Paciente paciente, DadosParaHistorico antes, boolean enderecoMudou) {
-        if (paciente.getResponsaveis() == null) {
-            return;
-        }
-        for (VinculoResponsavel vinculo : paciente.getResponsaveis()) {
-            if (!vinculo.isResideComPaciente()) {
-                continue;
-            }
-            VinculoParaHistorico anterior = antes.responsaveis().get(vinculo.getResponsavel().getIdCadastro());
-            if (anterior == null || !anterior.reside()) {
-                responsavelService.passarAResidir(vinculo.getResponsavel(), paciente);
-            } else if (enderecoMudou) {
-                responsavelService.mudarComPaciente(vinculo.getResponsavel(), paciente);
-            }
-        }
+    // ---------- Residência dos responsáveis por endereço do paciente ----------
+
+    // Como o request diz onde o responsável mora: INDICES (posições na lista "enderecos" do request), IDS (IDs de
+    // endereços atuais do paciente), TODOS e NENHUM (formato antigo: reside / não reside) ou MANTER (sem informação:
+    // continua onde está)
+    private enum Modo { INDICES, IDS, TODOS, NENHUM, MANTER }
+
+    private record Pedido(Modo modo, Set<Integer> indices, Set<Long> ids) {
+        static final Pedido TODOS = new Pedido(Modo.TODOS, Set.of(), Set.of());
+        static final Pedido NENHUM = new Pedido(Modo.NENHUM, Set.of(), Set.of());
+        static final Pedido MANTER = new Pedido(Modo.MANTER, Set.of(), Set.of());
     }
 
-    // Ao alterar um endereço, quem reside com o paciente vai junto e quem foi desmarcado como residente
-    // (neste mesmo request) fica no endereço antigo. Os dois casos não contam como "outros cadastros" no 409
-    private static Moradia moradiaDosResponsaveis(Paciente paciente, PacientePatchRequestDTO dto) {
-        Map<Long, Boolean> resideNoRequest = new HashMap<>();
-        if (dto.hasField("responsaveis") && dto.getResponsaveis() != null) {
-            dto.getResponsaveis().stream()
-                    .filter(vinculo -> vinculo.resideComPaciente() != null)
-                    .forEach(vinculo -> resideNoRequest.put(vinculo.idResponsavel(), vinculo.resideComPaciente()));
-        }
-        Map<Long, Boolean> reside = new HashMap<>();
-        if (paciente.getResponsaveis() != null) {
-            for (VinculoResponsavel vinculo : paciente.getResponsaveis()) {
-                Long id = vinculo.getResponsavel().getIdCadastro();
-                reside.put(id, resideNoRequest.getOrDefault(id, vinculo.isResideComPaciente()));
+    private static Pedido pedidoDeIndices(List<Integer> indices, int quantidade, String campo) {
+        for (Integer indice : indices) {
+            if (indice == null || indice < 0 || indice >= quantidade) {
+                throw new CampoInvalidoException(campo, "Índice de endereço fora da lista de endereços.");
             }
         }
+        return new Pedido(Modo.INDICES, new HashSet<>(indices), Set.of());
+    }
 
+    // POST /pacientes: os índices apontam para a lista "enderecos" do próprio request. Sem eles, vale o formato antigo
+    // (RN09). Os endereços do paciente já foram sincronizados
+    private List<Endereco> residenciaDoCadastro(Paciente paciente, List<EnderecoDTO> itens,
+            ResponsavelCadastroRequestDTO dto, int posicao) {
+        if (dto.getIdsEnderecoResidencia() != null) {
+            throw new CampoInvalidoException("responsaveis[%d].idsEnderecoResidencia".formatted(posicao),
+                    "No cadastro do paciente, informe indicesEnderecoResidencia.");
+        }
+        Pedido pedido = dto.getIndicesEnderecoResidencia() != null
+                ? pedidoDeIndices(dto.getIndicesEnderecoResidencia(), itens == null ? 0 : itens.size(),
+                        "responsaveis[%d].indicesEnderecoResidencia".formatted(posicao))
+                : formatoAntigo(dto.getNaoResideComPaciente());
+        return alvo(pedido, paciente, itens, null, Set.of(), Set.of());
+    }
+
+    // POST /pacientes/{id}/responsaveis: os IDs são de endereços atuais do paciente. Sem eles, vale o formato antigo
+    private List<Endereco> residenciaDoVinculoNovo(Paciente paciente, ResponsavelCadastroRequestDTO dto) {
+        if (dto.getIndicesEnderecoResidencia() != null) {
+            throw new CampoInvalidoException("indicesEnderecoResidencia",
+                    "Neste endpoint, informe idsEnderecoResidencia.");
+        }
+        Pedido pedido;
+        if (dto.getIdsEnderecoResidencia() != null) {
+            Set<Long> ids = new HashSet<>(dto.getIdsEnderecoResidencia());
+            if (ids.contains(null) || !idsDosEnderecos(paciente).containsAll(ids)) {
+                throw new CampoInvalidoException("idsEnderecoResidencia", "O endereço informado não é do paciente.");
+            }
+            pedido = new Pedido(Modo.IDS, Set.of(), ids);
+        } else {
+            pedido = formatoAntigo(dto.getNaoResideComPaciente());
+        }
+        return alvo(pedido, paciente, null, null, Set.of(), Set.of());
+    }
+
+    private static Pedido formatoAntigo(Boolean naoResideComPaciente) {
+        return Boolean.TRUE.equals(naoResideComPaciente) ? Pedido.NENHUM : Pedido.TODOS;
+    }
+
+    // PATCH: um pedido por responsável. Quem não é citado (ou não traz nada sobre residência) continua onde está
+    private Map<Long, Pedido> pedidosDoPatch(Paciente paciente, PacientePatchRequestDTO dto,
+            List<EnderecoDTO> itensEnderecos) {
+        Map<Long, Pedido> pedidos = new HashMap<>();
+        if (paciente.getResponsaveis() != null) {
+            paciente.getResponsaveis()
+                    .forEach(vinculo -> pedidos.put(vinculo.getResponsavel().getIdCadastro(), Pedido.MANTER));
+        }
+        if (!dto.hasField("responsaveis") || dto.getResponsaveis() == null) {
+            return pedidos;
+        }
+
+        for (int posicao = 0; posicao < dto.getResponsaveis().size(); posicao++) {
+            ResponsavelVinculoPatchDTO item = dto.getResponsaveis().get(posicao);
+            if (item.indicesEnderecoResidencia() != null) {
+                String campo = "responsaveis[%d].indicesEnderecoResidencia".formatted(posicao);
+                if (itensEnderecos == null) {
+                    throw new CampoInvalidoException(campo,
+                            "Para informar a residência por endereço, envie também os endereços do paciente.");
+                }
+                pedidos.put(item.idResponsavel(),
+                        pedidoDeIndices(item.indicesEnderecoResidencia(), itensEnderecos.size(), campo));
+            } else if (item.resideComPaciente() != null) {
+                pedidos.put(item.idResponsavel(), formatoAntigo(!item.resideComPaciente()));
+            } else {
+                // Vínculo novo sem informação de residência: não reside
+                pedidos.putIfAbsent(item.idResponsavel(), Pedido.NENHUM);
+            }
+        }
+        return pedidos;
+    }
+
+    // Os endereços do paciente em que cada responsável já mora (IDs das linhas que divide com ele)
+    private Map<Long, Set<Long>> linhasCompartilhadas(Paciente paciente) {
+        Map<Long, Set<Long>> compartilhadas = new HashMap<>();
+        if (paciente.getResponsaveis() != null) {
+            for (VinculoResponsavel vinculo : paciente.getResponsaveis()) {
+                compartilhadas.put(vinculo.getResponsavel().getIdCadastro(), new HashSet<>(
+                        enderecoService.idsCompartilhados(paciente, vinculo.getResponsavel())));
+            }
+        }
+        return compartilhadas;
+    }
+
+    // Os endereços do paciente em que o responsável mora, segundo o pedido (depois de o paciente sincronizar os seus)
+    private List<Endereco> alvo(Pedido pedido, Paciente paciente, List<EnderecoDTO> itens, Responsavel responsavel,
+            Set<Long> compartilhadasAntes, Set<Long> idsLinhasAntes) {
+        List<Endereco> linhas = paciente.getEnderecos() == null ? List.of() : paciente.getEnderecos();
+        return switch (pedido.modo()) {
+            case NENHUM -> List.of();
+            case TODOS -> List.copyOf(linhas);
+            case IDS -> linhas.stream().filter(linha -> pedido.ids().contains(linha.getIdEndereco())).toList();
+            case INDICES -> {
+                Set<Long> ids = pedido.indices().stream()
+                        .map(indice -> enderecoService.linhaDe(paciente, itens.get(indice))
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "Endereço do paciente não encontrado após a sincronização.")))
+                        .map(Endereco::getIdEndereco)
+                        .collect(Collectors.toSet());
+                yield linhas.stream().filter(linha -> ids.contains(linha.getIdEndereco())).toList();
+            }
+            case MANTER -> {
+                if (compartilhadasAntes.isEmpty()) {
+                    yield List.of();
+                }
+                // Quem morava em todos os endereços (a regra antiga) continua morando em todos, inclusive nos novos
+                if (compartilhadasAntes.containsAll(idsLinhasAntes)) {
+                    yield List.copyOf(linhas);
+                }
+                yield linhas.stream()
+                        .filter(linha -> linha.getMoradores() != null && linha.getMoradores().stream()
+                                .anyMatch(morador -> Objects.equals(morador.getIdCadastro(),
+                                        responsavel.getIdCadastro())))
+                        .toList();
+            }
+        };
+    }
+
+    // Ao alterar um endereço, quem mora nele segundo o request vai junto (acompanhantes) e quem o request marca como
+    // não morando nele fica no endereço antigo (ficam). Os dois casos não contam como "outros cadastros" no 409
+    private Moradia moradiaDosResponsaveis(Map<Long, Pedido> pedidos, List<EnderecoDTO> itens) {
         return new Moradia() {
             @Override
             public Set<Pessoa> acompanhantes(Endereco linha) {
@@ -304,14 +418,53 @@ public class PacienteService {
                 return moradores(linha, false);
             }
 
-            private Set<Pessoa> moradores(Endereco linha, boolean resideComPaciente) {
-                return linha.getMoradores() == null ? Set.of()
-                        : linha.getMoradores().stream()
-                                .filter(morador -> Objects.equals(reside.get(morador.getIdCadastro()),
-                                        resideComPaciente))
-                                .collect(Collectors.toSet());
+            private Set<Pessoa> moradores(Endereco linha, boolean acompanham) {
+                if (linha.getMoradores() == null) {
+                    return Set.of();
+                }
+                return linha.getMoradores().stream()
+                        .filter(morador -> {
+                            Pedido pedido = pedidos.get(morador.getIdCadastro());
+                            return pedido != null && segue(pedido, linha, itens) == acompanham;
+                        })
+                        .collect(Collectors.toSet());
             }
         };
+    }
+
+    private boolean segue(Pedido pedido, Endereco linha, List<EnderecoDTO> itens) {
+        return switch (pedido.modo()) {
+            case TODOS, MANTER -> true;
+            case NENHUM -> false;
+            case IDS -> pedido.ids().contains(linha.getIdEndereco());
+            case INDICES -> pedido.indices().stream().map(itens::get)
+                    .anyMatch(item -> Objects.equals(item.getIdEndereco(), linha.getIdEndereco())
+                            || (item.getIdEndereco() == null && enderecoService.mesmaChave(item, linha)));
+        };
+    }
+
+    // Depois de o paciente sincronizar os endereços e de os vínculos serem atualizados: cada responsável fica
+    // ligado exatamente aos endereços pedidos (RN01), saindo também das linhas que o paciente removeu (RN03)
+    private void aplicarResidencias(Paciente paciente, Map<Long, Pedido> pedidos, List<EnderecoDTO> itens,
+            Set<Long> idsLinhasAntes, Map<Long, Set<Long>> compartilhadasAntes) {
+        if (paciente.getResponsaveis() == null) {
+            return;
+        }
+        Set<Long> removidas = new HashSet<>(idsLinhasAntes);
+        removidas.removeAll(idsDosEnderecos(paciente));
+        if (itens != null) {
+            // Uma linha citada pelo ID foi alterada (quem não a acompanhou fica nela), não removida
+            itens.stream().map(EnderecoDTO::getIdEndereco).filter(Objects::nonNull).forEach(removidas::remove);
+        }
+
+        for (VinculoResponsavel vinculo : new ArrayList<>(paciente.getResponsaveis())) {
+            Responsavel responsavel = vinculo.getResponsavel();
+            Long id = responsavel.getIdCadastro();
+            Set<Long> antes = compartilhadasAntes.getOrDefault(id, Set.of());
+            List<Endereco> alvo = alvo(pedidos.getOrDefault(id, Pedido.MANTER), paciente, itens, responsavel, antes,
+                    idsLinhasAntes);
+            responsavelService.aplicarResidencia(responsavel, vinculo, paciente, alvo, !antes.isEmpty(), removidas);
+        }
     }
 
     private static Set<Long> idsDosEnderecos(Paciente paciente) {
@@ -373,7 +526,8 @@ public class PacienteService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Paciente não encontrado com ID: " + idCadastro));
 
-        Responsavel responsavel = responsavelService.obterOuCriar(dto);
+        List<Endereco> alvo = residenciaDoVinculoNovo(paciente, dto);
+        Responsavel responsavel = responsavelService.obterOuCriar(dto, paciente, !alvo.isEmpty());
 
         if (paciente.getResponsaveis() == null) {
             paciente.setResponsaveis(new ArrayList<>());
@@ -390,11 +544,8 @@ public class PacienteService {
         vinculo.setPaciente(paciente);
         vinculo.setResponsavel(responsavel);
         vinculo.setGrauParentesco(dto.getGrauParentesco());
-        vinculo.setResideComPaciente(!Boolean.TRUE.equals(dto.getNaoResideComPaciente()));
         paciente.getResponsaveis().add(vinculo);
-        if (vinculo.isResideComPaciente()) {
-            responsavelService.passarAResidir(responsavel, paciente);
-        }
+        responsavelService.aplicarResidencia(responsavel, vinculo, paciente, alvo, false, Set.of());
 
         Paciente pacienteSalvo = pacienteRepository.save(paciente);
         registrarVinculo(pacienteSalvo, responsavel.getNome(), dto.getGrauParentesco());
@@ -450,22 +601,21 @@ public class PacienteService {
         List<VinculoResponsavel> vinculos = new ArrayList<>();
         var cpfsResponsaveis = new LinkedHashSet<String>();
 
-        for (ResponsavelCadastroRequestDTO responsavelDto : dto.getResponsaveis()) {
+        for (int posicao = 0; posicao < dto.getResponsaveis().size(); posicao++) {
+            ResponsavelCadastroRequestDTO responsavelDto = dto.getResponsaveis().get(posicao);
             if (!cpfsResponsaveis.add(responsavelDto.getCpf())) {
                 throw new IllegalArgumentException("O mesmo responsável foi informado mais de uma vez");
             }
 
-            Responsavel responsavel = responsavelService.obterOuCriar(responsavelDto);
+            List<Endereco> alvo = residenciaDoCadastro(pacienteSalvo, dto.getEnderecos(), responsavelDto, posicao);
+            Responsavel responsavel = responsavelService.obterOuCriar(responsavelDto, pacienteSalvo, !alvo.isEmpty());
 
             VinculoResponsavel vinculo = new VinculoResponsavel();
             vinculo.setPaciente(pacienteSalvo);
             vinculo.setResponsavel(responsavel);
             vinculo.setGrauParentesco(responsavelDto.getGrauParentesco());
-            vinculo.setResideComPaciente(!Boolean.TRUE.equals(responsavelDto.getNaoResideComPaciente()));
             vinculos.add(vinculo);
-            if (vinculo.isResideComPaciente()) {
-                responsavelService.passarAResidir(responsavel, pacienteSalvo);
-            }
+            responsavelService.aplicarResidencia(responsavel, vinculo, pacienteSalvo, alvo, false, Set.of());
         }
 
         pacienteSalvo.setResponsaveis(vinculos);
@@ -597,9 +747,6 @@ public class PacienteService {
                 vinculo.setResponsavel(responsavel);
             }
             vinculo.setGrauParentesco(dto.grauParentesco());
-            if (dto.resideComPaciente() != null) {
-                vinculo.setResideComPaciente(dto.resideComPaciente());
-            }
             vinculosAtualizados.add(vinculo);
         }
 

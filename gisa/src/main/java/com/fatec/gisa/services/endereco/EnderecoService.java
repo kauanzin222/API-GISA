@@ -103,6 +103,45 @@ public class EnderecoService {
         return !enderecosDe(pessoa).isEmpty();
     }
 
+    // IDs, ordenados, das linhas que as duas pessoas compartilham (para um responsável e um paciente, é onde ele reside)
+    public List<Long> idsCompartilhados(Pessoa uma, Pessoa outra) {
+        Set<Long> daOutra = ids(outra);
+        return ids(uma).stream().filter(daOutra::contains).sorted().toList();
+    }
+
+    // A linha de dono que corresponde ao item do request (mesma chave, preferindo a de mesmo ID).
+    // Vazio se o dono não tem linha com essa chave
+    public Optional<Endereco> linhaDe(Pessoa dono, EnderecoDTO item) {
+        EnderecoDTO dto = normalizar(item);
+        List<Endereco> candidatas = enderecosDe(dono).stream()
+                .filter(endereco -> chave(dto).equals(chave(endereco)))
+                .toList();
+        return candidatas.stream()
+                .filter(endereco -> Objects.equals(endereco.getIdEndereco(), dto.getIdEndereco()))
+                .findFirst()
+                .or(() -> candidatas.stream().findFirst());
+    }
+
+    public boolean mesmaChave(EnderecoDTO item, Endereco endereco) {
+        return chave(normalizar(item)).equals(chave(endereco));
+    }
+
+    // Item do request e linha têm exatamente os mesmos valores (nada a alterar)
+    public boolean iguais(EnderecoDTO item, Endereco endereco) {
+        return mesmosValores(normalizar(item), endereco);
+    }
+
+    // Liga a pessoa à linha (os dois lados, em memória)
+    public void vincular(Pessoa pessoa, Endereco endereco) {
+        ligar(endereco, pessoa);
+    }
+
+    // Desliga a pessoa da linha; a linha sem moradores é apagada
+    public void desvincular(Pessoa pessoa, Endereco endereco) {
+        desligar(endereco, pessoa);
+        apagarSeVazio(endereco);
+    }
+
     // ---------- Sincronização ----------
 
     private static void validar(List<Item> itens, Map<Long, Endereco> atuais) {

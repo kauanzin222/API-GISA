@@ -21,6 +21,7 @@ import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelVinculoPatchDTO;
 import com.fatec.gisa.dtos.paciente.response.EventoPacienteDTO;
+import com.fatec.gisa.dtos.paciente.response.ResponsavelVinculoResponseDTO;
 import com.fatec.gisa.entities.Endereco;
 import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.paciente.Paciente;
@@ -30,6 +31,8 @@ import com.fatec.gisa.enums.EstadoCivil;
 import com.fatec.gisa.enums.GrauParentesco;
 import com.fatec.gisa.enums.TipoEventoPaciente;
 import com.fatec.gisa.exceptions.CampoInvalidoException;
+import com.fatec.gisa.exceptions.EnderecoCompartilhadoException;
+import com.fatec.gisa.exceptions.EnderecoCompartilhadoException.EnderecoCompartilhado;
 import com.fatec.gisa.services.endereco.EnderecoService;
 
 import jakarta.persistence.EntityManager;
@@ -95,13 +98,35 @@ class EnderecoResidenciaTest {
     }
 
     @Test
-    void responsavelExistenteComOutroEnderecoNaoPodeResidir() {
-        pacienteService.cadastrar(cadastro("20000000001", RUA_B, responsavelNovo("30000000001", false, null)));
+    void responsavelExistenteComEnderecoProprioQuePassaAResidirPerdeOEnderecoProprio() {
+        Paciente primeiro = pacienteService.cadastrar(cadastro("20000000001", RUA_A,
+                responsavelNovo("30000000001", true, RUA_B)));
+        Long idRuaB = ids(responsavelDe(primeiro, "30000000001")).get(0);
 
-        assertThatThrownBy(() -> pacienteService.cadastrar(cadastro("20000000002", RUA_A,
-                responsavelNovo("30000000001", false, null))))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("tem outro endereço cadastrado");
+        Paciente segundo = pacienteService.cadastrar(cadastro("20000000002", RUA_A,
+                responsavelNovo("30000000001", false, null)));
+
+        Responsavel responsavel = responsavelDe(segundo, "30000000001");
+        assertThat(ids(responsavel)).isEqualTo(ids(segundo)).doesNotContain(idRuaB);
+        // O endereço antigo só era dele: sem moradores, é excluído
+        entityManager.flush();
+        assertThat(entityManager.find(Endereco.class, idRuaB)).isNull();
+    }
+
+    @Test
+    void responsavelQuePassaAResidirMantemOEnderecoQueDivideComOutroPaciente() {
+        Paciente primeiro = pacienteService.cadastrar(cadastro("20000000001", RUA_B,
+                responsavelNovo("30000000001", false, null)));
+
+        Paciente segundo = pacienteService.cadastrar(cadastro("20000000002", RUA_A,
+                responsavelNovo("30000000001", false, null)));
+
+        Responsavel responsavel = responsavelDe(segundo, "30000000001");
+        List<Long> esperados = new ArrayList<>(ids(primeiro));
+        esperados.addAll(ids(segundo));
+        assertThat(ids(responsavel)).containsExactlyInAnyOrderElementsOf(esperados).hasSize(2);
+        assertThat(pacienteService.buscarDetalhes(primeiro.getIdCadastro()).responsaveis().get(0)
+                .idsEnderecoResidencia()).isEqualTo(ids(primeiro));
     }
 
     @Test
@@ -136,8 +161,9 @@ class EnderecoResidenciaTest {
         Responsavel pai = responsavelDe(paciente, "30000000002");
         Long idRuaA = ids(paciente).get(0);
 
+        // O endereço é citado pelo ID (alteração): quem o request marca como não morando nele fica
         PacientePatchRequestDTO dto = new PacientePatchRequestDTO();
-        dto.setEnderecos(List.of(RUA_B));
+        dto.setEnderecos(List.of(comId(RUA_B, idRuaA)));
         dto.setResponsaveis(List.of(
                 new ResponsavelVinculoPatchDTO(mae.getIdCadastro(), GrauParentesco.MAE, true),
                 new ResponsavelVinculoPatchDTO(pai.getIdCadastro(), GrauParentesco.PAI, false)));
@@ -212,16 +238,18 @@ class EnderecoResidenciaTest {
     }
 
     @Test
-    void marcarComoResidenteQuemTemOutroEnderecoERecusado() {
+    void marcarComoResidenteQuemTemOutroEnderecoSubstituiOEnderecoProprio() {
         Paciente paciente = pacienteService.cadastrar(cadastro("20000000001", RUA_A,
                 responsavelNovo("30000000001", true, RUA_B)));
         Responsavel mae = responsavelDe(paciente, "30000000001");
+        Long idRuaB = ids(mae).get(0);
 
         PacientePatchRequestDTO dto = new PacientePatchRequestDTO();
         dto.setResponsaveis(List.of(new ResponsavelVinculoPatchDTO(mae.getIdCadastro(), GrauParentesco.MAE, true)));
-        assertThatThrownBy(() -> pacienteService.atualizar(paciente.getIdCadastro(), dto))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("tem outro endereço cadastrado");
+        pacienteService.atualizar(paciente.getIdCadastro(), dto);
+
+        assertThat(ids(mae)).isEqualTo(ids(paciente)).doesNotContain(idRuaB);
+        assertThat(vinculoDe(paciente, mae).isResideComPaciente()).isTrue();
     }
 
     // ---------- Irmãos ----------
@@ -250,26 +278,313 @@ class EnderecoResidenciaTest {
                         "Dados do cadastro alterados: residência de Responsável 30000000001.");
     }
 
+    // ---------- B1: residência por endereço ----------
+
     @Test
-    void mudarOEnderecoNoCadastroDoResponsavelTiraAResidenciaDosPacientes() {
+    void cadaResponsavelFicaLigadoSoAosEnderecosIndicados() {
+        Paciente paciente = pacienteService.cadastrar(cadastroComEnderecos("20000000001", List.of(RUA_A, RUA_B),
+                responsavelComIndices("30000000001", List.of(0)),
+                responsavelComIndices("30000000002", List.of(1)),
+                responsavelComIndices("30000000003", List.of())));
+        Long idRuaA = idDaRua(paciente, "Rua A");
+        Long idRuaB = idDaRua(paciente, "Rua B");
+
+        assertThat(ids(responsavelDe(paciente, "30000000001"))).containsExactly(idRuaA);
+        assertThat(ids(responsavelDe(paciente, "30000000002"))).containsExactly(idRuaB);
+        assertThat(ids(responsavelDe(paciente, "30000000003"))).isEmpty();
+
+        List<ResponsavelVinculoResponseDTO> responsaveis = pacienteService
+                .buscarDetalhes(paciente.getIdCadastro()).responsaveis();
+        assertThat(responsaveis).extracting(ResponsavelVinculoResponseDTO::idsEnderecoResidencia)
+                .containsExactly(List.of(idRuaA), List.of(idRuaB), List.of());
+        assertThat(responsaveis).extracting(ResponsavelVinculoResponseDTO::resideComPaciente)
+                .containsExactly(true, true, false);
+    }
+
+    @Test
+    void requestNoFormatoAntigoFazOResponsavelResidirEmTodosOsEnderecos() {
+        Paciente paciente = pacienteService.cadastrar(cadastroComEnderecos("20000000001", List.of(RUA_A, RUA_B),
+                responsavelNovo("30000000001", false, null),
+                responsavelNovo("30000000002", true, null)));
+
+        assertThat(ids(responsavelDe(paciente, "30000000001"))).isEqualTo(ids(paciente)).hasSize(2);
+        assertThat(ids(responsavelDe(paciente, "30000000002"))).isEmpty();
+        assertThat(pacienteService.buscarDetalhes(paciente.getIdCadastro()).responsaveis())
+                .extracting(ResponsavelVinculoResponseDTO::idsEnderecoResidencia)
+                .containsExactly(ids(paciente), List.of());
+    }
+
+    @Test
+    void alterarOEnderecoOndeSoAMaeMoraAlteraNoLugarEAMaeAcompanha() {
+        Paciente paciente = pacienteService.cadastrar(cadastroComEnderecos("20000000001", List.of(RUA_A, RUA_B),
+                responsavelComIndices("30000000001", List.of(0)),
+                responsavelComIndices("30000000002", List.of(1))));
+        Long idRuaA = idDaRua(paciente, "Rua A");
+        Long idRuaB = idDaRua(paciente, "Rua B");
+        Responsavel mae = responsavelDe(paciente, "30000000001");
+        Responsavel pai = responsavelDe(paciente, "30000000002");
+
+        PacientePatchRequestDTO dto = new PacientePatchRequestDTO();
+        dto.setEnderecos(List.of(comId(endereco("18000001", "Rua A Nova", "11"), idRuaA), comId(RUA_B, idRuaB)));
+        dto.setResponsaveis(List.of(
+                new ResponsavelVinculoPatchDTO(mae.getIdCadastro(), GrauParentesco.MAE, null, List.of(0)),
+                new ResponsavelVinculoPatchDTO(pai.getIdCadastro(), GrauParentesco.PAI, null, List.of(1))));
+        pacienteService.atualizar(paciente.getIdCadastro(), dto);
+
+        assertThat(ids(paciente)).containsExactly(idRuaA, idRuaB);
+        assertThat(ids(mae)).containsExactly(idRuaA);
+        assertThat(ids(pai)).containsExactly(idRuaB);
+        assertThat(mae.getEnderecos().get(0).getRua()).isEqualTo("Rua A Nova");
+        assertThat(mae.getEnderecos().get(0).getNumero()).isEqualTo("11");
+    }
+
+    @Test
+    void maeMarcadaSemResidenciaFicaNoEnderecoAntigoESemConflito() {
+        Paciente paciente = pacienteService.cadastrar(cadastroComEnderecos("20000000001", List.of(RUA_A, RUA_B),
+                responsavelComIndices("30000000001", List.of(0)),
+                responsavelComIndices("30000000002", List.of(1))));
+        Long idRuaA = idDaRua(paciente, "Rua A");
+        Long idRuaB = idDaRua(paciente, "Rua B");
+        Responsavel mae = responsavelDe(paciente, "30000000001");
+        Responsavel pai = responsavelDe(paciente, "30000000002");
+
+        PacientePatchRequestDTO dto = new PacientePatchRequestDTO();
+        dto.setEnderecos(List.of(comId(endereco("18000001", "Rua A Nova", "11"), idRuaA), comId(RUA_B, idRuaB)));
+        dto.setResponsaveis(List.of(
+                new ResponsavelVinculoPatchDTO(mae.getIdCadastro(), GrauParentesco.MAE, null, List.of()),
+                new ResponsavelVinculoPatchDTO(pai.getIdCadastro(), GrauParentesco.PAI, null, List.of(1))));
+        pacienteService.atualizar(paciente.getIdCadastro(), dto);
+
+        assertThat(ids(paciente)).doesNotContain(idRuaA).contains(idRuaB).hasSize(2);
+        assertThat(ids(mae)).containsExactly(idRuaA);
+        assertThat(mae.getEnderecos().get(0).getNumero()).isEqualTo("10");
+        assertThat(vinculoDe(paciente, mae).isResideComPaciente()).isFalse();
+        assertThat(vinculoDe(paciente, pai).isResideComPaciente()).isTrue();
+    }
+
+    @Test
+    void soOsMoradoresDeForaDoPacienteContamNoConflito() {
+        Paciente ana = pacienteService.cadastrar(cadastroComEnderecos("20000000001", List.of(RUA_A),
+                responsavelComIndices("30000000001", List.of(0))));
+        pacienteService.cadastrar(cadastro("20000000002", RUA_A, responsavelNovo("30000000009", true, null)));
+        Long idRuaA = idDaRua(ana, "Rua A");
+        Responsavel mae = responsavelDe(ana, "30000000001");
+
+        PacientePatchRequestDTO dto = new PacientePatchRequestDTO();
+        dto.setEnderecos(List.of(comId(endereco("18000001", "Rua A Nova", "11"), idRuaA)));
+        dto.setResponsaveis(List.of(
+                new ResponsavelVinculoPatchDTO(mae.getIdCadastro(), GrauParentesco.MAE, null, List.of(0))));
+
+        assertThatThrownBy(() -> pacienteService.atualizar(ana.getIdCadastro(), dto))
+                .isInstanceOf(EnderecoCompartilhadoException.class)
+                .extracting(excecao -> ((EnderecoCompartilhadoException) excecao).getEnderecos())
+                .isEqualTo(List.of(new EnderecoCompartilhado(idRuaA, 1)));
+    }
+
+    @Test
+    void removerOEnderecoDoPacienteRemoveQuemMoravaNele() {
+        Paciente paciente = pacienteService.cadastrar(cadastroComEnderecos("20000000001", List.of(RUA_A, RUA_B),
+                responsavelComIndices("30000000001", List.of(0)),
+                responsavelComIndices("30000000002", List.of(1))));
+        Long idRuaA = idDaRua(paciente, "Rua A");
+        Long idRuaB = idDaRua(paciente, "Rua B");
+        Responsavel mae = responsavelDe(paciente, "30000000001");
+        Responsavel pai = responsavelDe(paciente, "30000000002");
+
+        PacientePatchRequestDTO dto = new PacientePatchRequestDTO();
+        dto.setEnderecos(List.of(comId(RUA_A, idRuaA)));
+        dto.setResponsaveis(List.of(
+                new ResponsavelVinculoPatchDTO(mae.getIdCadastro(), GrauParentesco.MAE, null, List.of(0)),
+                new ResponsavelVinculoPatchDTO(pai.getIdCadastro(), GrauParentesco.PAI, null, List.of())));
+        pacienteService.atualizar(paciente.getIdCadastro(), dto);
+
+        assertThat(ids(paciente)).containsExactly(idRuaA);
+        assertThat(ids(mae)).containsExactly(idRuaA);
+        assertThat(ids(pai)).isEmpty();
+        assertThat(vinculoDe(paciente, pai).isResideComPaciente()).isFalse();
+        entityManager.flush();
+        assertThat(entityManager.find(Endereco.class, idRuaB)).isNull();
+    }
+
+    @Test
+    void enderecoNovoDoPacienteJaLigaQuemFoiMarcadoNele() {
+        Paciente paciente = pacienteService.cadastrar(cadastroComEnderecos("20000000001", List.of(RUA_A),
+                responsavelComIndices("30000000001", List.of(0)),
+                responsavelComIndices("30000000002", List.of(0))));
+        Long idRuaA = idDaRua(paciente, "Rua A");
+        Responsavel mae = responsavelDe(paciente, "30000000001");
+        Responsavel pai = responsavelDe(paciente, "30000000002");
+
+        PacientePatchRequestDTO dto = new PacientePatchRequestDTO();
+        dto.setEnderecos(List.of(comId(RUA_A, idRuaA), RUA_B));
+        dto.setResponsaveis(List.of(
+                new ResponsavelVinculoPatchDTO(mae.getIdCadastro(), GrauParentesco.MAE, null, List.of(0)),
+                new ResponsavelVinculoPatchDTO(pai.getIdCadastro(), GrauParentesco.PAI, null, List.of(0, 1))));
+        pacienteService.atualizar(paciente.getIdCadastro(), dto);
+
+        assertThat(ids(paciente)).hasSize(2);
+        assertThat(ids(mae)).containsExactly(idRuaA);
+        assertThat(ids(pai)).isEqualTo(ids(paciente));
+    }
+
+    @Test
+    void indicesSemOsEnderecosNoRequestSaoRecusados() {
         Paciente paciente = pacienteService.cadastrar(cadastro("20000000001", RUA_A,
                 responsavelNovo("30000000001", false, null)));
         Responsavel mae = responsavelDe(paciente, "30000000001");
-        entityManager.flush();
-        entityManager.clear();
 
-        ResponsavelPatchRequestDTO dto = new ResponsavelPatchRequestDTO();
-        dto.setEnderecos(List.of(RUA_B));
-        responsavelService.atualizar(mae.getIdCadastro(), dto);
-        entityManager.flush();
-        entityManager.clear();
+        PacientePatchRequestDTO dto = new PacientePatchRequestDTO();
+        dto.setResponsaveis(List.of(
+                new ResponsavelVinculoPatchDTO(mae.getIdCadastro(), GrauParentesco.MAE, null, List.of(0))));
+        assertThatThrownBy(() -> pacienteService.atualizar(paciente.getIdCadastro(), dto))
+                .isInstanceOf(CampoInvalidoException.class);
+    }
 
-        Paciente atual = entityManager.find(Paciente.class, paciente.getIdCadastro());
-        assertThat(atual.getResponsaveis().get(0).isResideComPaciente()).isFalse();
-        assertThat(atual.getEnderecos()).extracting(Endereco::getRua).containsExactly("Rua A");
+    @Test
+    void responsavelSemNenhumaInformacaoDeResidenciaFalhaNaValidacaoDoCorpo() {
+        ResponsavelCadastroRequestDTO sem = responsavelNovo("30000000001", false, null);
+        sem.setNaoResideComPaciente(null);
+        jakarta.validation.Validator validador = jakarta.validation.Validation.buildDefaultValidatorFactory()
+                .getValidator();
+
+        // (o CPF fictício do teste também é inválido; aqui importa só o campo novo)
+        assertThat(validador.validate(sem)).extracting(violacao -> violacao.getPropertyPath().toString())
+                .contains("residenciaInformada");
+
+        sem.setIndicesEnderecoResidencia(List.of());
+        assertThat(validador.validate(sem)).extracting(violacao -> violacao.getPropertyPath().toString())
+                .doesNotContain("residenciaInformada");
+    }
+
+    @Test
+    void indiceForaDaListaDeEnderecosERecusado() {
+        assertThatThrownBy(() -> pacienteService.cadastrar(cadastroComEnderecos("20000000001", List.of(RUA_A),
+                responsavelComIndices("30000000001", List.of(1)))))
+                .isInstanceOf(CampoInvalidoException.class)
+                .extracting("campo").isEqualTo("responsaveis[0].indicesEnderecoResidencia");
+    }
+
+    @Test
+    void responsavelAdicionadoPorIdsDeEnderecoMoraSoNeles() {
+        Paciente paciente = pacienteService.cadastrar(cadastroComEnderecos("20000000001", List.of(RUA_A, RUA_B),
+                responsavelComIndices("30000000001", List.of(0, 1))));
+        Long idRuaB = idDaRua(paciente, "Rua B");
+
+        ResponsavelCadastroRequestDTO pai = responsavelNovo("30000000002", false, null);
+        pai.setNaoResideComPaciente(null);
+        pai.setIdsEnderecoResidencia(List.of(idRuaB));
+        pacienteService.adicionarResponsavel(paciente.getIdCadastro(), pai);
+
+        assertThat(ids(responsavelDe(paciente, "30000000002"))).containsExactly(idRuaB);
+        assertThat(ids(responsavelDe(paciente, "30000000001"))).isEqualTo(ids(paciente));
+    }
+
+    @Test
+    void idDeEnderecoQueNaoEDoPacienteERecusado() {
+        Paciente paciente = pacienteService.cadastrar(cadastro("20000000001", RUA_A,
+                responsavelNovo("30000000001", false, null)));
+        Paciente outro = pacienteService.cadastrar(cadastro("20000000002", RUA_B,
+                responsavelNovo("30000000003", false, null)));
+
+        ResponsavelCadastroRequestDTO pai = responsavelNovo("30000000002", false, null);
+        pai.setNaoResideComPaciente(null);
+        pai.setIdsEnderecoResidencia(ids(outro));
+        assertThatThrownBy(() -> pacienteService.adicionarResponsavel(paciente.getIdCadastro(), pai))
+                .isInstanceOf(CampoInvalidoException.class)
+                .extracting("campo").isEqualTo("idsEnderecoResidencia");
+    }
+
+    @Test
+    void naoResidenteComOEnderecoDoPacienteERecusado() {
+        assertThatThrownBy(() -> pacienteService.cadastrar(cadastro("20000000001", RUA_A,
+                responsavelNovo("30000000001", true, RUA_A))))
+                .isInstanceOf(CampoInvalidoException.class)
+                .hasMessage("Este é um endereço do paciente. Para morar nele, marque que reside.");
+    }
+
+    @Test
+    void naoResidenteComMaisDeUmEnderecoProprioERecusado() {
+        ResponsavelCadastroRequestDTO mae = responsavelNovo("30000000001", true, null);
+        mae.setEnderecos(List.of(RUA_B, endereco("18000003", "Rua C", "30")));
+        assertThatThrownBy(() -> pacienteService.cadastrar(cadastro("20000000001", RUA_A, mae)))
+                .isInstanceOf(CampoInvalidoException.class)
+                .extracting("campo").isEqualTo("enderecos");
+    }
+
+    // ---------- B1: endereços pelo cadastro do responsável (RN08) ----------
+
+    @Test
+    void responsavelNaoAlteraPeloSeuCadastroUmEnderecoQueETambemDePaciente() {
+        Paciente paciente = pacienteService.cadastrar(cadastro("20000000001", RUA_A,
+                responsavelNovo("30000000001", false, null)));
+        Responsavel mae = responsavelDe(paciente, "30000000001");
+        Long idRuaA = ids(paciente).get(0);
+
+        ResponsavelPatchRequestDTO alterado = new ResponsavelPatchRequestDTO();
+        alterado.setEnderecos(List.of(comId(endereco("18000001", "Rua A Nova", "10"), idRuaA)));
+        assertThatThrownBy(() -> responsavelService.atualizar(mae.getIdCadastro(), alterado))
+                .isInstanceOf(CampoInvalidoException.class)
+                .hasMessage("Este endereço também é de um paciente. Altere pela edição do paciente.");
+
+        ResponsavelPatchRequestDTO substituido = new ResponsavelPatchRequestDTO();
+        substituido.setEnderecos(List.of(RUA_B));
+        assertThatThrownBy(() -> responsavelService.atualizar(mae.getIdCadastro(), substituido))
+                .isInstanceOf(CampoInvalidoException.class)
+                .hasMessage("Este endereço também é de um paciente. Altere pela edição do paciente.");
+
+        ResponsavelPatchRequestDTO igual = new ResponsavelPatchRequestDTO();
+        igual.setEnderecos(List.of(comId(RUA_A, idRuaA)));
+        responsavelService.atualizar(mae.getIdCadastro(), igual);
+        assertThat(ids(mae)).containsExactly(idRuaA);
+        assertThat(vinculoDe(paciente, mae).isResideComPaciente()).isTrue();
+    }
+
+    @Test
+    void responsavelQueNaoResideTrocaOEnderecoProprioPeloSeuCadastroMasSoTemUm() {
+        Paciente paciente = pacienteService.cadastrar(cadastro("20000000001", RUA_A,
+                responsavelNovo("30000000001", true, RUA_B)));
+        Responsavel mae = responsavelDe(paciente, "30000000001");
+
+        ResponsavelPatchRequestDTO troca = new ResponsavelPatchRequestDTO();
+        troca.setEnderecos(List.of(endereco("18000003", "Rua C", "30")));
+        responsavelService.atualizar(mae.getIdCadastro(), troca);
+        assertThat(mae.getEnderecos()).extracting(Endereco::getRua).containsExactly("Rua C");
+
+        ResponsavelPatchRequestDTO dois = new ResponsavelPatchRequestDTO();
+        dois.setEnderecos(List.of(RUA_B, endereco("18000004", "Rua D", "40")));
+        assertThatThrownBy(() -> responsavelService.atualizar(mae.getIdCadastro(), dois))
+                .isInstanceOf(CampoInvalidoException.class);
     }
 
     // ---------- Apoio ----------
+
+    private static PacienteCadastroRequestDTO cadastroComEnderecos(String cpf, List<EnderecoDTO> enderecos,
+            ResponsavelCadastroRequestDTO... responsaveis) {
+        PacienteCadastroRequestDTO dto = cadastro(cpf, null, responsaveis);
+        dto.setEnderecos(enderecos);
+        return dto;
+    }
+
+    // Formato novo: sem naoResideComPaciente
+    private static ResponsavelCadastroRequestDTO responsavelComIndices(String cpf, List<Integer> indices) {
+        ResponsavelCadastroRequestDTO dto = responsavelNovo(cpf, false, null);
+        dto.setNaoResideComPaciente(null);
+        dto.setIndicesEnderecoResidencia(indices);
+        return dto;
+    }
+
+    private static EnderecoDTO comId(EnderecoDTO base, Long id) {
+        return new EnderecoDTO(id, base.getCep(), base.getRua(), base.getNumero(), base.getComplemento(),
+                base.getBairro(), base.getCidade(), base.getEstado(), null);
+    }
+
+    private static Long idDaRua(Paciente paciente, String rua) {
+        return paciente.getEnderecos().stream()
+                .filter(endereco -> endereco.getRua().equals(rua))
+                .findFirst()
+                .orElseThrow()
+                .getIdEndereco();
+    }
 
     private static PacienteCadastroRequestDTO cadastro(String cpf, EnderecoDTO endereco,
             ResponsavelCadastroRequestDTO... responsaveis) {
