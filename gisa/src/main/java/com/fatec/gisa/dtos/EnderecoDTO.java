@@ -1,5 +1,7 @@
 package com.fatec.gisa.dtos;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,6 +11,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class EnderecoDTO {
+
+    // Resposta: sempre. Request: ausente = endereço novo; presente = um endereço atual da pessoa
+    private Long idEndereco;
 
     @NotBlank(message = "O CEP é obrigatório")
     private String cep;
@@ -29,4 +34,14 @@ public class EnderecoDTO {
 
     @NotBlank(message = "O estado é obrigatório")
     private String estado;
+
+    // Só no request: se a alteração de um endereço que outros cadastros também usam vale para eles
+    // (true) ou só para quem está sendo editado (false). Ver EnderecoService.sincronizar
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private Boolean alterarParaTodos;
+
+    public EnderecoDTO(String cep, String rua, String numero, String complemento, String bairro, String cidade,
+            String estado) {
+        this(null, cep, rua, numero, complemento, bairro, cidade, estado, null);
+    }
 }

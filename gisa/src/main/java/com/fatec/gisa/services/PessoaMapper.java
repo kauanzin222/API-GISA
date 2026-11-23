@@ -1,5 +1,6 @@
 package com.fatec.gisa.services;
 
+import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.stereotype.Component;
@@ -26,6 +27,9 @@ public class PessoaMapper {
         List<EnderecoDTO> enderecos = pessoa.getEnderecos() == null
                 ? List.of()
                 : pessoa.getEnderecos().stream()
+                        // O primeiro (menor ID) é o principal; List de @ManyToMany não garante ordem
+                        .sorted(Comparator.comparing(Endereco::getIdEndereco,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
                         .map(this::toEnderecoDTO)
                         .toList();
 
@@ -44,12 +48,14 @@ public class PessoaMapper {
 
     private EnderecoDTO toEnderecoDTO(Endereco endereco) {
         return new EnderecoDTO(
+                endereco.getIdEndereco(),
                 endereco.getCep(),
                 endereco.getRua(),
                 endereco.getNumero(),
                 endereco.getComplemento(),
                 endereco.getBairro(),
                 endereco.getCidade(),
-                endereco.getEstado());
+                endereco.getEstado(),
+                null);
     }
 }

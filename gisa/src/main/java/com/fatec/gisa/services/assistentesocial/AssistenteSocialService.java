@@ -24,6 +24,7 @@ import com.fatec.gisa.repositories.paciente.PacienteRepository;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.services.BuscaPorIds;
 import com.fatec.gisa.services.endereco.EnderecoService;
+import com.fatec.gisa.services.endereco.Moradia;
 import com.fatec.gisa.services.paciente.PacienteService;
 import com.fatec.gisa.services.profissional.ProfissionalMapper;
 import com.fatec.gisa.services.profissional.ProfissionalService;
@@ -60,7 +61,7 @@ public class AssistenteSocialService {
         profissionalMapper.preencherProfissional(assistenteSocial, dto, cargo);
         assistenteSocial.setRegistroConselho(dto.getRegistroConselho());
         AssistenteSocial salvo = assistenteSocialRepository.save(assistenteSocial);
-        enderecoService.associarEnderecos(salvo, dto.getEnderecos());
+        enderecoService.sincronizar(salvo, dto.getEnderecos(), Moradia.sozinho());
 
         LocalDate hoje = LocalDate.now(relogio);
         vinculoAssistenteSocialRepository.saveAll(pacientes.stream()

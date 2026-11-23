@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fatec.gisa.dtos.PessoaPatchRequestDTO;
 import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.services.endereco.EnderecoService;
+import com.fatec.gisa.services.endereco.Moradia;
 
 import lombok.RequiredArgsConstructor;
 
@@ -19,6 +20,12 @@ public class PessoaService {
     // Aplica só os campos enviados; os opcionais podem ser limpos com null
     @Transactional
     public void aplicarAlteracoes(Pessoa pessoa, PessoaPatchRequestDTO dto) {
+        aplicarAlteracoes(pessoa, dto, Moradia.sozinho());
+    }
+
+    // moradia: quem acompanha a pessoa quando ela altera um endereço (ex.: responsáveis que residem com o paciente)
+    @Transactional
+    public void aplicarAlteracoes(Pessoa pessoa, PessoaPatchRequestDTO dto, Moradia moradia) {
         if (dto.hasField("nome")) {
             if (dto.getNome() == null || dto.getNome().isBlank()) {
                 throw new IllegalArgumentException("O nome não pode ser vazio.");
@@ -54,7 +61,7 @@ public class PessoaService {
             if (semEndereco && enderecoService.temEndereco(pessoa)) {
                 throw new IllegalArgumentException("O endereço não pode ser removido, apenas alterado.");
             }
-            enderecoService.substituirEnderecos(pessoa, dto.getEnderecos());
+            enderecoService.sincronizar(pessoa, dto.getEnderecos(), moradia);
         }
     }
 }

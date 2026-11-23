@@ -32,7 +32,9 @@ import com.fatec.gisa.dtos.paciente.response.InativacaoPacienteDTO;
 import com.fatec.gisa.dtos.paciente.response.PacienteBuscaDTO;
 import com.fatec.gisa.dtos.paciente.response.ProntuarioResponseDTO;
 import com.fatec.gisa.dtos.paciente.response.ResponsavelVinculoResponseDTO;
+import com.fatec.gisa.dtos.EnderecoDTO;
 import com.fatec.gisa.entities.Endereco;
+import com.fatec.gisa.entities.Pessoa;
 import com.fatec.gisa.entities.paciente.Paciente;
 import com.fatec.gisa.entities.paciente.Cid;
 import com.fatec.gisa.entities.paciente.Escola;
@@ -48,10 +50,12 @@ import com.fatec.gisa.repositories.assistentesocial.VinculoAssistenteSocialRepos
 import com.fatec.gisa.repositories.paciente.PacienteRepository;
 import com.fatec.gisa.repositories.paciente.ResponsavelRepository;
 import com.fatec.gisa.repositories.paciente.VinculoResponsavelRepository;
+import com.fatec.gisa.exceptions.CampoInvalidoException;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.services.PessoaMapper;
 import com.fatec.gisa.services.PessoaService;
 import com.fatec.gisa.services.endereco.EnderecoService;
+import com.fatec.gisa.services.endereco.Moradia;
 import com.fatec.gisa.services.terapia.TerapiaService;
 
 import lombok.RequiredArgsConstructor;
@@ -212,7 +216,7 @@ public class PacienteService {
         DadosParaHistorico antes = DadosParaHistorico.de(paciente, pessoaMapper);
         Set<Long> enderecosAntes = idsDosEnderecos(paciente);
 
-        pessoaService.aplicarAlteracoes(paciente, dto);
+        pessoaService.aplicarAlteracoes(paciente, dto, moradiaDosResponsaveis(paciente, dto));
 
         if (dto.hasField("statusPaciente")) {
             if (dto.getStatusPaciente() == null) {
@@ -272,6 +276,44 @@ public class PacienteService {
         }
     }
 
+    // Ao alterar um endereço, quem reside com o paciente vai junto e quem foi desmarcado como residente
+    // (neste mesmo request) fica no endereço antigo. Os dois casos não contam como "outros cadastros" no 409
+    private static Moradia moradiaDosResponsaveis(Paciente paciente, PacientePatchRequestDTO dto) {
+        Map<Long, Boolean> resideNoRequest = new HashMap<>();
+        if (dto.hasField("responsaveis") && dto.getResponsaveis() != null) {
+            dto.getResponsaveis().stream()
+                    .filter(vinculo -> vinculo.resideComPaciente() != null)
+                    .forEach(vinculo -> resideNoRequest.put(vinculo.idResponsavel(), vinculo.resideComPaciente()));
+        }
+        Map<Long, Boolean> reside = new HashMap<>();
+        if (paciente.getResponsaveis() != null) {
+            for (VinculoResponsavel vinculo : paciente.getResponsaveis()) {
+                Long id = vinculo.getResponsavel().getIdCadastro();
+                reside.put(id, resideNoRequest.getOrDefault(id, vinculo.isResideComPaciente()));
+            }
+        }
+
+        return new Moradia() {
+            @Override
+            public Set<Pessoa> acompanhantes(Endereco linha) {
+                return moradores(linha, true);
+            }
+
+            @Override
+            public Set<Pessoa> ficam(Endereco linha) {
+                return moradores(linha, false);
+            }
+
+            private Set<Pessoa> moradores(Endereco linha, boolean resideComPaciente) {
+                return linha.getMoradores() == null ? Set.of()
+                        : linha.getMoradores().stream()
+                                .filter(morador -> Objects.equals(reside.get(morador.getIdCadastro()),
+                                        resideComPaciente))
+                                .collect(Collectors.toSet());
+            }
+        };
+    }
+
     private static Set<Long> idsDosEnderecos(Paciente paciente) {
         return paciente.getEnderecos() == null
                 ? Set.of()
@@ -292,6 +334,10 @@ public class PacienteService {
         if (!alterados.isEmpty()) {
             historicoPacienteService.registrar(paciente, TipoEventoPaciente.DADOS_ALTERADOS,
                     "Dados do cadastro alterados: " + TextoHistorico.lista(alterados) + ".");
+        }
+        // O endereço em si não vai para o histórico
+        if (!antes.enderecos().equals(depois.enderecos())) {
+            historicoPacienteService.registrar(paciente, TipoEventoPaciente.ENDERECO_ALTERADO, "Endereço alterado.");
         }
 
         depois.responsaveis().forEach((idResponsavel, vinculo) -> {
@@ -384,6 +430,10 @@ public class PacienteService {
         if (pessoaRepository.existsByCpf(dto.getCpf())) {
             throw new IllegalArgumentException("CPF já cadastrado.");
         }
+        // Pacientes antigos sem endereço continuam válidos; o PATCH não aceita esvaziar a lista
+        if (dto.getEnderecos() == null || dto.getEnderecos().isEmpty()) {
+            throw new CampoInvalidoException("enderecos", "Informe ao menos um endereço.");
+        }
 
         Paciente paciente = new Paciente();
         pessoaMapper.preencherPessoa(paciente, dto);
@@ -395,7 +445,7 @@ public class PacienteService {
         paciente.setProntuario(prontuarioService.criar(dto.getProntuario(), paciente));
 
         Paciente pacienteSalvo = pacienteRepository.save(paciente);
-        enderecoService.associarEnderecos(pacienteSalvo, dto.getEnderecos());
+        enderecoService.sincronizar(pacienteSalvo, dto.getEnderecos(), Moradia.sozinho());
 
         List<VinculoResponsavel> vinculos = new ArrayList<>();
         var cpfsResponsaveis = new LinkedHashSet<String>();
@@ -434,6 +484,7 @@ public class PacienteService {
             StatusCadastro statusCadastro,
             StatusPaciente statusPaciente,
             Map<String, Object> campos,
+            Set<EnderecoDTO> enderecos,
             Map<Long, VinculoParaHistorico> responsaveis) {
 
         static DadosParaHistorico de(Paciente paciente, PessoaMapper pessoaMapper) {
@@ -443,7 +494,6 @@ public class PacienteService {
             campos.put("celular", paciente.getCelular());
             campos.put("CNS", paciente.getNumCNS());
             campos.put("estado civil", paciente.getEstadoCivil());
-            campos.put("endereços", new HashSet<>(pessoaMapper.toPessoaResponseDTO(paciente).enderecos()));
             campos.put("convênio", paciente.getConvenio());
             campos.put("escola", paciente.getEscola() == null ? null : paciente.getEscola().getIdEscola());
             Prontuario prontuario = paciente.getProntuario();
@@ -461,7 +511,8 @@ public class PacienteService {
                                 vinculo.isResideComPaciente())));
             }
             return new DadosParaHistorico(
-                    paciente.getStatusCadastro(), paciente.getStatusPaciente(), campos, responsaveis);
+                    paciente.getStatusCadastro(), paciente.getStatusPaciente(), campos,
+                    new HashSet<>(pessoaMapper.toPessoaResponseDTO(paciente).enderecos()), responsaveis);
         }
 
         List<String> camposAlterados(DadosParaHistorico depois) {

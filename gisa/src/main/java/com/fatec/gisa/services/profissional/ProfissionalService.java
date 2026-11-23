@@ -30,6 +30,7 @@ import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.repositories.profissional.ProfissionalRepository;
 import com.fatec.gisa.services.PessoaService;
 import com.fatec.gisa.services.endereco.EnderecoService;
+import com.fatec.gisa.services.endereco.Moradia;
 import com.fatec.gisa.services.usuario.PermissaoUsuarioLogado;
 import com.fatec.gisa.services.usuario.UsuarioService;
 
@@ -62,7 +63,7 @@ public class ProfissionalService {
         profissionalMapper.preencherProfissional(profissional, dto, cargo);
 
         Profissional profissionalSalvo = profissionalRepository.save(profissional);
-        enderecoService.associarEnderecos(profissionalSalvo, dto.getEnderecos());
+        enderecoService.sincronizar(profissionalSalvo, dto.getEnderecos(), Moradia.sozinho());
         return profissionalSalvo;
     }
 

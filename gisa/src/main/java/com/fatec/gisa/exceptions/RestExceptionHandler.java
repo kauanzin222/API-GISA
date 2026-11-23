@@ -129,6 +129,15 @@ public class RestExceptionHandler {
         return response(HttpStatus.BAD_REQUEST, "Corpo da requisição inválido ou malformado.", request, Map.of());
     }
 
+    // Regra de negócio de um campo do request: o campo vai em "fields"
+    @ExceptionHandler(CampoInvalidoException.class)
+    public ResponseEntity<ApiErrorResponse> handleCampoInvalido(
+            CampoInvalidoException exception,
+            HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, exception.getMessage(), request,
+                Map.of(exception.getCampo(), exception.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiErrorResponse> handleIllegalArgument(
             IllegalArgumentException exception,
@@ -150,6 +159,24 @@ public class RestExceptionHandler {
             TerapiasForaDaJornadaException exception,
             HttpServletRequest request) {
         return conflito(exception, request, null, exception.getTerapias());
+    }
+
+    // Alteração de endereço usado também por outros cadastros: o front pergunta se vale para eles
+    @ExceptionHandler(EnderecoCompartilhadoException.class)
+    public ResponseEntity<ApiConflitoResponse> handleEnderecoCompartilhado(
+            EnderecoCompartilhadoException exception,
+            HttpServletRequest request) {
+        HttpStatus status = HttpStatus.CONFLICT;
+        return ResponseEntity.status(status).body(new ApiConflitoResponse(
+                Instant.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                exception.getMessage(),
+                request.getRequestURI(),
+                Map.of(),
+                null,
+                null,
+                exception.getEnderecos()));
     }
 
     private ResponseEntity<ApiConflitoResponse> conflito(ConflitoException exception, HttpServletRequest request,

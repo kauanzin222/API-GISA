@@ -1,7 +1,5 @@
 package com.fatec.gisa.services.paciente;
 
-import java.util.List;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -25,6 +23,7 @@ import com.fatec.gisa.repositories.usuario.UsuarioRepository;
 import com.fatec.gisa.services.PessoaMapper;
 import com.fatec.gisa.services.PessoaService;
 import com.fatec.gisa.services.endereco.EnderecoService;
+import com.fatec.gisa.services.endereco.Moradia;
 
 import lombok.RequiredArgsConstructor;
 
@@ -69,7 +68,7 @@ public class ResponsavelService {
         responsavel.setOcupacao(dto.getOcupacao());
         Responsavel responsavelSalvo = responsavelRepository.save(responsavel);
         if (Boolean.TRUE.equals(dto.getNaoResideComPaciente())) {
-            enderecoService.associarEnderecos(responsavelSalvo, dto.getEnderecos());
+            enderecoService.sincronizar(responsavelSalvo, dto.getEnderecos(), Moradia.sozinho());
         }
         return responsavelSalvo;
     }
@@ -166,7 +165,7 @@ public class ResponsavelService {
                 continue;
             }
 
-            enderecoService.substituirEnderecos(responsavel, List.of());
+            enderecoService.desvincularTodos(responsavel);
             responsavelRepository.delete(responsavel);
         }
     }

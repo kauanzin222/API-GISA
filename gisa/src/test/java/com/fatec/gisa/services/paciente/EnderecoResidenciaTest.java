@@ -29,10 +29,12 @@ import com.fatec.gisa.entities.paciente.VinculoResponsavel;
 import com.fatec.gisa.enums.EstadoCivil;
 import com.fatec.gisa.enums.GrauParentesco;
 import com.fatec.gisa.enums.TipoEventoPaciente;
+import com.fatec.gisa.exceptions.CampoInvalidoException;
+import com.fatec.gisa.services.endereco.EnderecoService;
 
 import jakarta.persistence.EntityManager;
 
-// Endereço opcional no cadastro, responsáveis que residem com o paciente e endereços compartilhados
+// Endereço obrigatório no cadastro do paciente, responsáveis que residem com o paciente e endereços compartilhados
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:endereco-residencia;MODE=PostgreSQL",
         "spring.datasource.username=sa",
@@ -57,19 +59,20 @@ class EnderecoResidenciaTest {
     private HistoricoPacienteService historicoPacienteService;
 
     @Autowired
+    private EnderecoService enderecoService;
+
+    @Autowired
     private EntityManager entityManager;
 
     // ---------- Cadastro ----------
 
     @Test
-    void cadastroSemEnderecoComResponsavelQueReside() {
-        Paciente paciente = pacienteService.cadastrar(cadastro("20000000001", null,
-                responsavelNovo("30000000001", false, null)));
-
-        assertThat(paciente.getEnderecos()).isEmpty();
-        VinculoResponsavel vinculo = paciente.getResponsaveis().get(0);
-        assertThat(vinculo.isResideComPaciente()).isTrue();
-        assertThat(vinculo.getResponsavel().getEnderecos()).isNullOrEmpty();
+    void cadastroDePacienteSemEnderecoERecusado() {
+        assertThatThrownBy(() -> pacienteService.cadastrar(cadastro("20000000001", null,
+                responsavelNovo("30000000001", false, null))))
+                .isInstanceOf(CampoInvalidoException.class)
+                .hasMessage("Informe ao menos um endereço.")
+                .extracting("campo").isEqualTo("enderecos");
     }
 
     @Test
@@ -113,7 +116,7 @@ class EnderecoResidenciaTest {
 
     @Test
     void responsavelExistenteSemEnderecoRecebeODoPaciente() {
-        pacienteService.cadastrar(cadastro("20000000001", null, responsavelNovo("30000000001", false, null)));
+        pacienteService.cadastrar(cadastro("20000000001", RUA_B, responsavelNovo("30000000001", true, null)));
 
         Paciente outro = pacienteService.cadastrar(cadastro("20000000002", RUA_A,
                 responsavelNovo("30000000001", false, null)));
@@ -143,7 +146,10 @@ class EnderecoResidenciaTest {
         assertThat(ids(mae)).isEqualTo(ids(paciente)).doesNotContain(idRuaA);
         assertThat(ids(pai)).containsExactly(idRuaA);
         assertThat(vinculoDe(paciente, pai).isResideComPaciente()).isFalse();
-        assertThat(ultimoEvento(paciente).descricao()).contains("endereços", "residência de " + pai.getNome());
+        assertThat(eventos(paciente)).extracting(EventoPacienteDTO::descricao)
+                .contains("Endereço alterado.")
+                .anySatisfy(descricao -> assertThat(descricao).startsWith("Dados do cadastro alterados:")
+                        .contains("residência de " + pai.getNome()).doesNotContain("endereços"));
     }
 
     @Test
@@ -176,9 +182,11 @@ class EnderecoResidenciaTest {
     }
 
     @Test
-    void pacienteSemEnderecoPodeContinuarSemEndereco() {
-        Paciente paciente = pacienteService.cadastrar(cadastro("20000000001", null,
-                responsavelNovo("30000000001", false, null)));
+    void pacienteAntigoSemEnderecoPodeContinuarSemEndereco() {
+        Paciente paciente = pacienteService.cadastrar(cadastro("20000000001", RUA_A,
+                responsavelNovo("30000000001", true, null)));
+        // Cadastro anterior à obrigatoriedade do endereço
+        enderecoService.desvincularTodos(paciente);
 
         PacientePatchRequestDTO dto = new PacientePatchRequestDTO();
         dto.setEnderecos(List.of());
@@ -313,6 +321,11 @@ class EnderecoResidenciaTest {
                 .filter(vinculo -> vinculo.getResponsavel().equals(responsavel))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private List<EventoPacienteDTO> eventos(Paciente paciente) {
+        return historicoPacienteService.listar(paciente.getIdCadastro(), null, null, null, PageRequest.of(0, 50))
+                .getContent();
     }
 
     private EventoPacienteDTO ultimoEvento(Paciente paciente) {

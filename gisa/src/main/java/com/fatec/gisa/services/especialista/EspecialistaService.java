@@ -19,6 +19,7 @@ import com.fatec.gisa.repositories.especialista.EspecialistaRepository;
 import com.fatec.gisa.repositories.especialista.EspecialistaPJRepository;
 import com.fatec.gisa.repositories.profissional.CargoRepository;
 import com.fatec.gisa.services.endereco.EnderecoService;
+import com.fatec.gisa.services.endereco.Moradia;
 import com.fatec.gisa.services.profissional.ProfissionalMapper;
 import com.fatec.gisa.services.profissional.ProfissionalService;
 import com.fatec.gisa.services.terapia.TerapiaService;
@@ -45,7 +46,7 @@ public class EspecialistaService {
         Especialista especialista = new Especialista();
         preencherDadosEspecialista(especialista, dto);
         Especialista especialistaSalvo = especialistaRepository.save(especialista);
-        enderecoService.associarEnderecos(especialistaSalvo, dto.getEnderecos());
+        enderecoService.sincronizar(especialistaSalvo, dto.getEnderecos(), Moradia.sozinho());
         return especialistaSalvo;
     }
 

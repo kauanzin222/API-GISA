@@ -5,6 +5,7 @@ public enum TipoEventoPaciente {
     // Cadastro e status
     CADASTRO,
     DADOS_ALTERADOS,
+    ENDERECO_ALTERADO,
     STATUS_PACIENTE_ALTERADO,
     INATIVADO,
     REATIVADO,

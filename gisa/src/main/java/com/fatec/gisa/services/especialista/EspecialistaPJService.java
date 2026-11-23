@@ -9,6 +9,7 @@ import com.fatec.gisa.entities.especialista.EspecialistaPJ;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.repositories.especialista.EspecialistaPJRepository;
 import com.fatec.gisa.services.endereco.EnderecoService;
+import com.fatec.gisa.services.endereco.Moradia;
 import com.fatec.gisa.services.profissional.ProfissionalMapper;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -53,7 +54,7 @@ public class EspecialistaPJService {
         pj.setInscricaoEstadual(dto.getInscricaoEstadual());
 
         EspecialistaPJ especialistaPJSaved = especialistaPJRepository.save(pj);
-        enderecoService.associarEnderecos(especialistaPJSaved, dto.getEnderecos());
+        enderecoService.sincronizar(especialistaPJSaved, dto.getEnderecos(), Moradia.sozinho());
         return especialistaPJSaved;
     }
 
