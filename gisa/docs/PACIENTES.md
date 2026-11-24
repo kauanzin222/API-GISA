@@ -623,6 +623,7 @@ Atualiza os dados pessoais do responsável (o vínculo com o paciente e o grau d
 ## Endereços e residência
 
 - **Endereço compartilhado:** `cep` + `numero` + `complemento` identificam o endereço. Quem mora no mesmo endereço aponta para o mesmo registro.
+- **Mais de um registro com a mesma chave** (quem escolheu "só para este cadastro" sem mudar CEP, número e complemento): um endereço enviado sem `idEndereco` usa, nesta ordem, o registro em que a pessoa já mora, um com os mesmos valores, ou o mais antigo. Quem se separa vai para um registro com os mesmos valores digitados ou para um novo.
 - **Correção:** enviar um endereço com a mesma chave e outros campos diferentes (rua, bairro, cidade, estado) corrige o registro para **todos** os moradores.
 - **Sem remoção:** o endereço é opcional no cadastro, mas, uma vez cadastrado, só é alterado. Ele só deixa de existir quando ninguém mais mora nele (a API exclui o registro sem moradores).
 - **Quem reside acompanha o paciente:** com `resideComPaciente = true`, os endereços do responsável são sempre os do paciente. Quando o endereço do paciente muda, os residentes vão junto. Para alguém ficar no endereço antigo, envie `resideComPaciente: false` para ele no mesmo PATCH.

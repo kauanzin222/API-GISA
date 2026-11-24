@@ -174,8 +174,8 @@ public class EnderecoService {
             if (id != null) {
                 item.linha = atuais.get(id);
             } else {
-                // Linhas já apontadas por outro item deste request não são reaproveitadas
-                item.linha = buscarPelaChave(item.dto, usadas).orElse(null);
+                // Linhas já apontadas por outro item deste request não são reaproveitadas; prefere a linha em que o dono já mora
+                item.linha = escolherLinha(item.dto, usadas, atuais).orElse(null);
                 if (item.linha != null) {
                     usadas.add(item.linha.getIdEndereco());
                 }
@@ -266,8 +266,9 @@ public class EnderecoService {
             return;
         }
 
-        // Nunca a própria linha: com a mesma chave (só rua ou bairro mudaram), a busca a devolveria
-        Endereco destino = buscarPelaChave(item.dto, Set.of(linha.getIdEndereco()))
+        // Quem muda vai para uma linha com os mesmos valores digitados, ou para uma nova; nunca para a própria
+        // linha nem para outra de mesma chave com outros valores (os valores digitados se perderiam)
+        Endereco destino = buscarComOsMesmosValores(item.dto, Set.of(linha.getIdEndereco()))
                 .orElseGet(() -> enderecoRepository.save(enderecoMapper.criarEndereco(item.dto)));
         for (Pessoa morador : new ArrayList<>(linha.getMoradores())) {
             if (mudam.contains(morador.getIdCadastro())) {
@@ -348,6 +349,34 @@ public class EnderecoService {
     private Optional<Endereco> buscarPelaChave(EnderecoDTO dto, Set<Long> ignorar) {
         return enderecoRepository.buscarPelaChave(dto.getCep(), dto.getNumero(), dto.getComplemento()).stream()
                 .filter(endereco -> !ignorar.contains(endereco.getIdEndereco()))
+                .findFirst();
+    }
+
+    // Item sem ID: a linha com a chave do item, na ordem de preferência: em que o dono já mora e com os mesmos
+    // valores; em que o dono já mora; com os mesmos valores; a mais antiga. Pode haver mais de uma linha com a
+    // mesma chave (quem se mudou sem mudar a chave), e a de outra pessoa só é tocada se o dono não mora em nenhuma
+    private Optional<Endereco> escolherLinha(EnderecoDTO dto, Set<Long> ignorar, Map<Long, Endereco> atuais) {
+        List<Endereco> candidatas = enderecoRepository
+                .buscarPelaChave(dto.getCep(), dto.getNumero(), dto.getComplemento()).stream()
+                .filter(endereco -> !ignorar.contains(endereco.getIdEndereco()))
+                .toList();
+        return candidatas.stream()
+                .filter(endereco -> atuais.containsKey(endereco.getIdEndereco()) && mesmosValores(dto, endereco))
+                .findFirst()
+                .or(() -> candidatas.stream()
+                        .filter(endereco -> atuais.containsKey(endereco.getIdEndereco()))
+                        .findFirst())
+                .or(() -> candidatas.stream()
+                        .filter(endereco -> mesmosValores(dto, endereco))
+                        .findFirst())
+                .or(() -> candidatas.stream().findFirst());
+    }
+
+    // Outra linha com a mesma chave e exatamente os mesmos valores do item (o mesmo lugar, nada a alterar)
+    private Optional<Endereco> buscarComOsMesmosValores(EnderecoDTO dto, Set<Long> ignorar) {
+        return enderecoRepository.buscarPelaChave(dto.getCep(), dto.getNumero(), dto.getComplemento()).stream()
+                .filter(endereco -> !ignorar.contains(endereco.getIdEndereco()))
+                .filter(endereco -> mesmosValores(dto, endereco))
                 .findFirst();
     }
 

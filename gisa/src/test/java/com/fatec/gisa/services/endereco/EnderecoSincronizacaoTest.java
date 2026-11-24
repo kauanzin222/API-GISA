@@ -18,6 +18,7 @@ import com.fatec.gisa.dtos.paciente.request.PacienteCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.PacientePatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ProntuarioCadastroRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelCadastroRequestDTO;
+import com.fatec.gisa.dtos.paciente.request.ResponsavelPatchRequestDTO;
 import com.fatec.gisa.dtos.paciente.request.ResponsavelVinculoPatchDTO;
 import com.fatec.gisa.dtos.paciente.response.EventoPacienteDTO;
 import com.fatec.gisa.entities.Endereco;
@@ -33,6 +34,7 @@ import com.fatec.gisa.exceptions.EnderecoCompartilhadoException.EnderecoComparti
 import com.fatec.gisa.services.PessoaMapper;
 import com.fatec.gisa.services.paciente.HistoricoPacienteService;
 import com.fatec.gisa.services.paciente.PacienteService;
+import com.fatec.gisa.services.paciente.ResponsavelService;
 
 import jakarta.persistence.EntityManager;
 
@@ -49,6 +51,7 @@ import jakarta.persistence.EntityManager;
 class EnderecoSincronizacaoTest {
 
     private static final EnderecoDTO RUA_A = endereco(null, "18000001", "Rua A", "10");
+    private static final EnderecoDTO RUA_A_NOVA = endereco(null, "18000001", "Rua A Nova", "10");
     private static final EnderecoDTO RUA_B = endereco(null, "18000002", "Rua B", "20");
     private static final EnderecoDTO RUA_C = endereco(null, "18000003", "Rua C", "30");
 
@@ -60,6 +63,9 @@ class EnderecoSincronizacaoTest {
 
     @Autowired
     private PessoaMapper pessoaMapper;
+
+    @Autowired
+    private ResponsavelService responsavelService;
 
     @Autowired
     private EntityManager entityManager;
@@ -201,6 +207,94 @@ class EnderecoSincronizacaoTest {
         assertThat(idsDe(ana)).isEqualTo(idsDe(bruno));
         entityManager.flush();
         assertThat(entityManager.find(Endereco.class, idRuaA)).isNull();
+    }
+
+    @Test
+    void itemSemIdPrefereALinhaEmQueOCadastroJaMora() {
+        Paciente ana = cadastrar("20000000001", RUA_A);
+        Paciente bruno = cadastrar("20000000002", RUA_A);
+        Long idR1 = idDe(ana);
+
+        EnderecoDTO separacao = comId(RUA_A_NOVA, idR1);
+        separacao.setAlterarParaTodos(false);
+        alterarEnderecos(ana, separacao);
+        Long idR2 = idDe(ana);
+
+        alterarEnderecos(ana, RUA_A_NOVA);
+
+        assertThat(idsDe(ana)).containsExactly(idR2);
+        assertThat(idsDe(bruno)).containsExactly(idR1);
+        assertThat(entityManager.find(Endereco.class, idR1).getRua()).isEqualTo("Rua A");
+    }
+
+    @Test
+    void itemSemIdDeQuemNaoMoraNaChavePrefereALinhaComOsMesmosValores() {
+        Paciente ana = cadastrar("20000000001", RUA_A);
+        Paciente bruno = cadastrar("20000000002", RUA_A);
+        Long idR1 = idDe(ana);
+
+        EnderecoDTO separacao = comId(RUA_A_NOVA, idR1);
+        separacao.setAlterarParaTodos(false);
+        alterarEnderecos(ana, separacao);
+        Long idR2 = idDe(ana);
+
+        Paciente carla = cadastrar("20000000003", RUA_A_NOVA);
+
+        assertThat(idsDe(carla)).containsExactly(idR2);
+        assertThat(idsDe(bruno)).containsExactly(idR1);
+        assertThat(entityManager.find(Endereco.class, idR1).getRua()).isEqualTo("Rua A");
+    }
+
+    @Test
+    void responsavelQueResideAtualizaOProprioEnderecoSemIdSem409() {
+        Paciente ana = cadastrar("20000000001", List.of(RUA_A), responsavel("30000000009", false));
+        Responsavel luana = ana.getResponsaveis().get(0).getResponsavel();
+        Paciente bruno = cadastrar("20000000002", RUA_A);
+        Long idR1 = idDe(ana);
+
+        EnderecoDTO separacao = comId(RUA_A_NOVA, idR1);
+        separacao.setAlterarParaTodos(false);
+        alterarEnderecos(ana, separacao);
+        Long idR2 = idDe(ana);
+        assertThat(idsDe(luana)).containsExactly(idR2);
+
+        ResponsavelPatchRequestDTO dto = new ResponsavelPatchRequestDTO();
+        dto.setEnderecos(List.of(RUA_A_NOVA));
+        responsavelService.atualizar(luana.getIdCadastro(), dto);
+
+        assertThat(idsDe(luana)).containsExactly(idR2);
+        assertThat(idsDe(ana)).containsExactly(idR2);
+        assertThat(idsDe(bruno)).containsExactly(idR1);
+    }
+
+    @Test
+    void separacaoVaiParaLinhaComOsMesmosValoresOuCriaUma() {
+        Paciente ana = cadastrar("20000000001", RUA_A);
+        Paciente bruno = cadastrar("20000000002", RUA_A);
+        Paciente carla = cadastrar("20000000003", RUA_A);
+        Paciente davi = cadastrar("20000000004", RUA_A);
+        Long idR1 = idDe(ana);
+
+        EnderecoDTO anaSeSepara = comId(RUA_A_NOVA, idR1);
+        anaSeSepara.setAlterarParaTodos(false);
+        alterarEnderecos(ana, anaSeSepara);
+        Long idR2 = idDe(ana);
+
+        EnderecoDTO brunoSeSepara = comId(endereco(null, "18000001", "Rua A Corrigida", "10"), idR1);
+        brunoSeSepara.setAlterarParaTodos(false);
+        alterarEnderecos(bruno, brunoSeSepara);
+        assertThat(idsDe(bruno)).hasSize(1).doesNotContain(idR1, idR2);
+        assertThat(bruno.getEnderecos().get(0).getRua()).isEqualTo("Rua A Corrigida");
+        assertThat(idsDe(ana)).containsExactly(idR2);
+        assertThat(ana.getEnderecos().get(0).getRua()).isEqualTo("Rua A Nova");
+
+        EnderecoDTO carlaSeSepara = comId(RUA_A_NOVA, idR1);
+        carlaSeSepara.setAlterarParaTodos(false);
+        alterarEnderecos(carla, carlaSeSepara);
+        assertThat(idsDe(carla)).containsExactly(idR2);
+
+        assertThat(idsDe(davi)).containsExactly(idR1);
+        assertThat(davi.getEnderecos().get(0).getRua()).isEqualTo("Rua A");
     }
 
     // ---------- Remoção ----------
