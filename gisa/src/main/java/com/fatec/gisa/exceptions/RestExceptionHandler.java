@@ -176,7 +176,27 @@ public class RestExceptionHandler {
                 Map.of(),
                 null,
                 null,
-                exception.getEnderecos()));
+                exception.getEnderecos(),
+                null));
+    }
+
+    // Responsável que passa a residir e ainda mora com outros pacientes: o front pergunta se ele continua lá
+    @ExceptionHandler(ResidenciaEmOutrosPacientesException.class)
+    public ResponseEntity<ApiConflitoResponse> handleResidenciaEmOutrosPacientes(
+            ResidenciaEmOutrosPacientesException exception,
+            HttpServletRequest request) {
+        HttpStatus status = HttpStatus.CONFLICT;
+        return ResponseEntity.status(status).body(new ApiConflitoResponse(
+                Instant.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                exception.getMessage(),
+                request.getRequestURI(),
+                Map.of(),
+                null,
+                null,
+                null,
+                exception.getResidencias()));
     }
 
     private ResponseEntity<ApiConflitoResponse> conflito(ConflitoException exception, HttpServletRequest request,

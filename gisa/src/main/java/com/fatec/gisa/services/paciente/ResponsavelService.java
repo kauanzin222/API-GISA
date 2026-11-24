@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.hibernate.Hibernate;
 import org.springframework.data.domain.Page;
@@ -112,16 +113,18 @@ public class ResponsavelService {
      * <li>sai das linhas do paciente fora do alvo e das que o paciente removeu (RN03, RN06);</li>
      * <li>entra nas do alvo, inclusive as que acabaram de ser criadas (RN04);</li>
      * <li>quem passa a residir agora perde os outros endereços, menos os que divide com outro paciente
-     * dele (RN05).</li>
+     * dele, a não ser que tenha saído de lá (D12).</li>
      * </ul>
      * A coluna {@code ResideComPaciente} acompanha o resultado (reside = divide ao menos uma linha).
      *
      * @param residiaAntes se ele já dividia alguma linha com o paciente antes do request
      * @param linhasRemovidas IDs das linhas que o paciente deixou de ter neste request, sem terem sido alteradas
+     * @param continuaComOutrosPacientes resposta da D12; só vale quando ele passa a residir agora
      */
     @Transactional
     public void aplicarResidencia(Responsavel responsavel, VinculoResponsavel vinculo, Paciente paciente,
-            List<Endereco> alvo, boolean residiaAntes, Set<Long> linhasRemovidas) {
+            List<Endereco> alvo, boolean residiaAntes, Set<Long> linhasRemovidas,
+            Boolean continuaComOutrosPacientes) {
         Set<Long> idsAlvo = idsDe(alvo);
         Set<Long> idsDoPaciente = idsDe(paciente.getEnderecos());
 
@@ -136,36 +139,51 @@ public class ResponsavelService {
         alvo.forEach(linha -> enderecoService.vincular(responsavel, linha));
 
         if (!alvo.isEmpty() && !residiaAntes) {
-            removerEnderecosProprios(responsavel, paciente);
+            removerEnderecosProprios(responsavel, paciente, Boolean.FALSE.equals(continuaComOutrosPacientes));
         }
 
         vinculo.setResideComPaciente(!alvo.isEmpty());
         revisarResidencias(responsavel, paciente.getIdCadastro());
     }
 
-    // RN05: o endereço antigo é substituído, mas o responsável continua na casa de um irmão
-    private void removerEnderecosProprios(Responsavel responsavel, Paciente paciente) {
+    // D12: quantos outros pacientes dele moram com ele numa linha que não é do paciente (só a quantidade, LGPD)
+    public int outrosPacientesOndeReside(Responsavel responsavel, Paciente paciente) {
+        Set<Long> idsDoPaciente = idsDe(paciente.getEnderecos());
+        return (int) enderecosDe(responsavel.getEnderecos()).stream()
+                .filter(linha -> !idsDoPaciente.contains(linha.getIdEndereco()))
+                .flatMap(linha -> pacientesDele(responsavel, linha, paciente.getIdCadastro()))
+                .map(Paciente::getIdCadastro)
+                .distinct()
+                .count();
+    }
+
+    // RN05 / D12: o endereço antigo é substituído; ele continua na casa de outro paciente, a não ser que tenha saído de lá
+    private void removerEnderecosProprios(Responsavel responsavel, Paciente paciente, boolean saiuDosOutros) {
         Set<Long> idsDoPaciente = idsDe(paciente.getEnderecos());
         for (Endereco linha : new ArrayList<>(enderecosDe(responsavel.getEnderecos()))) {
             if (!idsDoPaciente.contains(linha.getIdEndereco())
-                    && !ehDeUmPacienteDele(responsavel, linha, paciente.getIdCadastro())) {
+                    && (saiuDosOutros || !ehDeUmPacienteDele(responsavel, linha, paciente.getIdCadastro()))) {
                 enderecoService.desvincular(responsavel, linha);
             }
         }
     }
 
-    // A linha também é de um paciente de quem o responsável cuida (menos o ignorado). Lê os moradores da linha e os
-    // vínculos deles, que a sincronização mantém iguais em memória (a lista "dependentes" do responsável não)
     private static boolean ehDeUmPacienteDele(Responsavel responsavel, Endereco linha, Long idPacienteIgnorado) {
+        return pacientesDele(responsavel, linha, idPacienteIgnorado).findAny().isPresent();
+    }
+
+    // Pacientes de quem o responsável cuida (menos o ignorado) que moram na linha. Lê os moradores da linha e os
+    // vínculos deles, que a sincronização mantém iguais em memória (a lista "dependentes" do responsável não)
+    private static Stream<Paciente> pacientesDele(Responsavel responsavel, Endereco linha, Long idPacienteIgnorado) {
         if (linha.getMoradores() == null) {
-            return false;
+            return Stream.empty();
         }
         return linha.getMoradores().stream()
                 .map(Hibernate::unproxy)
                 .filter(Paciente.class::isInstance)
                 .map(Paciente.class::cast)
                 .filter(paciente -> !paciente.getIdCadastro().equals(idPacienteIgnorado))
-                .anyMatch(paciente -> paciente.getResponsaveis() != null && paciente.getResponsaveis().stream()
+                .filter(paciente -> paciente.getResponsaveis() != null && paciente.getResponsaveis().stream()
                         .anyMatch(vinculo -> vinculo.getResponsavel().getIdCadastro()
                                 .equals(responsavel.getIdCadastro())));
     }

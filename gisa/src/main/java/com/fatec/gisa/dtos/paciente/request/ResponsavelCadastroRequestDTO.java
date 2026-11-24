@@ -40,6 +40,10 @@ public class ResponsavelCadastroRequestDTO extends PessoaCadastroRequestDTO {
     // paciente (os enviados para ele são ignorados); true = não reside
     private Boolean naoResideComPaciente;
 
+    // Só quando ele passa a residir e ainda mora com outros pacientes dele (senão é ignorado): true = continua
+    // morando com eles; false = saiu de lá (lá passa a não residir). Sem resposta nesse caso: 409
+    private Boolean continuaComOutrosPacientes;
+
     @JsonIgnore
     @AssertTrue(message = "Informe onde o responsável reside ou se ele não reside com o paciente")
     public boolean isResidenciaInformada() {

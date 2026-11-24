@@ -51,6 +51,8 @@ import com.fatec.gisa.repositories.paciente.PacienteRepository;
 import com.fatec.gisa.repositories.paciente.ResponsavelRepository;
 import com.fatec.gisa.repositories.paciente.VinculoResponsavelRepository;
 import com.fatec.gisa.exceptions.CampoInvalidoException;
+import com.fatec.gisa.exceptions.ResidenciaEmOutrosPacientesException;
+import com.fatec.gisa.exceptions.ResidenciaEmOutrosPacientesException.ResidenciaEmOutrosPacientes;
 import com.fatec.gisa.exceptions.ResourceNotFoundException;
 import com.fatec.gisa.services.PessoaMapper;
 import com.fatec.gisa.services.PessoaService;
@@ -255,7 +257,8 @@ public class PacienteService {
         if (dto.hasField("responsaveis")) {
             responsaveisDesvinculados = substituirResponsaveis(paciente, dto.getResponsaveis());
         }
-        aplicarResidencias(paciente, pedidos, itensEnderecos, enderecosAntes, compartilhadasAntes);
+        aplicarResidencias(paciente, pedidos, itensEnderecos, enderecosAntes, compartilhadasAntes,
+                respostasDoPatch(dto));
 
         Paciente pacienteAtualizado = pacienteRepository.save(paciente);
         registrarAlteracoes(pacienteAtualizado, antes, DadosParaHistorico.de(pacienteAtualizado, pessoaMapper));
@@ -446,7 +449,7 @@ public class PacienteService {
     // Depois de o paciente sincronizar os endereços e de os vínculos serem atualizados: cada responsável fica
     // ligado exatamente aos endereços pedidos (RN01), saindo também das linhas que o paciente removeu (RN03)
     private void aplicarResidencias(Paciente paciente, Map<Long, Pedido> pedidos, List<EnderecoDTO> itens,
-            Set<Long> idsLinhasAntes, Map<Long, Set<Long>> compartilhadasAntes) {
+            Set<Long> idsLinhasAntes, Map<Long, Set<Long>> compartilhadasAntes, Map<Long, Boolean> respostas) {
         if (paciente.getResponsaveis() == null) {
             return;
         }
@@ -457,14 +460,60 @@ public class PacienteService {
             itens.stream().map(EnderecoDTO::getIdEndereco).filter(Objects::nonNull).forEach(removidas::remove);
         }
 
+        List<Residencia> residencias = new ArrayList<>();
         for (VinculoResponsavel vinculo : new ArrayList<>(paciente.getResponsaveis())) {
             Responsavel responsavel = vinculo.getResponsavel();
             Long id = responsavel.getIdCadastro();
             Set<Long> antes = compartilhadasAntes.getOrDefault(id, Set.of());
             List<Endereco> alvo = alvo(pedidos.getOrDefault(id, Pedido.MANTER), paciente, itens, responsavel, antes,
                     idsLinhasAntes);
-            responsavelService.aplicarResidencia(responsavel, vinculo, paciente, alvo, !antes.isEmpty(), removidas);
+            residencias.add(new Residencia(responsavel, vinculo, alvo, !antes.isEmpty(), respostas.get(id)));
         }
+        exigirRespostaSobreOutrosPacientes(paciente, residencias);
+        aplicar(paciente, residencias, removidas);
+    }
+
+    // Residência a aplicar em um responsável, calculada antes de gravar (para verificar todos de uma vez)
+    private record Residencia(Responsavel responsavel, VinculoResponsavel vinculo, List<Endereco> alvo,
+            boolean residiaAntes, Boolean continuaComOutrosPacientes) {
+    }
+
+    // D12: quem passa a residir com o paciente e ainda mora com outros pacientes dele precisa dizer se continua lá.
+    // Sem resposta, nada é gravado e todos vão juntos num 409
+    private void exigirRespostaSobreOutrosPacientes(Paciente paciente, List<Residencia> residencias) {
+        List<ResidenciaEmOutrosPacientes> pendentes = new ArrayList<>();
+        for (Residencia r : residencias) {
+            if (r.alvo().isEmpty() || r.residiaAntes() || r.continuaComOutrosPacientes() != null) {
+                continue;
+            }
+            int outros = responsavelService.outrosPacientesOndeReside(r.responsavel(), paciente);
+            if (outros > 0) {
+                pendentes.add(new ResidenciaEmOutrosPacientes(r.responsavel().getIdCadastro(), outros));
+            }
+        }
+        if (!pendentes.isEmpty()) {
+            throw new ResidenciaEmOutrosPacientesException(pendentes);
+        }
+    }
+
+    private void aplicar(Paciente paciente, List<Residencia> residencias, Set<Long> linhasRemovidas) {
+        for (Residencia r : residencias) {
+            responsavelService.aplicarResidencia(r.responsavel(), r.vinculo(), paciente, r.alvo(), r.residiaAntes(),
+                    linhasRemovidas, r.continuaComOutrosPacientes());
+        }
+    }
+
+    // D12: a resposta de cada responsável citado no PATCH (só as informadas)
+    private static Map<Long, Boolean> respostasDoPatch(PacientePatchRequestDTO dto) {
+        Map<Long, Boolean> respostas = new HashMap<>();
+        if (dto.hasField("responsaveis") && dto.getResponsaveis() != null) {
+            for (ResponsavelVinculoPatchDTO item : dto.getResponsaveis()) {
+                if (item.continuaComOutrosPacientes() != null) {
+                    respostas.put(item.idResponsavel(), item.continuaComOutrosPacientes());
+                }
+            }
+        }
+        return respostas;
     }
 
     private static Set<Long> idsDosEnderecos(Paciente paciente) {
@@ -545,7 +594,10 @@ public class PacienteService {
         vinculo.setResponsavel(responsavel);
         vinculo.setGrauParentesco(dto.getGrauParentesco());
         paciente.getResponsaveis().add(vinculo);
-        responsavelService.aplicarResidencia(responsavel, vinculo, paciente, alvo, false, Set.of());
+        List<Residencia> residencias = List.of(
+                new Residencia(responsavel, vinculo, alvo, false, dto.getContinuaComOutrosPacientes()));
+        exigirRespostaSobreOutrosPacientes(paciente, residencias);
+        aplicar(paciente, residencias, Set.of());
 
         Paciente pacienteSalvo = pacienteRepository.save(paciente);
         registrarVinculo(pacienteSalvo, responsavel.getNome(), dto.getGrauParentesco());
@@ -599,6 +651,7 @@ public class PacienteService {
         enderecoService.sincronizar(pacienteSalvo, dto.getEnderecos(), Moradia.sozinho());
 
         List<VinculoResponsavel> vinculos = new ArrayList<>();
+        List<Residencia> residencias = new ArrayList<>();
         var cpfsResponsaveis = new LinkedHashSet<String>();
 
         for (int posicao = 0; posicao < dto.getResponsaveis().size(); posicao++) {
@@ -615,9 +668,12 @@ public class PacienteService {
             vinculo.setResponsavel(responsavel);
             vinculo.setGrauParentesco(responsavelDto.getGrauParentesco());
             vinculos.add(vinculo);
-            responsavelService.aplicarResidencia(responsavel, vinculo, pacienteSalvo, alvo, false, Set.of());
+            residencias.add(new Residencia(responsavel, vinculo, alvo, false,
+                    responsavelDto.getContinuaComOutrosPacientes()));
         }
 
+        exigirRespostaSobreOutrosPacientes(pacienteSalvo, residencias);
+        aplicar(pacienteSalvo, residencias, Set.of());
         pacienteSalvo.setResponsaveis(vinculos);
         Paciente pacienteCadastrado = pacienteRepository.save(pacienteSalvo);
 

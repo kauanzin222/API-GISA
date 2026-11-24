@@ -309,6 +309,7 @@ Um responsável é uma pessoa: exige os mesmos dados básicos do paciente (`nome
 | `numCNS` | string | não | |
 | `enderecos` | lista de endereço | não | só usado com `naoResideComPaciente = true` |
 | `idResponsavel` | número | não | para selecionar um responsável já cadastrado |
+| `continuaComOutrosPacientes` | boolean | não | só quando ele passa a residir e ainda mora com outros pacientes dele (senão é ignorado): `true` = continua morando com eles; `false` = saiu de lá (lá passa a não residir). Sem resposta nesse caso: `409` (ver "Endereços e residência") |
 
 **Regras dos responsáveis**
 
@@ -441,6 +442,7 @@ Cada item referencia um responsável **já cadastrado** pelo ID:
 - A lista precisa ter ao menos um responsável e não pode repetir o mesmo `idResponsavel`.
 - Responsável já vinculado: `grauParentesco` e `resideComPaciente` são atualizados. Responsável não vinculado: passa a ser vinculado.
 - `resideComPaciente` é opcional: sem ele, o vínculo mantém o valor atual (vínculo novo: `false`). Passar a `true` segue a regra do cadastro: sem endereço, o responsável recebe os do paciente; com outro endereço, `400`.
+- `continuaComOutrosPacientes` (boolean, opcional): só quando ele passa a residir e ainda mora com outros pacientes dele (senão é ignorado): `true` = continua morando com eles; `false` = saiu de lá (lá passa a não residir). Sem resposta nesse caso: `409` (ver "Endereços e residência").
 - Responsável que estava vinculado e não veio na lista é **desvinculado**. Se ele não tiver mais nenhum paciente e não tiver usuário de acesso, o cadastro dele é **excluído** da base (não apenas inativado).
 - O PATCH do paciente **não altera dados pessoais** do responsável; para isso, use `PATCH /api/responsaveis/{idResponsavel}`.
 - Para **adicionar** um responsável (novo ou já cadastrado) sem reenviar a lista inteira, use `POST /api/pacientes/{idCadastro}/responsaveis`.
@@ -628,6 +630,7 @@ Atualiza os dados pessoais do responsável (o vínculo com o paciente e o grau d
 - **Sem remoção:** o endereço é opcional no cadastro, mas, uma vez cadastrado, só é alterado. Ele só deixa de existir quando ninguém mais mora nele (a API exclui o registro sem moradores).
 - **Quem reside acompanha o paciente:** com `resideComPaciente = true`, os endereços do responsável são sempre os do paciente. Quando o endereço do paciente muda, os residentes vão junto. Para alguém ficar no endereço antigo, envie `resideComPaciente: false` para ele no mesmo PATCH.
 - **Irmãos:** se o responsável que foi junto também residia com outro paciente que ficou no endereço antigo, esse outro vínculo passa a `resideComPaciente = false` (evento "residência de {responsável}" no histórico daquele paciente). O ajuste, se necessário, é feito manualmente no cadastro daquele paciente.
+- **Responsável que passa a residir e já mora com outros pacientes** (em outro endereço): a API responde `409` com `residenciasEmOutrosPacientes: [{ idResponsavel, outrosPacientes }]` (só a quantidade) e não grava nada. Reenvie com `continuaComOutrosPacientes` no item dele: `true` = continua morando com eles; `false` = saiu de lá (nos vínculos deles passa a `resideComPaciente = false`, com evento "residência de {responsável}"; o endereço deles não muda). Se a família toda se mudou, responda `true` e depois altere o endereço daqueles pacientes para o mesmo endereço.
 - **Inativar paciente** (`DELETE`) não mexe em endereços.
 
 ---

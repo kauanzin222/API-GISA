@@ -33,6 +33,8 @@ import com.fatec.gisa.enums.TipoEventoPaciente;
 import com.fatec.gisa.exceptions.CampoInvalidoException;
 import com.fatec.gisa.exceptions.EnderecoCompartilhadoException;
 import com.fatec.gisa.exceptions.EnderecoCompartilhadoException.EnderecoCompartilhado;
+import com.fatec.gisa.exceptions.ResidenciaEmOutrosPacientesException;
+import com.fatec.gisa.exceptions.ResidenciaEmOutrosPacientesException.ResidenciaEmOutrosPacientes;
 import com.fatec.gisa.services.endereco.EnderecoService;
 
 import jakarta.persistence.EntityManager;
@@ -118,8 +120,10 @@ class EnderecoResidenciaTest {
         Paciente primeiro = pacienteService.cadastrar(cadastro("20000000001", RUA_B,
                 responsavelNovo("30000000001", false, null)));
 
-        Paciente segundo = pacienteService.cadastrar(cadastro("20000000002", RUA_A,
-                responsavelNovo("30000000001", false, null)));
+        // Saída (a): continua morando com o primeiro
+        ResponsavelCadastroRequestDTO continua = responsavelNovo("30000000001", false, null);
+        continua.setContinuaComOutrosPacientes(true);
+        Paciente segundo = pacienteService.cadastrar(cadastro("20000000002", RUA_A, continua));
 
         Responsavel responsavel = responsavelDe(segundo, "30000000001");
         List<Long> esperados = new ArrayList<>(ids(primeiro));
@@ -276,6 +280,115 @@ class EnderecoResidenciaTest {
         assertThat(ultimoEvento(brunoAtual)).extracting(EventoPacienteDTO::tipo, EventoPacienteDTO::descricao)
                 .containsExactly(TipoEventoPaciente.DADOS_ALTERADOS,
                         "Dados do cadastro alterados: residência de Responsável 30000000001.");
+    }
+
+    @Test
+    void quemPassaAResidirEMoraComOutroPacienteSemResponderDevolve409ENaoGrava() {
+        Paciente primeiro = pacienteService.cadastrar(cadastro("20000000001", RUA_B,
+                responsavelNovo("30000000001", false, null)));
+        Long idResponsavel = responsavelDe(primeiro, "30000000001").getIdCadastro();
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThatThrownBy(() -> pacienteService.cadastrar(cadastro("20000000002", RUA_A,
+                responsavelNovo("30000000001", false, null))))
+                .isInstanceOf(ResidenciaEmOutrosPacientesException.class)
+                .extracting(excecao -> ((ResidenciaEmOutrosPacientesException) excecao).getResidencias())
+                .isEqualTo(List.of(new ResidenciaEmOutrosPacientes(idResponsavel, 1)));
+    }
+
+    @Test
+    void quemSaiuDosOutrosPacientesDeixaDeResidirLaEOEnderecoDelesNaoMuda() {
+        Paciente primeiro = pacienteService.cadastrar(cadastro("20000000001", RUA_B,
+                responsavelNovo("30000000001", false, null)));
+        List<Long> idsDoPrimeiro = ids(primeiro);
+        entityManager.flush();
+        entityManager.clear();
+
+        ResponsavelCadastroRequestDTO saiu = responsavelNovo("30000000001", false, null);
+        saiu.setContinuaComOutrosPacientes(false);
+        Paciente segundo = pacienteService.cadastrar(cadastro("20000000002", RUA_A, saiu));
+        Responsavel responsavel = responsavelDe(segundo, "30000000001");
+        assertThat(ids(responsavel)).isEqualTo(ids(segundo));
+        entityManager.flush();
+        entityManager.clear();
+
+        Paciente primeiroAtual = entityManager.find(Paciente.class, primeiro.getIdCadastro());
+        assertThat(ids(primeiroAtual)).isEqualTo(idsDoPrimeiro);
+        assertThat(primeiroAtual.getResponsaveis().get(0).isResideComPaciente()).isFalse();
+        assertThat(ultimoEvento(primeiroAtual)).extracting(EventoPacienteDTO::tipo, EventoPacienteDTO::descricao)
+                .containsExactly(TipoEventoPaciente.DADOS_ALTERADOS,
+                        "Dados do cadastro alterados: residência de Responsável 30000000001.");
+    }
+
+    @Test
+    void irmaoNoMesmoEnderecoNaoGeraPergunta() {
+        pacienteService.cadastrar(cadastro("20000000001", RUA_A, responsavelNovo("30000000001", false, null)));
+        entityManager.flush();
+        entityManager.clear();
+
+        Paciente irmao = pacienteService.cadastrar(cadastro("20000000002", RUA_A,
+                responsavelNovo("30000000001", false, null)));
+
+        assertThat(irmao.getResponsaveis().get(0).isResideComPaciente()).isTrue();
+    }
+
+    @Test
+    void respostaEIgnoradaQuandoNaoHaOutroPaciente() {
+        pacienteService.cadastrar(cadastro("20000000001", RUA_B, responsavelNovo("30000000001", true, null)));
+        entityManager.flush();
+        entityManager.clear();
+
+        ResponsavelCadastroRequestDTO reside = responsavelNovo("30000000001", false, null);
+        reside.setContinuaComOutrosPacientes(false);
+        Paciente segundo = pacienteService.cadastrar(cadastro("20000000002", RUA_A, reside));
+
+        assertThat(ids(responsavelDe(segundo, "30000000001"))).isEqualTo(ids(segundo));
+    }
+
+    @Test
+    void adicionarResponsavelQueMoraComOutroPacienteDevolve409() {
+        pacienteService.cadastrar(cadastro("20000000001", RUA_B, responsavelNovo("30000000001", false, null)));
+        Paciente segundo = pacienteService.cadastrar(cadastro("20000000002", RUA_A,
+                responsavelNovo("30000000002", false, null)));
+        entityManager.flush();
+        entityManager.clear();
+
+        ResponsavelCadastroRequestDTO dto = responsavelNovo("30000000001", false, null);
+        assertThatThrownBy(() -> pacienteService.adicionarResponsavel(segundo.getIdCadastro(), dto))
+                .isInstanceOf(ResidenciaEmOutrosPacientesException.class);
+        // Na API, o 409 desfaz a transação e o reenvio é outra requisição: descarta o que ficou em memória
+        entityManager.clear();
+
+        dto.setContinuaComOutrosPacientes(true);
+        Paciente atualizado = pacienteService.adicionarResponsavel(segundo.getIdCadastro(), dto);
+        assertThat(ids(responsavelDe(atualizado, "30000000001"))).hasSize(2);
+    }
+
+    @Test
+    void patchQueMarcaComoResidenteQuemMoraComOutroPacientePergunta() {
+        Paciente primeiro = pacienteService.cadastrar(cadastro("20000000001", RUA_B,
+                responsavelNovo("30000000001", false, null)));
+        Paciente segundo = pacienteService.cadastrar(cadastro("20000000002", RUA_A,
+                responsavelNovo("30000000001", true, null)));
+        Long id = responsavelDe(segundo, "30000000001").getIdCadastro();
+        assertThat(ids(responsavelDe(segundo, "30000000001"))).isEqualTo(ids(primeiro));
+        entityManager.flush();
+        entityManager.clear();
+
+        PacientePatchRequestDTO semResposta = new PacientePatchRequestDTO();
+        semResposta.setResponsaveis(List.of(new ResponsavelVinculoPatchDTO(id, GrauParentesco.MAE, true)));
+        assertThatThrownBy(() -> pacienteService.atualizar(segundo.getIdCadastro(), semResposta))
+                .isInstanceOf(ResidenciaEmOutrosPacientesException.class);
+
+        PacientePatchRequestDTO saiu = new PacientePatchRequestDTO();
+        saiu.setResponsaveis(List.of(new ResponsavelVinculoPatchDTO(id, GrauParentesco.MAE, true, null, false)));
+        pacienteService.atualizar(segundo.getIdCadastro(), saiu);
+        entityManager.flush();
+        entityManager.clear();
+
+        Paciente primeiroAtual = entityManager.find(Paciente.class, primeiro.getIdCadastro());
+        assertThat(primeiroAtual.getResponsaveis().get(0).isResideComPaciente()).isFalse();
     }
 
     // ---------- B1: residência por endereço ----------

@@ -15,9 +15,17 @@ public record ResponsavelVinculoPatchDTO(
         Boolean resideComPaciente,
         // Posições, na lista "enderecos" do mesmo request, dos endereços do paciente em que o responsável mora.
         // [] = não reside. Exige "enderecos" no request
-        List<Integer> indicesEnderecoResidencia) {
+        List<Integer> indicesEnderecoResidencia,
+        // Só quando ele passa a residir e ainda mora com outros pacientes dele (senão é ignorado): true = continua
+        // morando com eles; false = saiu de lá (lá passa a não residir). Sem resposta nesse caso: 409
+        Boolean continuaComOutrosPacientes) {
 
     public ResponsavelVinculoPatchDTO(Long idResponsavel, GrauParentesco grauParentesco, Boolean resideComPaciente) {
-        this(idResponsavel, grauParentesco, resideComPaciente, null);
+        this(idResponsavel, grauParentesco, resideComPaciente, null, null);
+    }
+
+    public ResponsavelVinculoPatchDTO(Long idResponsavel, GrauParentesco grauParentesco, Boolean resideComPaciente,
+            List<Integer> indicesEnderecoResidencia) {
+        this(idResponsavel, grauParentesco, resideComPaciente, indicesEnderecoResidencia, null);
     }
 }
